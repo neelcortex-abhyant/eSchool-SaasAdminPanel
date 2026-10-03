@@ -1,0 +1,162 @@
+{
+  "version": "phase1-draft",
+  "note": "Schemas only. Capture golden bodies after sanitized MySQL dumps exist.",
+  "cases": [
+    {
+      "id": "A1",
+      "name": "student_login_success",
+      "method": "POST",
+      "path": "/api/student/login",
+      "encoding": "multipart",
+      "auth": "none",
+      "request_fields": ["gr_number", "password", "school_code", "fcm_id?"],
+      "expect": {
+        "http_status": 200,
+        "body": {
+          "error": false,
+          "message": "string",
+          "code": "number",
+          "data": "UserDataResource complete graph",
+          "token": "string id|plain"
+        }
+      },
+      "golden_file": "fixtures/golden/student/login_success.json"
+    },
+    {
+      "id": "A2",
+      "name": "parent_login_success",
+      "method": "POST",
+      "path": "/api/parent/login",
+      "encoding": "multipart",
+      "auth": "none",
+      "request_fields": ["email|mobile", "password", "school_code", "fcm_id?"],
+      "expect": {
+        "http_status": 200,
+        "data.children": "array of complete child resources, not reduced"
+      },
+      "golden_file": "fixtures/golden/parent/login_success.json"
+    },
+    {
+      "id": "A3",
+      "name": "teacher_login_success",
+      "method": "POST",
+      "path": "/api/teacher/login",
+      "encoding": "multipart",
+      "role": "Teacher",
+      "golden_file": "fixtures/golden/teacher/login_success.json"
+    },
+    {
+      "id": "A4",
+      "name": "school_admin_login_success",
+      "method": "POST",
+      "path": "/api/teacher/login",
+      "encoding": "multipart",
+      "role": "School Admin",
+      "golden_file": "fixtures/golden/school_admin/login_success.json"
+    },
+    {
+      "id": "A5",
+      "name": "driver_login_success",
+      "method": "POST",
+      "path": "/api/teacher/login",
+      "encoding": "multipart",
+      "role": "Driver",
+      "golden_file": "fixtures/golden/driver/login_success.json"
+    },
+    {
+      "id": "L1",
+      "name": "logout_by_device_id",
+      "method": "POST",
+      "path": "/api/logout",
+      "encoding": "multipart",
+      "auth": "bearer+school-code",
+      "request_fields": ["device_id"],
+      "side_effects": [
+        "remove FCM tokens for device_id",
+        "clear users.fcm_id legacy field when applicable",
+        "revoke current Sanctum token"
+      ],
+      "golden_file": "fixtures/golden/auth/logout_device_id.json"
+    },
+    {
+      "id": "L2",
+      "name": "logout_by_fcm_id",
+      "method": "POST",
+      "path": "/api/logout",
+      "encoding": "multipart",
+      "request_fields": ["fcm_id"],
+      "golden_file": "fixtures/golden/auth/logout_fcm_id.json"
+    },
+    {
+      "id": "L3",
+      "name": "logout_by_web_fcm",
+      "method": "POST",
+      "path": "/api/logout",
+      "encoding": "multipart",
+      "request_fields": ["web_fcm"],
+      "golden_file": "fixtures/golden/auth/logout_web_fcm.json"
+    },
+    {
+      "id": "L4",
+      "name": "logout_no_device_token",
+      "method": "POST",
+      "path": "/api/logout",
+      "encoding": "multipart",
+      "request_fields": [],
+      "side_effects": ["remove all device tokens if Laravel does so", "revoke current token"],
+      "golden_file": "fixtures/golden/auth/logout_no_device.json"
+    },
+    {
+      "id": "B1",
+      "name": "staff_features_permission",
+      "method": "GET",
+      "path": "/api/staff/features-permission",
+      "encoding": "query",
+      "auth": "bearer+school-code",
+      "expect": {
+        "permissions_and_features_shape": "match Laravel exactly",
+        "message_strings": "exact trans() output"
+      },
+      "golden_file": "fixtures/golden/staff/features_permission.json"
+    },
+    {
+      "id": "B2",
+      "name": "school_settings",
+      "method": "GET",
+      "path": "/api/school-settings",
+      "encoding": "query",
+      "golden_file": "fixtures/golden/common/school_settings.json"
+    },
+    {
+      "id": "B3a",
+      "name": "get_languages",
+      "method": "GET",
+      "path": "/api/get-languages",
+      "encoding": "query",
+      "auth": "none_or_optional",
+      "golden_file": "fixtures/golden/common/get_languages.json"
+    },
+    {
+      "id": "B3b",
+      "name": "set_languages",
+      "method": "POST",
+      "path": "/api/set-languages",
+      "encoding": "multipart",
+      "note": "read-like POST returning translation labels",
+      "golden_file": "fixtures/golden/common/set_languages.json"
+    },
+    {
+      "id": "M1",
+      "name": "auth_failure_messages",
+      "cases": [
+        "bad password",
+        "missing school-code",
+        "invalid school-code",
+        "inactive user",
+        "maintenance",
+        "cross-tenant token"
+      ],
+      "expect": "exact localized message strings and body codes, usually HTTP 200"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "code": 200,
+  "data": {
+    "country_code": null,
+    "created_at": "2026-10-03T07:42:50.404343",
+    "current_address": null,
+    "device_type": null,
+    "dob": null,
+    "email": "schooladmin@demoa.test",
+    "email_verified_at": null,
+    "fcm_id": null,
+    "first_name": "Alice",
+    "gender": null,
+    "id": 4,
+    "image": null,
+    "last_name": "Admin",
+    "mobile": null,
+    "occupation": null,
+    "permanent_address": null,
+    "roles": [
+      {
+        "name": "School Admin"
+      }
+    ],
+    "school": {
+      "address": "100 Demo Ave",
+      "code": "DEMOA",
+      "domain": null,
+      "id": 1,
+      "logo": "",
+      "name": "Demo School A",
+      "status": 1,
+      "support_email": "admin-a@example.test",
+      "support_phone": "",
+      "tagline": ""
+    },
+    "school_id": 1,
+    "staff": null,
+    "status": 1,
+    "teacher": null,
+    "updated_at": null,
+    "web_fcm": null
+  },
+  "error": false,
+  "message": "User logged-in!",
+  "token": "REDACTED_TOKEN"
+}

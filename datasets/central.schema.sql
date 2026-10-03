@@ -1,0 +1,57 @@
+
+CREATE TABLE IF NOT EXISTS schools (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  address VARCHAR(255) NOT NULL DEFAULT '',
+  support_phone VARCHAR(255) NOT NULL DEFAULT '',
+  support_email VARCHAR(255) NOT NULL DEFAULT '',
+  tagline VARCHAR(255) NOT NULL DEFAULT '',
+  logo VARCHAR(255) NOT NULL DEFAULT '',
+  admin_id INT NULL,
+  status INT NOT NULL DEFAULT 1,
+  code VARCHAR(255) NULL,
+  database_name VARCHAR(255) NULL,
+  domain VARCHAR(255) NULL,
+  installed INT NOT NULL DEFAULT 1,
+  created_at DATETIME NULL,
+  updated_at DATETIME NULL,
+  deleted_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS system_settings (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  data VARCHAR(255) NOT NULL,
+  type VARCHAR(255) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS packages (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(255) NULL,
+  description VARCHAR(255) NULL,
+  status INT NOT NULL DEFAULT 0,
+  created_at DATETIME NULL,
+  updated_at DATETIME NULL,
+  deleted_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  first_name VARCHAR(128) NOT NULL,
+  last_name VARCHAR(128) NOT NULL,
+  mobile VARCHAR(255) NULL,
+  email VARCHAR(255) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  gender VARCHAR(16) NULL,
+  image VARCHAR(512) NULL,
+  dob DATE NULL,
+  country_code VARCHAR(32) NULL,
+  current_address VARCHAR(512) NULL,
+  permanent_address VARCHAR(512) NULL,
+  occupation VARCHAR(255) NULL,
+  status INT NOT NULL DEFAULT 1,
+  reset_request INT NOT NULL DEFAULT 0,
+  fcm_id VARCHAR(1024) NULL,
+  school_id INT NULL,
+  email_verified_at DATETIME NULL,
+  created_at DATETIME NULL,
+  updated_at DATETIME NULL,
+  deleted_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

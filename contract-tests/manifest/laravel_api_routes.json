@@ -1,0 +1,3177 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/certificate/assign",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@certificateAssign",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/certificate/generate",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@certificateGenerate",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/certificates",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getCertificates",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/change-password",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@changePassword",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/class-section/teachers",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@classSectionTeachers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/classes",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getClass",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/country-codes",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getCountryCodes",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/create-transportation-expense",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_expense_create",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/delete-my-leaves",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@deleteLeaves",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/delete/message",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@deleteMessage",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/diaries",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getStudentDiaries",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver-helpr/dashboard",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getDriverHelperDashboard",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver-helpr/get-trips",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getDriverHelperTrips",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver-helpr/get-vehicle-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getVehicleDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/driver-helpr/trip/start-end",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@tripStartEnd",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/fees-due-notification",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@sendFeeNotification",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/firebase-config",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@getFirebaseConfig",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "POST",
+    "path": "/api/forgot-password",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@forgotPassword",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "GET",
+    "path": "/api/gallery",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getGallery",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/get-languages",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@getLanguages",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/get-transportation-expense",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_expense_get",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/get-vehicle-assignment-status",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getvehicleAssignmentstatus",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/holidays",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getHolidays",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/leave-settings",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@leaveSettings",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/leaves",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getLeaves",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/leaves",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@applyLeaves",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/logout",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@logout",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/medium",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getMedium",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/message",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getMessage",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/message",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@sendMessage",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/message/read",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@readMessage",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/my-leaves",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getMyLeaves",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getNotifications",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/announcements",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getAnnouncements",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/assignments",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getAssignments",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/class-subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@classSubjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/current-session-year",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getSessionYear",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/diary-categories",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getChildDiaryCategories",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/diary-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@showStudentDiaryDetail",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/exam-marks",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getExamMarks",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/fees/compulsory/pay",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@payCompulsoryFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees/fees-transactions",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getFeesTransactions",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/fees/manual/compulsory/pay",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@payCompulsoryManualFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees/manual/config",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getManualPaymentConfig",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/fees/manual/optional/pay",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@payOptionalManualFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees/manual/status",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getManualPaymentStatus",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/fees/optional/pay",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@payOptionalFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees/receipt",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@feesPaidReceiptPDF",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/fees/transaction-receipt",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ParentApiController@transactionReceiptPDF",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "withoutMiddleware: checkChild; Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-assignments-report",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getAssignmentReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-child-profile-data",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getChildProfileDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-data",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ParentApiController@getParentData",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-exam-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getExamDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-exam-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getExamList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-online-exam-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getOnlineExamList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-online-exam-report",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getOnlineExamReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-online-exam-result",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getOnlineExamResult",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/get-online-exam-result-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getOnlineExamResultList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/lesson-topics",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getLessonTopics",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/lessons",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getLessons",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/login",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ParentApiController@login",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/school-settings",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getSchoolSettings",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/sliders",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ParentApiController@getSliders",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/student/leave",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getStudentLeave",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/student/leave",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@applyLeave",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/student/leave/cancel",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@cancelStudentLeave",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@subjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/test",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ParentApiController@test",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/timetable",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "ParentApiController@getTimetable",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/parent/transportation/live-tracking",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "TransportationTrackingApiController@myBusTracking",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/parent/transportation/live-tracking/link",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkChild"
+    ],
+    "controller": "TransportationTrackingApiController@createLink",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/payment-confirmation",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getPaymentConfirmation",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/payment-transactions",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getPaymentTransactions",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/pickup-points",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@pickupPoints",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/profile",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getUserProfile",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/school-details",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@schoolDetails",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/school-settings",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getSchoolSettings",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/semester",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getSemester",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/session-years",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getSessionYear",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/set-languages",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@setLanguages",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@getSettings",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff-leaves-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getStaffLeaveDetail",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/allowances-deductions",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@allowancesDeductions",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/class-timetable",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getClassTimetable",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/counter",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@counter",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/delete-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@deleteAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/features-permission",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getFeaturesPermissions",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/fees-paid-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getFeesPaidList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/get-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/get-fees",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getFees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/id-card",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getStaffIdCard",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/leave-approve",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@leaveApprove",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/leave-delete",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@leaveDelete",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/leave-request",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@leaveRequest",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/login",
+    "middleware": [
+      "api"
+    ],
+    "controller": "TeacherApiController@login",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/my-payroll",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@myPayroll",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/notification",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getNotification",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/notification",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@storeNotification",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/notification-delete",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@deleteNotification",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/payroll-create",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@storePayroll",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/payroll-slip",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@myPayrollSlip",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/payroll-staff-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@staffPayrollList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/payroll-year",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@payrollYear",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/profile",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@profile",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/qr-attendance/config",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "QrAttendanceApiController@config",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/qr-attendance/my-attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "QrAttendanceApiController@myAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/qr-attendance/punch",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "QrAttendanceApiController@punch",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/qr-attendance/punches",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "QrAttendanceApiController@punches",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/qr-attendance/today",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "QrAttendanceApiController@today",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/roles",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getRoles",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/send-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@sendAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/staff-attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getStaffAttendanceData",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/staff-attendance-store",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@storeStaffAttendanceData",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/staffs",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@staff",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/student-fees-receipt",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@feesReceipt",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/student-leave",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getStudentLeaves",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/student-leave/update-status",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@updateStudentLeaveStatus",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/student-offline-exam-result",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getOfflineExamResult",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/student/attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@studentAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/tasks",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getTasks",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/tasks",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@storeTask",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/tasks/delete",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@deleteTask",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/tasks/status",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@updateTaskStatus",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/tasks/update",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@updateTask",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/teacher-timetable",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@teacherTimetable",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/teachers",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@teacher",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/update-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@updateAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/users",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getUsers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/users-role-wise",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StaffApiController@getUsersRoleWise",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getStudentDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student-exan-result-pdf",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getExamResultPdf",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/announcements",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getAnnouncements",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/assignments",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getAssignments",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/class-subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@classSubjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/current-session-year",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getSessionYear",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/delete-assignment-submission",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@deleteAssignmentSubmission",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/diary-categories",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getStudentDiaryCategories",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/diary-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@showStudentDiaryDetail",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/exam-marks",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getExamMarks",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/forgot-password",
+    "middleware": [
+      "api"
+    ],
+    "controller": "StudentApiController@forgotPassword",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-assignments-report",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getAssignmentReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-exam-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getExamDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-exam-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getExamList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-online-exam-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getOnlineExamList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-online-exam-questions",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getOnlineExamQuestions",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-online-exam-report",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getOnlineExamReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-online-exam-result",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getOnlineExamResult",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-online-exam-result-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getOnlineExamResultList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/get-profile-data",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getProfileDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/guradian-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getGuardianDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/id-card",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getStudentIdCard",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/lesson-topics",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getLessonTopics",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/lessons",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getLessons",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/login",
+    "middleware": [
+      "api"
+    ],
+    "controller": "StudentApiController@login",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/report",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "StudentApiController@getStudentReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/school-settings",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getSchoolSettings",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/select-subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@selectSubjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/sliders",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getSliders",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@subjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/submit-assignment",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@submitAssignment",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/submit-online-exam-answers",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@submitOnlineExamAnswers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/timetable",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getTimetable",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/transportation/live-tracking",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TransportationTrackingApiController@myBusTracking",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/student/transportation/live-tracking/link",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TransportationTrackingApiController@createLink",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/student/web-sliders",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "StudentApiController@getWebSliders",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/subscription/webhook/razorpay",
+    "middleware": [
+      "api"
+    ],
+    "controller": "SubscriptionWebhookController@razorpay",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "POST",
+    "path": "/api/subscription/webhook/stripe",
+    "middleware": [
+      "api"
+    ],
+    "controller": "SubscriptionWebhookController@stripe",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "GET",
+    "path": "/api/system-settings",
+    "middleware": [
+      "api"
+    ],
+    "controller": "ApiController@getSystemSettings",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": ""
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/class-detail",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getClassDetail",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/create-assignment",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@createAssignment",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/create-diary",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@createStudentDiary",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/create-diary-category",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@createStudentDiaryCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/create-lesson",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@createLesson",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/create-topic",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@createTopic",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-assignment",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteAssignment",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-diary",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteStudentDiary",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-diary-category",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteStudentDiaryCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-file",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteFile",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-lesson",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteLesson",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/delete-topic",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@deleteTopic",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/diary-categories",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getStudentDiaryCategories",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-assignment",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getAssignment",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-assignment-submission",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getAssignmentSubmission",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-exam-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getExamDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-exam-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getExamList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-lesson",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getLesson",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-student-marks",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus",
+      "auth:sanctum",
+      "checkStudent"
+    ],
+    "controller": "TeacherApiController@GetStudentExamMarks",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-student-result",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus",
+      "auth:sanctum",
+      "checkStudent"
+    ],
+    "controller": "TeacherApiController@GetStudentExamResult",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/get-topic",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getTopic",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/login",
+    "middleware": [
+      "api"
+    ],
+    "controller": "TeacherApiController@login",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": "Unauthenticated; school_code expected in request body"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/online-classes",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "OnlineClassApiController@store",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/online-classes/delete",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "OnlineClassApiController@destroy",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/online-classes/periods",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "OnlineClassApiController@periods",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/online-classes/subject-classes",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "OnlineClassApiController@subjectClasses",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/online-classes/update",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "OnlineClassApiController@update",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/remove-student",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@removeStudent",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/restore-diary-category",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@restoreStudentDiaryCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/send-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@sendAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/student-details",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getStudentDetails",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/student-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getStudentList",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/subjects",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@subjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/submit-attendance",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@submitAttendance",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/submit-exam-marks/student",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@submitExamMarksByStudent",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/submit-exam-marks/subject",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@submitExamMarksBySubjects",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teacher/teacher_timetable",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@getTeacherTimetable",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/trash-diary-category",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@trashStudentDiaryCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-announcement",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateAnnouncement",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-assignment",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateAssignment",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-assignment-submission",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateAssignmentSubmission",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-diary-category",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateStudentDiaryCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-file",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateFile",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-lesson",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateLesson",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/teacher/update-topic",
+    "middleware": [
+      "api",
+      "APISwitchDatabase",
+      "checkSchoolStatus"
+    ],
+    "controller": "TeacherApiController@updateTopic",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/teachers",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getTeachers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/attendance/create",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransoprtationAttendanceStore",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/attendance/user-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransoprtationAttendanceUsers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/dashboard",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransportationData",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transport/expense/categories/list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransportationExpenseCategory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/plans/current",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransoprtationCurrentPlan",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/receipt",
+    "middleware": [
+      "api"
+    ],
+    "controller": "TrasportationApiController@transportationReceipt",
+    "auth": "none",
+    "tenant_source": "body",
+    "notes": ""
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/requests",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransportationRequests",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/routes/stops",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransoprtationRouteForUser",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/store-trip-reports",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@storeTripReport",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transport/trip-reports",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTripReports",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transport/user/attendance-list",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@getTransportationAteendaceRecordForUser",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation-fees",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_fees",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transportation-payments",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_payments",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transportation-requests",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_requests",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation-shifts",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@transportation_shifts",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transportation/live-route",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TrasportationApiController@pickupPointsTrack",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation/live-tracking",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TransportationTrackingApiController@liveTracking",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transportation/live-tracking/link",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TransportationTrackingApiController@createLink",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation/live-tracking/my-bus",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TransportationTrackingApiController@myBusTracking",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation/live-tracking/session",
+    "middleware": [
+      "api"
+    ],
+    "controller": "TransportationTrackingApiController@session",
+    "auth": "tracking_token",
+    "tenant_source": "tracking",
+    "notes": "Auth via X-Tracking-Token; school DB resolved from token; outside APISwitchDatabase"
+  },
+  {
+    "method": "GET",
+    "path": "/api/transportation/trip/current",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TransportationTrackingApiController@currentTrip",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/transportation/trip/location",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "TransportationTrackingApiController@updateLocation",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/update-profile",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@updateProfile",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/users",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getUsers",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/users-by-role",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@getUsersByRoles",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/users/chat/history",
+    "middleware": [
+      "api",
+      "APISwitchDatabase"
+    ],
+    "controller": "ApiController@usersChatHistory",
+    "auth": "bearer",
+    "tenant_source": "school-code header",
+    "notes": "Requires school-code header; validates Sanctum bearer token"
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/flutterwave",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WebhookController@flutterwave",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/paystack",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WebhookController@paystack",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/razorpay",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WebhookController@razorpay",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/stripe",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WebhookController@stripe",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller"
+  },
+  {
+    "method": "GET",
+    "path": "/api/whatsapp/webhook/{schoolCode}",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WhatsAppWebhookController@verify",
+    "auth": "none",
+    "tenant_source": "path",
+    "notes": "Meta WhatsApp Cloud API webhook; school from path param"
+  },
+  {
+    "method": "POST",
+    "path": "/api/whatsapp/webhook/{schoolCode}",
+    "middleware": [
+      "api"
+    ],
+    "controller": "WhatsAppWebhookController@receive",
+    "auth": "none",
+    "tenant_source": "path",
+    "notes": "Meta WhatsApp Cloud API webhook; school from path param"
+  }
+]

@@ -1,0 +1,46 @@
+# Phase 0 reproducible local dependencies.
+# Usage (from repo root):
+#   docker compose -f ops/docker-compose.phase0.yml up -d
+# Load sanitized dumps from datasets/ after containers are healthy.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: eschool-phase0-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: eschool_root
+      MYSQL_USER: eschool
+      MYSQL_PASSWORD: eschool
+    ports:
+      - "3307:3306"
+    volumes:
+      - phase0_mysql:/var/lib/mysql
+      - ../datasets:/datasets:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ueschool", "-peschool"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: eschool-phase0-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - phase0_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  phase0_mysql:
+  phase0_redis:

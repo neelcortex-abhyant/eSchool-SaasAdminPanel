@@ -1,0 +1,482 @@
+[
+  {
+    "name": "ANNOUNCEMENT_ENDPOINTS.GET_ANNOUNCEMENTS",
+    "path": "/student/announcements",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get subject-specific announcements; shares path /student/announcements with NOTICE_BOARD_ENDPOINTS; used in functions.ts lines: 3786"
+  },
+  {
+    "name": "ASSIGNMENT_ENDPOINTS.DELETE_ASSIGNMENT_SUBMISSION",
+    "path": "/student/delete-assignment-submission",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "DELETE request to delete student assignment submission; endpoint comment says DELETE; runtime uses POST multipart; used in functions.ts lines: 2050"
+  },
+  {
+    "name": "ASSIGNMENT_ENDPOINTS.GET_ASSIGNMENTS",
+    "path": "/student/assignments",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student assignments; used in functions.ts lines: 1927"
+  },
+  {
+    "name": "ASSIGNMENT_ENDPOINTS.SUBMIT_ASSIGNMENT",
+    "path": "/student/submit-assignment",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request to upload student assignment; used in functions.ts lines: 2000"
+  },
+  {
+    "name": "ATTENDANCE_ENDPOINTS.GET_ATTENDANCE",
+    "path": "/student/attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get attendance; used in functions.ts lines: 3249"
+  },
+  {
+    "name": "CERTIFICATE_ENDPOINTS.ASSIGN",
+    "path": "/certificate/assign",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 4879, 4898"
+  },
+  {
+    "name": "CERTIFICATE_ENDPOINTS.GENERATE",
+    "path": "/certificate/generate",
+    "method": "POST",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "POST with empty JSON body; id & school_code as query params; used in functions.ts lines: 4927"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.DELETE_MESSAGE",
+    "path": "/delete/message",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "DELETE request to delete message by id; endpoint comment says DELETE; runtime uses POST JSON body; used in functions.ts lines: 947"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.GET_CHAT_USERS",
+    "path": "/users",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with role, child_id, page params; used in functions.ts lines: 652"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.GET_CLASS_SECTION_TEACHERS",
+    "path": "/class-section/teachers",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 530"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.GET_MESSAGE",
+    "path": "/message",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with receiver_id query param; used in functions.ts lines: 771"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.GET_USER_CHAT_HISTORY",
+    "path": "/users/chat/history",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 687"
+  },
+  {
+    "name": "CHAT_ENDPOINTS.SEND_MESSAGE",
+    "path": "/message",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request to send message with text and files; used in functions.ts lines: 912"
+  },
+  {
+    "name": "DIARY_ENDPOINTS.GET_DIARIES",
+    "path": "/diaries",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with sort, subject_id, student_id, diary_category_id params; used in functions.ts lines: 3962"
+  },
+  {
+    "name": "DIARY_ENDPOINTS.GET_DIARY_CATEGORIES",
+    "path": "/student/diary-categories",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get all diary categories; used in functions.ts lines: 4005"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_EXAM_DETAILS",
+    "path": "/student/get-exam-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get exam details with exam_id param; used in functions.ts lines: 1596"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_EXAM_LIST",
+    "path": "/student/get-exam-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get offline exam list; used in functions.ts lines: 1434"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_EXAM_RESULT",
+    "path": "/student/exam-marks",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student result; used in functions.ts lines: 1105"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_ONLINE_EXAM_LIST",
+    "path": "/student/get-online-exam-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get online exam list with class_subject_id param; used in functions.ts lines: 1401"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_ONLINE_EXAM_QUESTIONS",
+    "path": "/student/get-online-exam-questions",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get exam questions with exam_id and exam_key params; used in functions.ts lines: 3652"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_ONLINE_EXAM_RESULT",
+    "path": "/student/get-online-exam-result",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get online exam details; used in functions.ts lines: 1513"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_ONLINE_EXAM_RESULT_LIST",
+    "path": "/student/get-online-exam-result-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get online exam result list; used in functions.ts lines: 1305"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.GET_STUDENT_EXAM_RESULT_PDF",
+    "path": "/student-exan-result-pdf",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student exam result pdf data; path typo in source: student-exan-result-pdf; used in functions.ts lines: 1171"
+  },
+  {
+    "name": "EXAM_ENDPOINTS.SUBMIT_ONLINE_EXAM_ANSWERS",
+    "path": "/student/submit-online-exam-answers",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "POST request to submit online exam answers; used in functions.ts lines: 856"
+  },
+  {
+    "name": "GALLERY_ENDPOINTS.GET_GALLERY",
+    "path": "/gallery",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with class_subject_id param; used in functions.ts lines: 2588, 2664"
+  },
+  {
+    "name": "GUARDIAN_ENDPOINTS.GET_GUARDIAN_DETAILS",
+    "path": "/student/guradian-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get guardian details; path typo in source: guradian-details; used in functions.ts lines: 2745"
+  },
+  {
+    "name": "HOLIDAY_ENDPOINTS.GET_HOLIDAYS",
+    "path": "/holidays",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with class_subject_id param; used in functions.ts lines: 2408"
+  },
+  {
+    "name": "ID_CARD_ENDPOINTS.GET_ID_CARD",
+    "path": "/student/id-card",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 4953"
+  },
+  {
+    "name": "LANGUAGE_ENDPOINTS.GET_LANGUAGES",
+    "path": "/get-languages",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get all available languages; used in functions.ts lines: 5103"
+  },
+  {
+    "name": "LANGUAGE_ENDPOINTS.SET_LANGUAGE",
+    "path": "/set-languages",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "POST request with language_code and type params, returns translation file; used in functions.ts lines: 5118"
+  },
+  {
+    "name": "LESSONS_ENDPOINTS.GET_LESSONS",
+    "path": "/student/lessons",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with class_subject_id param; used in functions.ts lines: 3481"
+  },
+  {
+    "name": "LESSONS_ENDPOINTS.GET_LESSON_TOPICS",
+    "path": "/student/lesson-topics",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with lesson_id param; used in functions.ts lines: 3561"
+  },
+  {
+    "name": "NOTICE_BOARD_ENDPOINTS.GET_NOTICE_BOARD",
+    "path": "/student/announcements",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student notice board; shares path /student/announcements with ANNOUNCEMENT_ENDPOINTS; used in functions.ts lines: 2186"
+  },
+  {
+    "name": "NOTIFICATIONS_ENDPOINTS.GET_NOTIFICATIONS",
+    "path": "/notifications",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student notifications; used in functions.ts lines: 4749"
+  },
+  {
+    "name": "REPORT_ENDPOINTS.GET_ASSIGNMENTS_REPORT",
+    "path": "/student/get-assignments-report",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 2268"
+  },
+  {
+    "name": "REPORT_ENDPOINTS.GET_ONLINE_EXAM_REPORT",
+    "path": "/student/get-online-exam-report",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 2346"
+  },
+  {
+    "name": "REPORT_ENDPOINTS.GET_STUDENT_REPORT",
+    "path": "/student/report",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 5029"
+  },
+  {
+    "name": "SEMESTER_ENDPOINTS.GET_SEMESTERS",
+    "path": "/semester",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with session_year_id param; used in functions.ts lines: 2495"
+  },
+  {
+    "name": "SESSION_YEARS_ENDPOINTS.GET_SESSION_YEARS",
+    "path": "/session-years",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request with class_subject_id param; used in functions.ts lines: 2463"
+  },
+  {
+    "name": "SETTINGS_ENDPOINTS.GET_SCHOOL_SETTINGS",
+    "path": "/school-settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get school settings; used in functions.ts lines: 2870"
+  },
+  {
+    "name": "SETTINGS_ENDPOINTS.GET_SETTINGS",
+    "path": "/settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get settings; used in functions.ts lines: 2789"
+  },
+  {
+    "name": "SETTINGS_ENDPOINTS.GET_STUDENT_SCHOOL_SETTINGS",
+    "path": "/student/school-settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student school settings (includes footer_text); used in functions.ts lines: 3087"
+  },
+  {
+    "name": "SETTINGS_ENDPOINTS.GET_SYSTEM_BRANDING",
+    "path": "/system-settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get system branding; public fetch GET; optional school_code query param; no auth; uses fetch() not studentApi; used in functions.ts lines: 3047, 3049"
+  },
+  {
+    "name": "SLIDER_ENDPOINTS.GET_SLIDERS",
+    "path": "/student/web-sliders",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get sliders; used in functions.ts lines: 3169"
+  },
+  {
+    "name": "STUDENT_AUTH_ENDPOINTS.CHANGE_PASSWORD",
+    "path": "/change-password",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "No /student prefix as per API docs; used in functions.ts lines: 291"
+  },
+  {
+    "name": "STUDENT_AUTH_ENDPOINTS.GET_PROFILE",
+    "path": "/student/get-profile-data",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 456"
+  },
+  {
+    "name": "STUDENT_AUTH_ENDPOINTS.LOGIN",
+    "path": "/student/login",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "also referenced in axiosConfig interceptors for login-request detection; also referenced in: lib/api/student/axiosConfig.ts; used in functions.ts lines: 183"
+  },
+  {
+    "name": "STUDENT_AUTH_ENDPOINTS.RESET_PASSWORD",
+    "path": "/student/forgot-password",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "used in functions.ts lines: 237"
+  },
+  {
+    "name": "STUDENT_TIMETABLE_ENDPOINTS.GET_STUDENT_TIMETABLE",
+    "path": "/student/timetable",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student timetable; used in functions.ts lines: 1009"
+  },
+  {
+    "name": "SUBJECT_ENDPOINTS.GET_CLASS_SUBJECTS",
+    "path": "/student/class-subjects",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get class subjects with elective groups; used in functions.ts lines: 3359"
+  },
+  {
+    "name": "SUBJECT_ENDPOINTS.GET_SUBJECTS",
+    "path": "/student/subjects",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student subjects; used in functions.ts lines: 1710"
+  },
+  {
+    "name": "SUBJECT_ENDPOINTS.SELECT_SUBJECTS",
+    "path": "/student/select-subjects",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "POST request to save elective subject selections; used in functions.ts lines: 3407"
+  },
+  {
+    "name": "TEACHER_ENDPOINTS.GET_TEACHERS",
+    "path": "/teachers",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request to get student's teachers list with student_id query param; used in functions.ts lines: 4620"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GENERATE_TRACKING_LINK",
+    "path": "/transportation/live-tracking/link",
+    "method": "POST",
+    "encoding": "json",
+    "referenced": true,
+    "notes": "POST request with user_id, returns a shareable tokenized tracking URL; used in functions.ts lines: 4474"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GET_ATTENDANCE_LIST",
+    "path": "/transport/user/attendance-list",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request with user_id param; used in functions.ts lines: 4538"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GET_DASHBOARD",
+    "path": "/transport/dashboard",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request with user_id and pickup_drop params; used in functions.ts lines: 4137"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GET_LIVE_ROUTE",
+    "path": "/transportation/live-route",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request with user_id param; used in functions.ts lines: 4237"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GET_LIVE_TRACKING",
+    "path": "/student/transportation/live-tracking",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request, returns running trip + last GPS location; used in functions.ts lines: 4320"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.GET_TRACKING_SESSION",
+    "path": "/transportation/live-tracking/session",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "GET request, X-Tracking-Token only, self-contained live session (no auth/school-code); fetch GET; X-Tracking-Token header only (no Bearer/school-code); uses fetch() not studentApi; used in functions.ts lines: 4435"
+  },
+  {
+    "name": "TRANSPORTATION_ENDPOINTS.STORE_TRIP_REPORT",
+    "path": "/transport/store-trip-reports",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "POST request to store trip report; used in functions.ts lines: 4808"
+  }
+]

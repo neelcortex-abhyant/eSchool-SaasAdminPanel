@@ -1,0 +1,44 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+
+# Datasets may contain PII — keep only sanitized synthetic dumps in git
+datasets/*
+!datasets/.gitkeep
+!datasets/README.md
+!datasets/*.md
+!datasets/*.sh
+!datasets/*.py
+!datasets/*.schema.sql
+!datasets/*.data.sanitized.sql
+!datasets/MANIFEST.md
+datasets/sqlite_mirror/
+
+# Python
+backend/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Node
+admin-web/node_modules/
+admin-web/.next/
+**/node_modules/
+**/.next/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs / coverage
+logs/
+coverage/
+htmlcov/
+.coverage

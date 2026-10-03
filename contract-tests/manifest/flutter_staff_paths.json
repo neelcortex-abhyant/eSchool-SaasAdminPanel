@@ -1,0 +1,1114 @@
+[
+  {
+    "name": "login",
+    "path": "teacher/login",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: none (useAuthToken:false)"
+  },
+  {
+    "name": "logout",
+    "path": "logout",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "schoolDetails",
+    "path": "school-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "passwordResetEmail",
+    "path": "forgot-password",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: none (useAuthToken:false)"
+  },
+  {
+    "name": "changepassword",
+    "path": "change-password",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "editProfile",
+    "path": "update-profile",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "profile",
+    "path": "profile",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getCountryCodes",
+    "path": "country-codes",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStaffPermissionAndFeatures",
+    "path": "staff/features-permission",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getSystemStatistics",
+    "path": "staff/counter",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTeachers",
+    "path": "staff/teachers",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLeaves",
+    "path": "leaves",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "applyLeave",
+    "path": "leaves",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getSettings",
+    "path": "settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getSchoolSettings",
+    "path": "school-settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLanguages",
+    "path": "get-languages",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: none (useAuthToken:false)"
+  },
+  {
+    "name": "getLanguageLabels",
+    "path": "set-languages",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: none (useAuthToken:false)"
+  },
+  {
+    "name": "getHolidays",
+    "path": "holidays",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLeaveRequests",
+    "path": "staff/leave-request",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "approveOrRejectLeaveRequest",
+    "path": "staff/leave-approve",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStudentLeaves",
+    "path": "staff/student-leave",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateStudentLeaveStatus",
+    "path": "staff/student-leave/update-status",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getClasses",
+    "path": "classes",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getSessionYears",
+    "path": "session-years",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStudents",
+    "path": "teacher/student-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStaffs",
+    "path": "staff/staffs",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTimeTableOfTeacher",
+    "path": "staff/teacher-timetable",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUserLeaves",
+    "path": "staff-leaves-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStudentAttendanceForStaff",
+    "path": "staff/student/attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getClassTimetable",
+    "path": "staff/class-timetable",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getMediums",
+    "path": "medium",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getOfflineExamStudentResults",
+    "path": "staff/student-offline-exam-result",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getNotifications",
+    "path": "notifications",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteNotification",
+    "path": "staff/notification-delete",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getAnnouncements",
+    "path": "staff/get-announcement",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteGeneralAnnouncement",
+    "path": "staff/delete-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "sendNotification",
+    "path": "staff/notification",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "MultipartFile in body; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "sendGeneralAnnouncement",
+    "path": "staff/send-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "editGeneralAnnouncement",
+    "path": "staff/update-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getMyPayRolls",
+    "path": "staff/my-payroll",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "downloadPayRollSlip",
+    "path": "staff/payroll-slip",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getPayRollYears",
+    "path": "staff/payroll-year",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getRoles",
+    "path": "staff/roles",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "searchUsers",
+    "path": "staff/users",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUsersByRole",
+    "path": "users-by-role",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getFees",
+    "path": "staff/get-fees",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStudentsFeeStatus",
+    "path": "staff/fees-paid-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStaffsPayroll",
+    "path": "staff/payroll-staff-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "submitStaffsPayroll",
+    "path": "staff/payroll-create",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "downloadStudentFeeReceipt",
+    "path": "staff/student-fees-receipt",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getAllowancesAndDeductions",
+    "path": "staff/allowances-deductions",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLeaveSettings",
+    "path": "leave-settings",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStaffAttendance",
+    "path": "staff/staff-attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "submitStaffAttendance",
+    "path": "staff/staff-attendance-store",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getQrAttendanceConfig",
+    "path": "staff/qr-attendance/config",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "via local _get -> Api.get; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getQrAttendanceToday",
+    "path": "staff/qr-attendance/today",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "via local _get -> Api.get; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "qrAttendancePunch",
+    "path": "staff/qr-attendance/punch",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "via local _post -> Api.postRaw; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getQrMyAttendance",
+    "path": "staff/qr-attendance/my-attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "via local _get -> Api.get; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getQrAttendancePunches",
+    "path": "staff/qr-attendance/punches",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "via local _get -> Api.get; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTeacherMyTimetable",
+    "path": "teacher/teacher_timetable",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getClassesWithTeacherDetails",
+    "path": "teacher/class-detail",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getExams",
+    "path": "teacher/get-exam-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLessons",
+    "path": "teacher/get-lesson",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getSubjects",
+    "path": "teacher/subjects",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getClassDetails",
+    "path": "teacher/class-detail",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createLesson",
+    "path": "teacher/create-lesson",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateLesson",
+    "path": "teacher/update-lesson",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteLesson",
+    "path": "teacher/delete-lesson",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteStudyMaterial",
+    "path": "teacher/delete-file",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateStudyMaterial",
+    "path": "teacher/update-file",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTopics",
+    "path": "teacher/get-topic",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createTopic",
+    "path": "teacher/create-topic",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateTopic",
+    "path": "teacher/update-topic",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteTopic",
+    "path": "teacher/delete-topic",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getReviewAssignment",
+    "path": "teacher/get-assignment-submission",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateReviewAssignment",
+    "path": "teacher/update-assignment-submission",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getAssignment",
+    "path": "teacher/get-assignment",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "uploadAssignment",
+    "path": "teacher/update-assignment",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteAssignment",
+    "path": "teacher/delete-assignment",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createAssignment",
+    "path": "teacher/create-assignment",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getAnnouncement",
+    "path": "teacher/get-announcement",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createAnnouncement",
+    "path": "teacher/send-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteAnnouncement",
+    "path": "teacher/delete-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateAnnouncement",
+    "path": "teacher/update-announcement",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getAttendance",
+    "path": "teacher/get-attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "submitAttendance",
+    "path": "teacher/submit-attendance",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTeacherAttendance",
+    "path": "staff/attendance",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "examList",
+    "path": "teacher/get-exam-list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "submitExamMarks",
+    "path": "teacher/submit-exam-marks/subject",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getDiaryCategories",
+    "path": "teacher/diary-categories",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createDiaryCategory",
+    "path": "teacher/create-diary-category",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateDiaryCategory",
+    "path": "teacher/update-diary-category",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteDiaryCategory",
+    "path": "teacher/delete-diary-category",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createDiary",
+    "path": "teacher/create-diary",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteDiary",
+    "path": "teacher/delete-diary",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getDiaries",
+    "path": "diaries",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getStudentDetails",
+    "path": "student-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "chatMessages",
+    "path": "message",
+    "method": "GET|POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "readMessages",
+    "path": "message/read",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteMessages",
+    "path": "delete/message",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUsers",
+    "path": "users",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUserChatHistory",
+    "path": "users/chat/history",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getPickupPoints",
+    "path": "pickup-points",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportationShifts",
+    "path": "transportation-shifts",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportationFees",
+    "path": "transportation-fees",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportDashboard",
+    "path": "transport/dashboard",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getCurrentPlan",
+    "path": "transport/plans/current",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getVehicleAssignmentStatus",
+    "path": "get-vehicle-assignment-status",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTrips",
+    "path": "driver-helpr/get-trips",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "typo: helpr (helper); auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUserImage",
+    "path": "get-image",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": false,
+    "notes": "Api.getUserImage unused; trip.dart hardcodes '\u2026/api/get-image?user_id=&type=profile' (inferred GET+query); typo/odd path get-image; auth: unknown (hardcoded URL, no Bearer)"
+  },
+  {
+    "name": "startEndTrip",
+    "path": "driver-helpr/trip/start-end",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "typo: helpr (helper); auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateTripLocation",
+    "path": "transportation/trip/location",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "via Api.postRaw; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createAttendance",
+    "path": "transport/attendance/create",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportUserAttendanceList",
+    "path": "transport/user/attendance-list",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getLiveRoute",
+    "path": "transportation/live-route",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getRouteStops",
+    "path": "transport/routes/stops",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportRequests",
+    "path": "transport/requests",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "submitTransportEnrollment",
+    "path": "transportation-payments",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createTransportationExpense",
+    "path": "create-transportation-expense",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "may include file fields; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getExpenseCategories",
+    "path": "transport/expense/categories/list",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getVehicleDetails",
+    "path": "driver-helpr/get-vehicle-details",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "typo: helpr (helper); auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTransportationExpenses",
+    "path": "get-transportation-expense",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "storeTripReports",
+    "path": "transport/store-trip-reports",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "downloadStudentResult",
+    "path": "student-exan-result-pdf",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "typo: exan (exam); auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getDriverDashboard",
+    "path": "driver-helpr/dashboard",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "typo: helpr (helper); auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getCertificateAssignments",
+    "path": "certificate/assign",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "generateCertificate",
+    "path": "certificate/generate",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "via Api.postRaw; auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "downloadStaffIdCard",
+    "path": "staff/id-card",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getTasks",
+    "path": "staff/tasks",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createTask",
+    "path": "staff/tasks",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateTask",
+    "path": "staff/tasks/update",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteTask",
+    "path": "staff/tasks/delete",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateTaskStatus",
+    "path": "staff/tasks/status",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getUsersRoleWise",
+    "path": "staff/users-role-wise",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getOnlineClassSubjects",
+    "path": "teacher/online-classes/subject-classes",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "getOnlineClassPeriods",
+    "path": "teacher/online-classes/periods",
+    "method": "GET",
+    "encoding": "query",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "createOnlineClass",
+    "path": "teacher/online-classes",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "updateOnlineClass",
+    "path": "teacher/online-classes/update",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  },
+  {
+    "name": "deleteOnlineClass",
+    "path": "teacher/online-classes/delete",
+    "method": "POST",
+    "encoding": "multipart",
+    "referenced": true,
+    "notes": "auth: Bearer+school-code (Authorization + school-code)"
+  }
+]

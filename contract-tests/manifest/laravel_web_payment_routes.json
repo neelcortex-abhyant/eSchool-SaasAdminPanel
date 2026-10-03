@@ -1,0 +1,124 @@
+[
+  {
+    "method": "GET",
+    "path": "/payment/cancel",
+    "middleware": [
+      "web"
+    ],
+    "controller": "PaymentController@cancel",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "App payment cancel URL"
+  },
+  {
+    "method": "GET",
+    "path": "/payment/status",
+    "middleware": [
+      "web"
+    ],
+    "controller": "PaymentController@status",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "App payment return URL; defined twice in web.php (prefix group + standalone)"
+  },
+  {
+    "method": "GET",
+    "path": "/subscription/cron-job",
+    "middleware": [
+      "web",
+      "CheckForMaintenanceMode"
+    ],
+    "controller": "Controller@cron_job",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Public subscription cron trigger under CheckForMaintenanceMode only"
+  },
+  {
+    "method": "POST",
+    "path": "/subscription/webhook/flutterwave",
+    "middleware": [
+      "web"
+    ],
+    "controller": "SubscriptionWebhookController@flutterwave",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public SaaS subscription webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/subscription/webhook/paystack",
+    "middleware": [
+      "web"
+    ],
+    "controller": "SubscriptionWebhookController@paystack",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public SaaS subscription webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/subscription/webhook/razorpay",
+    "middleware": [
+      "web"
+    ],
+    "controller": "SubscriptionWebhookController@razorpay",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public SaaS subscription webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/subscription/webhook/stripe",
+    "middleware": [
+      "web"
+    ],
+    "controller": "SubscriptionWebhookController@stripe",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public SaaS subscription webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/webhook/flutterwave",
+    "middleware": [
+      "web"
+    ],
+    "controller": "WebhookController@flutterwave",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public fee payment webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/webhook/paystack",
+    "middleware": [
+      "web"
+    ],
+    "controller": "WebhookController@paystack",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public fee payment webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/webhook/razorpay",
+    "middleware": [
+      "web"
+    ],
+    "controller": "WebhookController@razorpay",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public fee payment webhook"
+  },
+  {
+    "method": "POST",
+    "path": "/webhook/stripe",
+    "middleware": [
+      "web"
+    ],
+    "controller": "WebhookController@stripe",
+    "auth": "none",
+    "tenant_source": "none",
+    "notes": "Provider webhook; signature validation in controller; Public fee payment webhook"
+  }
+]

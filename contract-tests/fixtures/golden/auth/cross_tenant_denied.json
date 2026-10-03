@@ -1,0 +1,7 @@
+{
+  "code": 401,
+  "data": null,
+  "details": "",
+  "error": true,
+  "message": "Unauthenticated."
+}

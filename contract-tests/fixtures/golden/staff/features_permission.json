@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "features": [
+      "Attendance Management",
+      "Timetable Management",
+      "Assignment Management",
+      "Exam Management"
+    ],
+    "permissions": [
+      "attendance-list",
+      "timetable-list",
+      "assignment-list",
+      "exam-list",
+      "announcement-list",
+      "class-teacher"
+    ]
+  },
+  "error": false,
+  "message": "Data Fetched Successfully"
+}

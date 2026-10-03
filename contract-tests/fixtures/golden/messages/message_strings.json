@@ -1,0 +1,45 @@
+{
+  "version": "phase1",
+  "note": "Exact message strings captured from FastAPI golden fixtures; expand as more domains port",
+  "response_codes": {
+    "SUCCESS": 200,
+    "INVALID_LOGIN": 101,
+    "VALIDATION_ERROR": 102,
+    "EXCEPTION_ERROR": 103,
+    "INVALID_PASSWORD": 109,
+    "INACTIVATED_USER": 116,
+    "UNAUTHENTICATED_BODY": 401
+  },
+  "observed_messages": [
+    {
+      "source_fixture": "teacher/login_success.json",
+      "code": 200,
+      "message": "User logged-in!",
+      "error": false
+    },
+    {
+      "source_fixture": "auth/logout_no_device.json",
+      "code": 200,
+      "message": "Logout Successfully",
+      "error": false
+    },
+    {
+      "source_fixture": "auth/cross_tenant_denied.json",
+      "code": 401,
+      "message": "Unauthenticated.",
+      "error": true
+    },
+    {
+      "source_fixture": "auth/login_failure_bad_password.json",
+      "code": 101,
+      "message": "Invalid Login Credentials",
+      "error": true
+    },
+    {
+      "source_fixture": "staff/features_permission.json",
+      "code": 200,
+      "message": "Data Fetched Successfully",
+      "error": false
+    }
+  ]
+}

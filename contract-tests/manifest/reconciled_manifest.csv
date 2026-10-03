@@ -1,0 +1,259 @@
+status,method,path,domain,encoding,auth,tenant_source,client_count,flutter_student,flutter_staff,student_web,fixture_required,notes
+active,POST,/api/certificate/assign,certificate,json|multipart,bearer,school-code header,3,getCertificateAssignments,getCertificateAssignments,CERTIFICATE_ENDPOINTS.ASSIGN,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/certificate/generate,certificate,multipart|query,none,body,3,generateCertificate,generateCertificate,CERTIFICATE_ENDPOINTS.GENERATE,True,contract exception: returns text/html
+dead_or_admin_only,GET,/api/certificates,certificates,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/change-password,change-password,multipart,bearer,school-code header,3,changePassword,changepassword,STUDENT_AUTH_ENDPOINTS.CHANGE_PASSWORD,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/class-section/teachers,class-section,multipart,bearer,school-code header,1,,,CHAT_ENDPOINTS.GET_CLASS_SECTION_TEACHERS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/classes,classes,query,bearer,school-code header,1,,getClasses,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/country-codes,country-codes,query,bearer,school-code header,1,,getCountryCodes,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/create-transportation-expense,create-transportation-expense,multipart,bearer,school-code header,1,,createTransportationExpense,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/delete-my-leaves,delete-my-leaves,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/delete/message,delete,json|multipart,bearer,school-code header,3,deleteMessages,deleteMessages,CHAT_ENDPOINTS.DELETE_MESSAGE,True,contract exception: may accept JSON despite multipart default; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/diaries,diaries,query,bearer,school-code header,3,getDiaries,getDiaries,DIARY_ENDPOINTS.GET_DIARIES,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/driver-helpr/dashboard,driver,query,bearer,school-code header,1,,getDriverDashboard,,True,preserve odd spelling: driver-helpr; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/driver-helpr/get-trips,driver,query,bearer,school-code header,1,,getTrips,,True,preserve odd spelling: driver-helpr; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/driver-helpr/get-vehicle-details,driver,query,bearer,school-code header,1,,getVehicleDetails,,True,preserve odd spelling: driver-helpr; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/driver-helpr/trip/start-end,driver,multipart,bearer,school-code header,1,,startEndTrip,,True,preserve odd spelling: driver-helpr; Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/fees-due-notification,fees-due-notification,unknown,none,none,0,,,,False,No Flutter or student-web constant references this route
+dead_or_admin_only,GET,/api/firebase-config,firebase-config,unknown,none,none,0,,,,False,No Flutter or student-web constant references this route
+active,POST,/api/forgot-password,forgot-password,multipart,none,body,2,forgotPassword,passwordResetEmail,,True,Unauthenticated; school_code expected in request body
+active,GET,/api/gallery,gallery,query,bearer,school-code header,2,getSchoolGallery,,GALLERY_ENDPOINTS.GET_GALLERY,True,Requires school-code header; validates Sanctum bearer token
+conditional,GET,/api/get-image,get-image,query,unknown,unknown,1,,getUserImage,,False,Api.getUserImage unused; trip.dart hardcodes https://wrteam.net/api/get-image. Not in Laravel api.php.
+active,GET,/api/get-languages,get-languages,query,none,none,3,getLanguages,getLanguages,LANGUAGE_ENDPOINTS.GET_LANGUAGES,True,
+active,GET,/api/get-transportation-expense,get-transportation-expense,query,bearer,school-code header,1,,getTransportationExpenses,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/get-vehicle-assignment-status,get-vehicle-assignment-status,multipart,bearer,school-code header,2,getVehicleAssignmentStatus,getVehicleAssignmentStatus,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/holidays,holidays,query,bearer,school-code header,3,holidays,getHolidays,HOLIDAY_ENDPOINTS.GET_HOLIDAYS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/leave-settings,leave-settings,query,bearer,school-code header,2,getLeaveSettings,getLeaveSettings,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/leaves,leaves,query,bearer,school-code header,1,,getLeaves,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/leaves,leaves,multipart,bearer,school-code header,1,,applyLeave,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/logout,logout,multipart,bearer,school-code header,2,logout,logout,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/medium,medium,query,bearer,school-code header,1,,getMediums,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/message,message,multipart|query,bearer,school-code header,3,chatMessages,chatMessages,CHAT_ENDPOINTS.GET_MESSAGE,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/message,message,multipart,bearer,school-code header,3,chatMessages,chatMessages,CHAT_ENDPOINTS.SEND_MESSAGE,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/message/read,message,multipart,bearer,school-code header,2,readMessages,readMessages,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/my-leaves,my-leaves,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/notifications,notifications,query,bearer,school-code header,3,notifications,getNotifications,NOTIFICATIONS_ENDPOINTS.GET_NOTIFICATIONS,True,Requires school-code header; validates Sanctum bearer token
+dead_client_constant,POST,/api/parent/add-fees-transaction,parent,multipart,unknown,unknown,1,addFeesTransaction,,,False,Flutter constant exists but addFeesTransaction method is commented out in studentRepository.dart; Laravel route removed and controller code commented. Prefer confirm with staging traffic before implem
+active,GET,/api/parent/announcements,parent,query,bearer,school-code header,1,generalAnnouncementsParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/assignments,parent,query,bearer,school-code header,1,getAssignmentsParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/attendance,parent,query,bearer,school-code header,1,getStudentAttendanceParent,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/class-subjects,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/current-session-year,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/diary-categories,parent,query,bearer,school-code header,1,getParentDiaryCategories,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/diary-details,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/exam-marks,parent,query,bearer,school-code header,1,getStudentResultsParent,,,True,Requires school-code header; validates Sanctum bearer token
+missing_in_laravel_live_client,POST,/api/parent/fail-payment-transaction,parent,multipart,unknown,unknown,1,failPaymentTransaction,,,True,STILL CALLED from failPaymentTransaction and transport payment repo. Laravel failPaymentTransactionStatus commented/unrouted.
+active,GET,/api/parent/fees,parent,query,bearer,school-code header,1,getStudentFeesDetailParent,,,True,Requires school-code header; validates Sanctum bearer token
+dead_client_constant,GET,/api/parent/fees-paid-list,parent,query,unknown,unknown,1,getPaidFeesListParent,,,False,Flutter fetchFeesList using this path is commented out; Laravel feesPaidList commented/unrouted. Replacement list flows use /api/parent/fees and related.
+active,POST,/api/parent/fees/compulsory/pay,parent,multipart,bearer,school-code header,1,payChildCompulsoryFees,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/fees/fees-transactions,parent,query,bearer,school-code header,1,getFeesTransactions,,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/fees/manual/compulsory/pay,parent,multipart,bearer,school-code header,1,payChildCompulsoryFeesManual,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/fees/manual/config,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/fees/manual/optional/pay,parent,multipart,bearer,school-code header,1,payChildOptionalFeesManual,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/fees/manual/status,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/fees/optional/pay,parent,multipart,bearer,school-code header,1,payChildOptionalFees,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/fees/receipt,parent,query,bearer,school-code header,1,downloadFeeReceipt,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/fees/transaction-receipt,parent,query,bearer,school-code header,1,getFeeTransactionReceipt,,,True,withoutMiddleware: checkChild; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-assignments-report,parent,query,bearer,school-code header,1,parentAssignmentReport,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-child-profile-data,parent,query,bearer,school-code header,1,childProfileDetails,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-data,parent,query,bearer,school-code header,1,getParentData,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-exam-details,parent,query,bearer,school-code header,1,getStudentExamDetailsParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-exam-list,parent,query,bearer,school-code header,1,getStudentExamListParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-online-exam-list,parent,query,bearer,school-code header,1,parentExamOnlineList,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-online-exam-report,parent,query,bearer,school-code header,1,parentOnlineExamReport,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-online-exam-result,parent,query,bearer,school-code header,1,parentOnlineExamResult,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/get-online-exam-result-list,parent,query,bearer,school-code header,1,parentOnlineExamResultList,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/lesson-topics,parent,query,bearer,school-code header,1,getstudyMaterialsOfTopicParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/lessons,parent,query,bearer,school-code header,1,lessonsOfSubjectParent,,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/login,parent,multipart,none,body,1,parentLogin,,,True,Unauthenticated; school_code expected in request body
+active,GET,/api/parent/school-settings,parent,query,bearer,school-code header,1,getParentChildSchoolSettingDetails,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/sliders,parent,query,bearer,school-code header,1,getParentSliders,,,True,Requires school-code header; validates Sanctum bearer token
+missing_in_laravel_live_client,POST,/api/parent/store-fees,parent,multipart,unknown,unknown,1,storeFeesParent,,,True,STILL CALLED from studentRepository.storeFees and transportationPaymentRepository. Laravel route absent; must restore for binary compatibility or prove production never hits it.
+active,GET,/api/parent/student/leave,parent,multipart,bearer,school-code header,1,studentLeave,,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/student/leave,parent,multipart,bearer,school-code header,1,studentLeave,,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/parent/student/leave/cancel,parent,multipart,bearer,school-code header,1,cancelStudentLeave,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/subjects,parent,query,bearer,school-code header,1,subjectsByChildId,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/test,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/parent/timetable,parent,query,bearer,school-code header,1,getStudentTimetableParent,,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/parent/transportation/live-tracking,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/parent/transportation/live-tracking/link,parent,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/payment-confirmation,payment-confirmation,query,bearer,school-code header,1,confirmPayment,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/payment-transactions,payment-transactions,query,bearer,school-code header,1,getTransactions,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/pickup-points,pickup-points,query,bearer,school-code header,2,getPickupPoints,getPickupPoints,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/profile,profile,query,bearer,school-code header,1,,profile,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/school-details,school-details,query,none,body,2,schoolDetails,schoolDetails,,True,
+active,GET,/api/school-settings,school-settings,query,bearer,school-code header,3,schoolSettings,getSchoolSettings,SETTINGS_ENDPOINTS.GET_SCHOOL_SETTINGS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/semester,semester,query,bearer,school-code header,2,getSemesters,,SEMESTER_ENDPOINTS.GET_SEMESTERS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/session-years,session-years,query,bearer,school-code header,3,getSchoolSessionYears,getSessionYears,SESSION_YEARS_ENDPOINTS.GET_SESSION_YEARS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/set-languages,set-languages,json|multipart,none,none,3,getLanguageLabels,getLanguageLabels,LANGUAGE_ENDPOINTS.SET_LANGUAGE,True,
+active,GET,/api/settings,settings,query,none,none,3,settings,getSettings,SETTINGS_ENDPOINTS.GET_SETTINGS,True,
+active,GET,/api/staff-leaves-details,staff-leaves-details,query,bearer,school-code header,1,,getUserLeaves,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/allowances-deductions,staff,query,bearer,school-code header,1,,getAllowancesAndDeductions,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/attendance,staff,query,bearer,school-code header,1,,getTeacherAttendance,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/class-timetable,staff,query,bearer,school-code header,1,,getClassTimetable,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/counter,staff,query,bearer,school-code header,1,,getSystemStatistics,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/delete-announcement,staff,multipart,bearer,school-code header,1,,deleteGeneralAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/features-permission,staff,query,bearer,school-code header,1,,getStaffPermissionAndFeatures,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/fees-paid-list,staff,query,bearer,school-code header,1,,getStudentsFeeStatus,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/get-announcement,staff,query,bearer,school-code header,1,,getAnnouncements,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/get-fees,staff,query,bearer,school-code header,1,,getFees,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/id-card,staff,query,bearer,school-code header,1,,downloadStaffIdCard,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/leave-approve,staff,multipart,bearer,school-code header,1,,approveOrRejectLeaveRequest,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/staff/leave-delete,staff,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/leave-request,staff,query,bearer,school-code header,1,,getLeaveRequests,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/staff/login,staff,unknown,none,body,0,,,,False,No Flutter or student-web constant references this route; Unauthenticated; school_code expected in request body
+active,GET,/api/staff/my-payroll,staff,query,bearer,school-code header,1,,getMyPayRolls,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/staff/notification,staff,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/notification,staff,multipart,bearer,school-code header,1,,sendNotification,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/notification-delete,staff,multipart,bearer,school-code header,1,,deleteNotification,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/payroll-create,staff,multipart,bearer,school-code header,1,,submitStaffsPayroll,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/payroll-slip,staff,query,bearer,school-code header,1,,downloadPayRollSlip,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/payroll-staff-list,staff,query,bearer,school-code header,1,,getStaffsPayroll,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/payroll-year,staff,query,bearer,school-code header,1,,getPayRollYears,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/staff/profile,staff,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/qr-attendance/config,staff,query,bearer,school-code header,1,,getQrAttendanceConfig,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/qr-attendance/my-attendance,staff,query,bearer,school-code header,1,,getQrMyAttendance,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/qr-attendance/punch,staff,multipart,bearer,school-code header,1,,qrAttendancePunch,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/qr-attendance/punches,staff,query,bearer,school-code header,1,,getQrAttendancePunches,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/qr-attendance/today,staff,query,bearer,school-code header,1,,getQrAttendanceToday,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/roles,staff,query,bearer,school-code header,1,,getRoles,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/send-announcement,staff,multipart,bearer,school-code header,1,,sendGeneralAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/staff-attendance,staff,query,bearer,school-code header,1,,getStaffAttendance,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/staff-attendance-store,staff,multipart,bearer,school-code header,1,,submitStaffAttendance,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/staffs,staff,query,bearer,school-code header,1,,getStaffs,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/student-fees-receipt,staff,query,bearer,school-code header,1,,downloadStudentFeeReceipt,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/student-leave,staff,query,bearer,school-code header,1,,getStudentLeaves,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/student-leave/update-status,staff,multipart,bearer,school-code header,1,,updateStudentLeaveStatus,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/student-offline-exam-result,staff,query,bearer,school-code header,1,,getOfflineExamStudentResults,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/student/attendance,staff,query,bearer,school-code header,1,,getStudentAttendanceForStaff,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/tasks,staff,query,bearer,school-code header,1,,getTasks,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/tasks,staff,multipart,bearer,school-code header,1,,createTask,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/tasks/delete,staff,multipart,bearer,school-code header,1,,deleteTask,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/tasks/status,staff,multipart,bearer,school-code header,1,,updateTaskStatus,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/tasks/update,staff,multipart,bearer,school-code header,1,,updateTask,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/teacher-timetable,staff,query,bearer,school-code header,1,,getTimeTableOfTeacher,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/teachers,staff,query,bearer,school-code header,1,,getTeachers,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/staff/update-announcement,staff,multipart,bearer,school-code header,1,,editGeneralAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/users,staff,query,bearer,school-code header,1,,searchUsers,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/staff/users-role-wise,staff,query,bearer,school-code header,1,,getUsersRoleWise,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student-details,student-details,query,bearer,school-code header,2,getStudentDetails,getStudentDetails,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student-exan-result-pdf,student-exan-result-pdf,query,bearer,school-code header,3,downloadStudentResult,downloadStudentResult,EXAM_ENDPOINTS.GET_STUDENT_EXAM_RESULT_PDF,True,preserve odd spelling: student-exan-result-pdf; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/announcements,student,query,bearer,school-code header,2,generalAnnouncements,,ANNOUNCEMENT_ENDPOINTS.GET_ANNOUNCEMENTS|NOTICE_BOARD_ENDPOINTS.GET_NOTICE_BOARD,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/assignments,student,query,bearer,school-code header,2,getAssignments,,ASSIGNMENT_ENDPOINTS.GET_ASSIGNMENTS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/attendance,student,query,bearer,school-code header,2,getStudentAttendance,,ATTENDANCE_ENDPOINTS.GET_ATTENDANCE,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/class-subjects,student,query,bearer,school-code header,2,classSubjects,,SUBJECT_ENDPOINTS.GET_CLASS_SUBJECTS,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/student/current-session-year,student,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/delete-assignment-submission,student,multipart,bearer,school-code header,2,deleteAssignment,,ASSIGNMENT_ENDPOINTS.DELETE_ASSIGNMENT_SUBMISSION,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/diary-categories,student,query,bearer,school-code header,2,getStudentDiaryCategories,,DIARY_ENDPOINTS.GET_DIARY_CATEGORIES,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/student/diary-details,student,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/exam-marks,student,query,bearer,school-code header,2,studentResults,,EXAM_ENDPOINTS.GET_EXAM_RESULT,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/forgot-password,student,multipart,none,body,2,requestResetPassword,,STUDENT_AUTH_ENDPOINTS.RESET_PASSWORD,True,Unauthenticated; school_code expected in request body
+active,GET,/api/student/get-assignments-report,student,query,bearer,school-code header,2,studentAssignmentReport,,REPORT_ENDPOINTS.GET_ASSIGNMENTS_REPORT,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-exam-details,student,query,bearer,school-code header,2,studentExamDetails,,EXAM_ENDPOINTS.GET_EXAM_DETAILS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-exam-list,student,query,bearer,school-code header,2,studentExamList,,EXAM_ENDPOINTS.GET_EXAM_LIST,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-online-exam-list,student,query,bearer,school-code header,2,studentExamOnlineList,,EXAM_ENDPOINTS.GET_ONLINE_EXAM_LIST,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-online-exam-questions,student,query,bearer,school-code header,2,studentExamOnlineQuestions,,EXAM_ENDPOINTS.GET_ONLINE_EXAM_QUESTIONS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-online-exam-report,student,query,bearer,school-code header,2,studentOnlineExamReport,,REPORT_ENDPOINTS.GET_ONLINE_EXAM_REPORT,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-online-exam-result,student,query,bearer,school-code header,2,studentOnlineExamResult,,EXAM_ENDPOINTS.GET_ONLINE_EXAM_RESULT,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-online-exam-result-list,student,query,bearer,school-code header,2,studentOnlineExamResultList,,EXAM_ENDPOINTS.GET_ONLINE_EXAM_RESULT_LIST,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/get-profile-data,student,query,bearer,school-code header,2,studentProfile,,STUDENT_AUTH_ENDPOINTS.GET_PROFILE,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/guradian-details,student,query,bearer,school-code header,2,guardianDetailsOfStudent,,GUARDIAN_ENDPOINTS.GET_GUARDIAN_DETAILS,True,preserve odd spelling: guradian-details; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/id-card,student,query,bearer,school-code header,2,downloadStudentIdCard,,ID_CARD_ENDPOINTS.GET_ID_CARD,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/lesson-topics,student,query,bearer,school-code header,2,getstudyMaterialsOfTopic,,LESSONS_ENDPOINTS.GET_LESSON_TOPICS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/lessons,student,query,bearer,school-code header,2,getLessonsOfSubject,,LESSONS_ENDPOINTS.GET_LESSONS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/login,student,multipart,none,body,2,studentLogin,,STUDENT_AUTH_ENDPOINTS.LOGIN,True,Unauthenticated; school_code expected in request body
+active,GET,/api/student/report,student,query,bearer,school-code header,2,studentSubjectReport,,REPORT_ENDPOINTS.GET_STUDENT_REPORT,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/school-settings,student,query,bearer,school-code header,2,getSchoolSettingDetails,,SETTINGS_ENDPOINTS.GET_STUDENT_SCHOOL_SETTINGS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/select-subjects,student,json|multipart,bearer,school-code header,2,selectStudentElectiveSubjects,,SUBJECT_ENDPOINTS.SELECT_SUBJECTS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/sliders,student,query,bearer,school-code header,1,getStudentSliders,,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/subjects,student,query,bearer,school-code header,2,studentSubjects,,SUBJECT_ENDPOINTS.GET_SUBJECTS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/submit-assignment,student,multipart,bearer,school-code header,2,submitAssignment,,ASSIGNMENT_ENDPOINTS.SUBMIT_ASSIGNMENT,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/student/submit-online-exam-answers,student,json|multipart,bearer,school-code header,2,studentSubmitOnlineExamAnswers,,EXAM_ENDPOINTS.SUBMIT_ONLINE_EXAM_ANSWERS,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/timetable,student,query,bearer,school-code header,2,studentTimeTable,,STUDENT_TIMETABLE_ENDPOINTS.GET_STUDENT_TIMETABLE,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/transportation/live-tracking,student,query,bearer,school-code header,1,,,TRANSPORTATION_ENDPOINTS.GET_LIVE_TRACKING,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/student/transportation/live-tracking/link,student,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/student/web-sliders,student,query,bearer,school-code header,1,,,SLIDER_ENDPOINTS.GET_SLIDERS,True,Requires school-code header; validates Sanctum bearer token
+active_external,POST,/api/subscription/webhook/razorpay,subscription,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active_external,POST,/api/subscription/webhook/stripe,subscription,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active,GET,/api/system-settings,system-settings,query,none,none,1,,,SETTINGS_ENDPOINTS.GET_SYSTEM_BRANDING,True,
+active,POST,/api/teacher/class-detail,teacher,multipart,bearer,school-code header,1,,getClassesWithTeacherDetails|getClassDetails,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/create-assignment,teacher,multipart,bearer,school-code header,1,,createAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/create-diary,teacher,multipart,bearer,school-code header,1,,createDiary,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/create-diary-category,teacher,multipart,bearer,school-code header,1,,createDiaryCategory,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/create-lesson,teacher,multipart,bearer,school-code header,1,,createLesson,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/create-topic,teacher,multipart,bearer,school-code header,1,,createTopic,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-announcement,teacher,multipart,bearer,school-code header,1,,deleteAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-assignment,teacher,multipart,bearer,school-code header,1,,deleteAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-diary,teacher,multipart,bearer,school-code header,1,,deleteDiary,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-diary-category,teacher,multipart,bearer,school-code header,1,,deleteDiaryCategory,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-file,teacher,multipart,bearer,school-code header,1,,deleteStudyMaterial,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-lesson,teacher,multipart,bearer,school-code header,1,,deleteLesson,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/delete-topic,teacher,multipart,bearer,school-code header,1,,deleteTopic,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/diary-categories,teacher,query,bearer,school-code header,1,,getDiaryCategories,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-announcement,teacher,query,bearer,school-code header,1,,getAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-assignment,teacher,query,bearer,school-code header,1,,getAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-assignment-submission,teacher,query,bearer,school-code header,1,,getReviewAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-attendance,teacher,query,bearer,school-code header,1,,getAttendance,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/teacher/get-exam-details,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-exam-list,teacher,query,bearer,school-code header,1,,getExams|examList,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-lesson,teacher,query,bearer,school-code header,1,,getLessons,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/teacher/get-student-marks,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/teacher/get-student-result,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/get-topic,teacher,query,bearer,school-code header,1,,getTopics,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/login,teacher,multipart,none,body,1,,login,,True,Unauthenticated; school_code expected in request body
+active,POST,/api/teacher/online-classes,teacher,multipart,bearer,school-code header,1,,createOnlineClass,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/online-classes/delete,teacher,multipart,bearer,school-code header,1,,deleteOnlineClass,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/online-classes/periods,teacher,query,bearer,school-code header,1,,getOnlineClassPeriods,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/online-classes/subject-classes,teacher,query,bearer,school-code header,1,,getOnlineClassSubjects,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/online-classes/update,teacher,multipart,bearer,school-code header,1,,updateOnlineClass,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/teacher/remove-student,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/teacher/restore-diary-category,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/send-announcement,teacher,multipart,bearer,school-code header,1,,createAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/teacher/student-details,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/student-list,teacher,query,bearer,school-code header,1,,getStudents,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/subjects,teacher,query,bearer,school-code header,1,,getSubjects,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/submit-attendance,teacher,multipart,bearer,school-code header,1,,submitAttendance,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/teacher/submit-exam-marks/student,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/submit-exam-marks/subject,teacher,multipart,bearer,school-code header,1,,submitExamMarks,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teacher/teacher_timetable,teacher,query,bearer,school-code header,1,,getTeacherMyTimetable,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/teacher/trash-diary-category,teacher,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-announcement,teacher,multipart,bearer,school-code header,1,,updateAnnouncement,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-assignment,teacher,multipart,bearer,school-code header,1,,uploadAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-assignment-submission,teacher,multipart,bearer,school-code header,1,,updateReviewAssignment,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-diary-category,teacher,multipart,bearer,school-code header,1,,updateDiaryCategory,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-file,teacher,multipart,bearer,school-code header,1,,updateStudyMaterial,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-lesson,teacher,multipart,bearer,school-code header,1,,updateLesson,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/teacher/update-topic,teacher,multipart,bearer,school-code header,1,,updateTopic,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/teachers,teachers,query,bearer,school-code header,2,getStudentTeachersParent,,TEACHER_ENDPOINTS.GET_TEACHERS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/attendance/create,transport,multipart,bearer,school-code header,1,,createAttendance,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/transport/attendance/user-list,transport,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/dashboard,transport,multipart,bearer,school-code header,3,getTransportDashboard,getTransportDashboard,TRANSPORTATION_ENDPOINTS.GET_DASHBOARD,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/transport/expense/categories/list,transport,query,bearer,school-code header,1,,getExpenseCategories,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/plans/current,transport,multipart,bearer,school-code header,2,getCurrentTransportPlan,getCurrentPlan,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/receipt,transport,multipart,none,body,1,getTransportReceipt,,,True,
+active,POST,/api/transport/requests,transport,multipart,bearer,school-code header,2,getTransportRequests,getTransportRequests,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/routes/stops,transport,multipart,bearer,school-code header,2,getRouteStops,getRouteStops,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/store-trip-reports,transport,multipart,bearer,school-code header,3,storeTripReports,storeTripReports,TRANSPORTATION_ENDPOINTS.STORE_TRIP_REPORT,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/transport/trip-reports,transport,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transport/user/attendance-list,transport,multipart,bearer,school-code header,3,getTransportAttendanceList,getTransportUserAttendanceList,TRANSPORTATION_ENDPOINTS.GET_ATTENDANCE_LIST,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/transportation-fees,transportation-fees,query,bearer,school-code header,2,getTransportationFees,getTransportationFees,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transportation-payments,transportation-payments,multipart,bearer,school-code header,2,payTransportationFees,submitTransportEnrollment,,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,POST,/api/transportation-requests,transportation-requests,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/transportation-shifts,transportation-shifts,query,bearer,school-code header,2,getTransportationShifts,getTransportationShifts,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transportation/live-route,transportation,multipart,bearer,school-code header,3,getLiveRoute,getLiveRoute,TRANSPORTATION_ENDPOINTS.GET_LIVE_ROUTE,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/transportation/live-tracking,transportation,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transportation/live-tracking/link,transportation,json|multipart,bearer,school-code header,2,createLiveTrackingLink,,TRANSPORTATION_ENDPOINTS.GENERATE_TRACKING_LINK,True,Requires school-code header; validates Sanctum bearer token
+dead_or_admin_only,GET,/api/transportation/live-tracking/my-bus,transportation,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,GET,/api/transportation/live-tracking/session,transportation,query,tracking_token,tracking,1,,,TRANSPORTATION_ENDPOINTS.GET_TRACKING_SESSION,True,"contract exception: X-Tracking-Token, real HTTP 401/410/429; Auth via X-Tracking-Token; school DB resolved from token; outside APISwitchDatabase"
+dead_or_admin_only,GET,/api/transportation/trip/current,transportation,unknown,bearer,school-code header,0,,,,False,No Flutter or student-web constant references this route; Requires school-code header; validates Sanctum bearer token
+active,POST,/api/transportation/trip/location,transportation,multipart,bearer,school-code header,1,,updateTripLocation,,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/update-profile,update-profile,multipart,bearer,school-code header,1,,editProfile,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/users,users,query,bearer,school-code header,3,getUsers,getUsers,CHAT_ENDPOINTS.GET_CHAT_USERS,True,Requires school-code header; validates Sanctum bearer token
+active,POST,/api/users-by-role,users-by-role,multipart,bearer,school-code header,1,,getUsersByRole,,True,Requires school-code header; validates Sanctum bearer token
+active,GET,/api/users/chat/history,users,query,bearer,school-code header,3,getUserChatHistory,getUserChatHistory,CHAT_ENDPOINTS.GET_USER_CHAT_HISTORY,True,Requires school-code header; validates Sanctum bearer token
+active_external,POST,/api/webhook/flutterwave,webhook,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active_external,POST,/api/webhook/paystack,webhook,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active_external,POST,/api/webhook/razorpay,webhook,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active_external,POST,/api/webhook/stripe,webhook,unknown,none,none,0,,,,True,Gateway/provider callback; not in Flutter constants but must preserve; Provider webhook; signature validation in controller
+active_external,GET,/api/whatsapp/webhook/{schoolCode},whatsapp,unknown,none,path,0,,,,True,WhatsApp Meta webhook; preserve; Meta WhatsApp Cloud API webhook; school from path param
+active_external,POST,/api/whatsapp/webhook/{schoolCode},whatsapp,unknown,none,path,0,,,,True,WhatsApp Meta webhook; preserve; Meta WhatsApp Cloud API webhook; school from path param

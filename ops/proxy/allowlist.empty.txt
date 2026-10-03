@@ -1,0 +1,15 @@
+# Phase 9 canary allowlist — EMPTY TEMPLATE
+#
+# One path prefix per line (no scheme/host). Comments start with #.
+# Empty file = 100% Laravel (safe default / rollback target).
+#
+# Examples (do not enable without ownership matrix approval):
+# /api/health
+# /api/get-languages
+# /api/school-settings
+#
+# Rules:
+# - Reads may be canaried after golden parity.
+# - Writes require signed ownership transfer for the whole domain lifecycle
+#   (API + admin + webhook + worker/schedule) — see contract-tests/ownership/.
+# - Never dual-write Laravel and FastAPI for the same workflow.

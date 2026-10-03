@@ -1,0 +1,51 @@
+# Phase 9 canary allowlist — READ-ONLY candidates (not yet production-enabled)
+#
+# Copy selected lines into the active nginx allowlist only after:
+# - golden parity for the path
+# - ownership matrix CanaryRead approval
+# - 24h shadow-read comparison where applicable
+#
+# Empty active allowlist remains the rollback default (allowlist.empty.txt).
+
+# Health (non-Laravel path on FastAPI host only — usually not proxied via /api)
+# /health
+# /ready
+
+# Safe public/bootstrap reads (implemented + fixture-backed)
+# /api/get-languages
+# /api/settings
+# /api/school-settings
+# /api/school-details
+# /api/session-years
+# /api/holidays
+# /api/notifications
+# /api/gallery
+
+# Authenticated student reads (after login canary)
+# /api/student/get-profile-data
+# /api/student/subjects
+# /api/student/timetable
+# /api/student/attendance
+# /api/student/assignments
+# /api/student/get-exam-list
+# /api/student/announcements
+# /api/student/guradian-details
+# /api/student/school-settings
+
+# Authenticated parent reads
+# /api/parent/get-data
+# /api/parent/subjects
+# /api/parent/attendance
+# /api/parent/get-exam-list
+# /api/parent/announcements
+# /api/parent/school-settings
+
+# Staff bootstrap reads
+# /api/profile
+# /api/staff/features-permission
+# /api/staff/counter
+# /api/classes
+# /api/staff/teachers
+# /api/leaves
+# /api/medium
+# /api/country-codes

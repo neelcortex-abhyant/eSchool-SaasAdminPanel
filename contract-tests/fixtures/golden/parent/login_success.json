@@ -1,0 +1,102 @@
+{
+  "code": 200,
+  "data": {
+    "children": [
+      {
+        "admission_date": "2026-04-01",
+        "admission_no": "GR001",
+        "class_section": {
+          "class": {
+            "id": 1,
+            "name": "Grade 1"
+          },
+          "class_id": 1,
+          "id": 1,
+          "medium_id": 1,
+          "school_id": 1,
+          "section": {
+            "id": 1,
+            "name": "A"
+          },
+          "section_id": 1
+        },
+        "country_code": "+91",
+        "created_at": "2026-10-03T07:42:50.404188",
+        "current_address": "12 Demo Street",
+        "device_type": null,
+        "dob": null,
+        "email_verified_at": null,
+        "fcm_id": null,
+        "first_name": "Ada",
+        "gender": "female",
+        "guardian": {
+          "email": "guardian@school.test",
+          "first_name": "Grace",
+          "id": 2,
+          "image": null,
+          "last_name": "Guardian",
+          "mobile": null,
+          "occupation": "Engineer"
+        },
+        "id": 1,
+        "image": null,
+        "last_name": "Student",
+        "mobile": null,
+        "occupation": null,
+        "permanent_address": "12 Demo Street",
+        "roll_number": 1,
+        "school": {
+          "address": "100 Demo Ave",
+          "code": "DEMOA",
+          "domain": null,
+          "id": 1,
+          "logo": "",
+          "name": "Demo School A",
+          "status": 1,
+          "support_email": "admin-a@example.test",
+          "support_phone": "",
+          "tagline": ""
+        },
+        "school_id": 1,
+        "session_year_id": 1,
+        "status": 1,
+        "updated_at": null,
+        "web_fcm": null
+      }
+    ],
+    "country_code": "+91",
+    "created_at": "2026-10-03T07:42:50.404297",
+    "current_address": null,
+    "device_type": null,
+    "dob": null,
+    "email": "guardian@school.test",
+    "email_verified_at": null,
+    "fcm_id": "REDACTED_FCM",
+    "first_name": "Grace",
+    "gender": "female",
+    "id": 2,
+    "image": null,
+    "last_name": "Guardian",
+    "mobile": null,
+    "occupation": "Engineer",
+    "permanent_address": null,
+    "school": {
+      "address": "100 Demo Ave",
+      "code": "DEMOA",
+      "domain": null,
+      "id": 1,
+      "logo": "",
+      "name": "Demo School A",
+      "status": 1,
+      "support_email": "admin-a@example.test",
+      "support_phone": "",
+      "tagline": ""
+    },
+    "status": 1,
+    "updated_at": null,
+    "web_fcm": null
+  },
+  "error": false,
+  "message": "User logged-in!",
+  "token": "REDACTED_TOKEN"
+}
