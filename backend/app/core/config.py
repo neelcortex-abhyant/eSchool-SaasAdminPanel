@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     pool_size: int = 5
     max_overflow: int = 10
 
+    # V1 clean slice (Neon PostgreSQL). Legacy MySQL uses DB_* above.
+    neon_database_url: str = ""
+    v1_session_ttl_minutes: int = 10080
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.frontend_origin.split(",") if origin.strip()]

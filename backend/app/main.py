@@ -14,6 +14,7 @@ from app.api.mobile import router as mobile_router
 from app.api.staff_and_writes import router as staff_and_writes_router
 from app.api.student_reads import router as student_reads_router
 from app.api.stubs import router as stub_router
+from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 
 logging.basicConfig(level=getattr(logging, get_settings().log_level.upper(), logging.INFO))
@@ -94,3 +95,5 @@ app.include_router(student_reads_router, prefix="/api")
 app.include_router(staff_and_writes_router, prefix="/api")
 app.include_router(stub_router, prefix="/api")
 app.include_router(admin_router, prefix="/api/admin")
+app.include_router(v1_router)
+

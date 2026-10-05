@@ -53,10 +53,15 @@ def assign(db, user_id, role_name, school_id):
 def client():
     settings = get_settings()
     tmp = Path(settings.sqlite_dir)
+    # Dispose engines before unlinking — Windows cannot delete open SQLite files.
+    reset_engines()
     if tmp.exists():
         for path in tmp.glob("*.db"):
-            path.unlink()
-    reset_engines()
+            try:
+                path.unlink()
+            except PermissionError:
+                reset_engines()
+                path.unlink()
     create_schema()
     create_schema("eschool_demo")
     central = session_factory()()
@@ -222,3 +227,4 @@ def client():
 
     with TestClient(app) as test_client:
         yield test_client
+    reset_engines()
