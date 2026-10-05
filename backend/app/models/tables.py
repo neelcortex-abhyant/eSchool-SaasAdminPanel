@@ -16,7 +16,16 @@ class TimestampMixin:
 
 
 class User(Base, TimestampMixin):
+    """Legacy Laravel-compatible users (integer PK). School-scoped via school_id.
+
+    Distinct from V1 `v1_users` (UUID). Do not merge these tables blindly.
+    """
+
     __tablename__ = "users"
+    __table_args__ = (
+        # Same email may exist in different schools; globally unique when school_id is set.
+        UniqueConstraint("school_id", "email", name="uq_users_school_email"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     first_name: Mapped[str] = mapped_column(String(128))
@@ -34,7 +43,7 @@ class User(Base, TimestampMixin):
     status: Mapped[int] = mapped_column(Integer, default=1)
     reset_request: Mapped[int] = mapped_column(Integer, default=0)
     fcm_id: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    school_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    school_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
     email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     two_factor_enabled: Mapped[int] = mapped_column(Integer, default=0)
     two_factor_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -56,7 +65,8 @@ class School(Base, TimestampMixin):
     logo: Mapped[str] = mapped_column(String(255), default="")
     admin_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[int] = mapped_column(Integer, default=1)
-    code: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    code: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    # Legacy MySQL physical DB name — kept for import mapping only; not used for connections.
     database_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     installed: Mapped[int] = mapped_column(Integer, default=1)
@@ -65,11 +75,12 @@ class School(Base, TimestampMixin):
 
 class Role(Base, TimestampMixin):
     __tablename__ = "roles"
+    __table_args__ = (UniqueConstraint("school_id", "name", "guard_name", name="uq_roles_school_name_guard"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     guard_name: Mapped[str] = mapped_column(String(255), default="web")
-    school_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    school_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
 
 
 class ModelHasRole(Base):
@@ -219,7 +230,8 @@ class Staff(Base, TimestampMixin):
     __tablename__ = "staffs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    school_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
     qualification: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     salary: Mapped[float] = mapped_column(Float, default=0)
 

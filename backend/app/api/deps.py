@@ -21,6 +21,7 @@ class ApiError(Exception):
 
 
 def central_db() -> Generator[Session, None, None]:
+    """Shared Neon session (formerly the central MySQL database)."""
     db = session_factory()()
     try:
         yield db
@@ -28,8 +29,25 @@ def central_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def open_named_db(database_name: str) -> Session:
-    return session_factory(database_name)()
+def open_named_db(_database_name: str | None = None) -> Session:
+    """Compatibility shim.
+
+    Historically opened a per-school MySQL database named ``database_name``.
+    All schools now share one Neon database; isolation is via ``school_id``.
+    Callers must still filter by school. The argument is ignored.
+    """
+    return session_factory()()
+
+
+def school_is_ready(school: School | None) -> bool:
+    return school is not None and school.deleted_at is None and school.installed == 1
+
+
+def assert_user_in_school(user: User, school: School) -> bool:
+    """Prevent cross-school access when the user is school-scoped."""
+    if user.school_id is None:
+        return True
+    return user.school_id == school.id
 
 
 def admin_context(
@@ -42,16 +60,26 @@ def admin_context(
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Unauthenticated")
-    database_name = payload.get("db")
-    db = open_named_db(database_name) if database_name else central
+    # Single Neon DB: always use the shared session. Cookie `db` is legacy metadata only.
+    db = central
     user = db.get(User, payload.get("uid"))
     if user is None or user.deleted_at is not None:
-        if database_name:
-            db.close()
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Unauthenticated")
-    request.state.admin_db_owned = bool(database_name)
+    # If the cookie carries a school code, enforce school_id match for school admins.
+    code = payload.get("code")
+    if code:
+        school = find_school(db, code)
+        if school is None or not assert_user_in_school(user, school):
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=401, detail="Unauthenticated")
+        if user.school_id is not None and user.school_id != school.id:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=403, detail="Cross-school access denied")
+    request.state.admin_db_owned = False
     request.state.admin_db = db
     return db, user, user.school_id
 
@@ -79,17 +107,18 @@ def require_tenant_user(
     authorization: Optional[str] = Header(default=None),
     central: Session = Depends(central_db),
 ) -> Generator[Tuple[Session, User, School], None, None]:
-    """Resolve school-code + Bearer token to (school_db, user, school)."""
+    """Resolve school-code + Bearer token to (db, user, school) on the shared Neon DB."""
     if not school_code:
         raise ApiError(fail("School Code is Required", code=VALIDATION_ERROR))
     school = find_school(central, school_code)
-    if school is None or not school.database_name:
+    if not school_is_ready(school):
         raise ApiError(fail("Invalid school code", code=VALIDATION_ERROR))
-    db = open_named_db(school.database_name)
-    try:
-        user = find_token_user(db, _bearer(authorization))
-        if user is None or user.deleted_at is not None:
-            raise ApiError(fail("Unauthenticated.", code=401))
-        yield db, user, school
-    finally:
-        db.close()
+    assert school is not None
+    # Same Neon session; do not open a second physical database.
+    db = central
+    user = find_token_user(db, _bearer(authorization))
+    if user is None or user.deleted_at is not None:
+        raise ApiError(fail("Unauthenticated.", code=401))
+    if not assert_user_in_school(user, school):
+        raise ApiError(fail("Unauthenticated.", code=401))
+    yield db, user, school

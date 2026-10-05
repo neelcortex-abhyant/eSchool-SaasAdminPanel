@@ -5,25 +5,42 @@ Migration home for the Laravel API replacement.
 ## Run locally
 
 ```bash
-cd /Users/apple/eSchool-SaasAdminPanel/backend
-python3 -m venv .venv
-source .venv/bin/activate
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1   # Windows
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env           # then set NEON_DATABASE_URL
 uvicorn app.main:app --reload --port 8001
 ```
 
+## Single Neon database
+
+All APIs use **one** `NEON_DATABASE_URL` (PostgreSQL via psycopg):
+
+| Routes | Tables |
+| --- | --- |
+| `/api/v1/*` | `v1_users`, `auth_sessions` |
+| `/api/student|parent|teacher|staff|admin/*` | legacy `users`, `schools`, … scoped by `school_id` |
+
+School isolation is **logical** (`school_id` + school-code). Do not create per-school databases.
+
+Docs:
+- [docs/RENDER.md](docs/RENDER.md) — Render env vars
+- [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md) — MySQL import status (pending without dumps)
+
 ## Rules
 
-- Default DB is MySQL (see `.env.example` / `ops/docker-compose.phase0.yml` ports 3307/6380).
-- `ALLOW_DDL` must stay `false` outside unit tests. Production startup never calls `create_schema()`.
+- `ALLOW_DDL` must stay `false` outside tests. Production never calls `create_schema()`.
 - Mobile writes are multipart (`Form`), not JSON.
-- Login resources are still reduced vs Laravel `UserDataResource` — expand against golden fixtures (Phase 4 gate).
-- Unported client routes return envelope stubs from `app/api/stubs.py` (not canary-ready).
+- MySQL / PyMySQL / SQLite runtime fallbacks are removed.
 
-## Tests
+## Tests (isolated Postgres only)
 
 ```bash
 cd backend
-ALLOW_DDL=true DB_CONNECTION=sqlite .venv/bin/pytest -q
+# TEST_DATABASE_URL must point at a non-live DB (e.g. .../eschool_saas_test)
+$env:ALLOW_DDL="true"
+.\.venv\Scripts\python.exe -m pytest -q
 ```
+
+Never point pytest at the live app database name.

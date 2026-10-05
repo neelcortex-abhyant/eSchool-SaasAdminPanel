@@ -264,11 +264,19 @@ def login_student(
     password: str,
     fcm_id: str | None,
 ) -> dict:
-    user = school_db.scalar(select(User).where(User.email == gr_number))
+    user = school_db.scalar(
+        select(User).where(User.email == gr_number, User.school_id == school.id)
+    )
     student = (
         None
         if user is None
-        else school_db.scalar(select(Student).where(Student.user_id == user.id, Student.deleted_at.is_(None)))
+        else school_db.scalar(
+            select(Student).where(
+                Student.user_id == user.id,
+                Student.school_id == school.id,
+                Student.deleted_at.is_(None),
+            )
+        )
     )
     if user is None or student is None or not verify_password(password, user.password):
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
@@ -289,7 +297,7 @@ def login_student(
 
 
 def login_parent(school_db: Session, school: School, email: str, password: str, fcm_id: str | None) -> dict:
-    user = school_db.scalar(select(User).where(User.email == email))
+    user = school_db.scalar(select(User).where(User.email == email, User.school_id == school.id))
     if user is None or not verify_password(password, user.password) or user.deleted_at is not None:
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
     if "Guardian" not in user_roles(school_db, user.id):
@@ -301,6 +309,7 @@ def login_parent(school_db: Session, school: School, email: str, password: str, 
             school_db.scalars(
                 select(Student).where(
                     Student.guardian_id == user.id,
+                    Student.school_id == school.id,
                     Student.session_year_id == session_year.id,
                     Student.deleted_at.is_(None),
                 )
@@ -310,6 +319,8 @@ def login_parent(school_db: Session, school: School, email: str, password: str, 
     for child in children:
         child_user = school_db.get(User, child.user_id)
         if child_user and child_user.status == 1 and child_user.deleted_at is None:
+            if child_user.school_id is not None and child_user.school_id != school.id:
+                continue
             active.append(child)
     if not active:
         return fail("You currently don't have any active children.", code=INVALID_LOGIN)
@@ -323,7 +334,7 @@ def login_parent(school_db: Session, school: School, email: str, password: str, 
 
 
 def login_teacher(school_db: Session, school: School, email: str, password: str, fcm_id: str | None) -> dict:
-    user = school_db.scalar(select(User).where(User.email == email))
+    user = school_db.scalar(select(User).where(User.email == email, User.school_id == school.id))
     if user is None:
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
     roles = user_roles(school_db, user.id)

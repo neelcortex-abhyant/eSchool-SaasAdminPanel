@@ -70,20 +70,42 @@ async def request_context(request: Request, call_next):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": settings.app_name, "env": settings.app_env}
+    """Liveness probe — does not open database connections."""
+    from app.core.db_urls import safe_url_target
+
+    neon_target = None
+    if settings.neon_configured:
+        neon_target = safe_url_target(settings.neon_database_url)
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "env": settings.app_env,
+        "database": {
+            "engine": "postgresql+psycopg",
+            "configured": settings.neon_configured,
+            "target": neon_target,
+            "tenancy": "school_id (single Neon database)",
+        },
+    }
 
 
 @app.get("/ready")
 def ready():
-    """Readiness: config loaded; DB ping is added when MySQL is configured."""
+    """Readiness: config loaded; Neon URL must be present."""
     checks = {
         "settings": True,
-        "db_connection": settings.db_connection,
         "allow_ddl": settings.allow_ddl,
+        "neon_configured": settings.neon_configured,
     }
     if settings.allow_ddl and settings.app_env == "production":
         return Response(
             content='{"status":"fail","reason":"DDL enabled in production"}',
+            media_type="application/json",
+            status_code=503,
+        )
+    if not settings.neon_configured:
+        return Response(
+            content='{"status":"fail","reason":"NEON_DATABASE_URL not set"}',
             media_type="application/json",
             status_code=503,
         )

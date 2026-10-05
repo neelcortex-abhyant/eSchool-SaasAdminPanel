@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import admin_context, central_db, close_admin_db, open_named_db
+from app.api.deps import admin_context, central_db, close_admin_db
 from app.models.tables import (
     Announcement,
     Attendance,
@@ -94,15 +94,14 @@ def login(body: AdminLogin, response: Response, central: Session = Depends(centr
     school_db = None
     if body.code:
         school = find_school(central, body.code)
-        if school is None or school.installed != 1 or not school.database_name:
+        if school is None or school.installed != 1:
             response.status_code = 422
             return {"error": True, "message": "Invalid school identifier."}
-        school_db = open_named_db(school.database_name)
+        school_db = central
     try:
         payload, status = login_admin(central, school_db, school, body.email, body.password)
     finally:
-        if school_db is not None:
-            school_db.close()
+        pass
     if status != 200:
         response.status_code = status
         return payload

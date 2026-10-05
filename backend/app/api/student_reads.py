@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, Header, Query, Request
 from sqlalchemy import extract, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import central_db, open_named_db, require_tenant_user
+from app.api.deps import central_db, require_tenant_user
 from app.core.responses import (
     INACTIVE_CHILD,
     INVALID_PASSWORD,
@@ -519,35 +519,38 @@ async def forgot_password(
     if not school_code:
         return fail("Unauthenticated", code=VALIDATION_ERROR)
     school = find_school(central, str(school_code))
-    if school is None or not school.database_name:
+    if school is None or school.deleted_at is not None or school.installed != 1:
         return fail("Invalid school code", code=VALIDATION_ERROR)
-    db = open_named_db(school.database_name)
-    try:
-        user = None
-        if email:
-            user = db.scalar(select(User).where(User.email == str(email)))
-        elif gr_no and dob:
-            student = db.scalar(
-                select(Student).where(Student.admission_no == str(gr_no), Student.deleted_at.is_(None))
+    db = central
+    user = None
+    if email:
+        user = db.scalar(
+            select(User).where(User.email == str(email), User.school_id == school.id)
+        )
+    elif gr_no and dob:
+        student = db.scalar(
+            select(Student).where(
+                Student.admission_no == str(gr_no),
+                Student.school_id == school.id,
+                Student.deleted_at.is_(None),
             )
-            if student is not None:
-                candidate = db.get(User, student.user_id)
-                if candidate is not None and candidate.dob and candidate.dob.isoformat() == str(dob):
+        )
+        if student is not None:
+            candidate = db.get(User, student.user_id)
+            if candidate is not None and candidate.dob and candidate.dob.isoformat() == str(dob):
+                user = candidate
+            elif candidate is not None:
+                # Accept when dob not stored in mirror for local/dev flows
+                if candidate.dob is None or candidate.dob.isoformat() == str(dob):
                     user = candidate
-                elif candidate is not None:
-                    # Accept when dob not stored in mirror for local/dev flows
-                    if candidate.dob is None or candidate.dob.isoformat() == str(dob):
-                        user = candidate
-        else:
-            return validation_error("Email or GR number with date of birth is required.")
-        if user is None:
-            return fail("Invalid user Details", code=INVALID_USER_DETAILS)
-        if hasattr(user, "reset_request"):
-            user.reset_request = 1
-            db.commit()
-        return ok("Forgot Password email send successfully" if email else "Request Send Successfully")
-    finally:
-        db.close()
+    else:
+        return validation_error("Email or GR number with date of birth is required.")
+    if user is None:
+        return fail("Invalid user Details", code=INVALID_USER_DETAILS)
+    if hasattr(user, "reset_request"):
+        user.reset_request = 1
+        db.commit()
+    return ok("Forgot Password email send successfully" if email else "Request Send Successfully")
 
 
 # --- Student routes ---

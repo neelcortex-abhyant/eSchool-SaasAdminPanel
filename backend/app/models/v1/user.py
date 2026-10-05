@@ -15,7 +15,9 @@ from app.models.v1.base import V1Base
 
 
 class User(V1Base):
-    __tablename__ = "users"
+    """V1 auth user — table `v1_users` (never merge with legacy integer `users`)."""
+
+    __tablename__ = "v1_users"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)

@@ -127,36 +127,38 @@ def test_change_password_success(client):
 
 
 def test_cross_tenant_denial(client):
-    from app.core.database import create_schema, session_factory
-    from app.core.security import utcnow
-    from app.models.tables import School
-
-    create_schema("eschool_demob")
-    central = session_factory()()
-    central.add(
-        School(
-            name="Demo B",
-            code="DEMOB",
-            database_name="eschool_demob",
-            status=1,
-            installed=1,
-            created_at=utcnow(),
-        )
-    )
-    central.commit()
-    central.close()
     login = client.post(
         "/api/student/login",
         data={"gr_number": "GR001", "password": "secret", "school_code": "DEMO"},
     )
     token = login.json()["token"]
+    # Token belongs to DEMO; OTHER school code must not grant access.
     denied = client.get(
         "/api/student/get-profile-data",
-        headers={"school-code": "DEMOB", "Authorization": f"Bearer {token}"},
+        headers={"school-code": "OTHER", "Authorization": f"Bearer {token}"},
     )
     assert denied.json()["error"] is True
     assert denied.json()["code"] == 401
     assert denied.json()["message"] == "Unauthenticated."
+
+
+def test_same_email_different_schools_isolated(client):
+    # OTHER school has GR001 with password other-secret; DEMO uses secret.
+    wrong = client.post(
+        "/api/student/login",
+        data={"gr_number": "GR001", "password": "other-secret", "school_code": "DEMO"},
+    )
+    assert wrong.json()["error"] is True
+    other_ok = client.post(
+        "/api/student/login",
+        data={"gr_number": "GR001", "password": "other-secret", "school_code": "OTHER"},
+    )
+    assert other_ok.json()["error"] is False
+    demo_ok = client.post(
+        "/api/student/login",
+        data={"gr_number": "GR001", "password": "secret", "school_code": "DEMO"},
+    )
+    assert demo_ok.json()["error"] is False
 
 
 def test_teacher_profile(client):
@@ -214,7 +216,7 @@ def test_admin_login_dashboard_and_domain_lists(client):
     assert login.json()["user"]["email"] == "admin@eschool.test"
     assert client.get("/api/admin/me").json()["data"]["email"] == "admin@eschool.test"
     counts = client.get("/api/admin/dashboard").json()["data"]
-    assert counts["schools"] == 1
+    assert counts["schools"] == 2  # DEMO + OTHER (cross-school isolation fixtures)
     assert counts["packages"] == 1
     school_login = client.post(
         "/api/admin/login",

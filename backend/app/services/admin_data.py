@@ -20,23 +20,33 @@ from app.models.tables import (
 )
 
 
-def _find_admin(db: Session, login: str) -> User | None:
-    return db.scalar(select(User).where((User.email == login) | (User.mobile == login), User.deleted_at.is_(None)))
+def _find_admin(db: Session, login: str, school_id: int | None) -> User | None:
+    query = select(User).where((User.email == login) | (User.mobile == login), User.deleted_at.is_(None))
+    if school_id is None:
+        query = query.where(User.school_id.is_(None))
+    else:
+        query = query.where(User.school_id == school_id)
+    return db.scalar(query)
 
 
 def login_admin(central: Session, school_db: Session | None, school: School | None, login: str, password: str) -> tuple[dict, int]:
     db = school_db or central
-    user = _find_admin(db, login)
+    school_id = school.id if school is not None else None
+    user = _find_admin(db, login, school_id)
     if user is None or not verify_password(password, user.password) or user.status != 1:
         return {"error": True, "message": "The provided credentials do not match our records."}, 401
     if school is None and user.school_id:
         return {"error": True, "message": "The provided credentials do not match our records."}, 401
     if school is not None and school.installed != 1:
         return {"error": True, "message": "Invalid school identifier."}, 422
+    if school is not None and user.school_id is not None and user.school_id != school.id:
+        return {"error": True, "message": "The provided credentials do not match our records."}, 401
     payload = {
         "uid": user.id,
+        # Legacy cookie field; physical DB switching removed — school_id scopes data.
         "db": school.database_name if school else None,
         "code": school.code if school else None,
+        "school_id": school.id if school else None,
     }
     requires_2fa = bool(user.two_factor_enabled) and not user.two_factor_secret
     return {
