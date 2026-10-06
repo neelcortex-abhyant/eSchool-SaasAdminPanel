@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, apiErrorMessage, setSession } from "@/lib/api";
+import { api, apiErrorMessage, CLIENT_BUILD, setSession } from "@/lib/api";
 
 type LoginResponse = {
   access_token?: string;
@@ -65,7 +65,8 @@ export default function LoginForm() {
     <main className="container py-5" style={{ maxWidth: 480 }}>
       <h1 className="h3 mb-3">Admin login</h1>
       <p className="text-muted small mb-3">
-        Posts to <code>/api/v1/auth/login</code> on FastAPI (Bearer token).
+        Posts to Render <code>/api/v1/auth/login</code> (Bearer). Build{" "}
+        <code>{CLIENT_BUILD}</code>
       </p>
       <form onSubmit={onSubmit} className="border rounded p-4">
         {error ? <div className="alert alert-danger">{error}</div> : null}
