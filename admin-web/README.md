@@ -25,6 +25,8 @@ Optional env:
 
 Repo root has `netlify.toml` (`base = admin-web`, `publish = .next`, `@netlify/plugin-nextjs`).
 
+Same-origin `/api/v1/*` and `/api/admin/*` are proxied by Next route handlers to `BACKEND_URL` (not `next.config` rewrites).
+
 In Netlify → Site configuration → Build settings:
 
 | Setting | Value |

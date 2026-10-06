@@ -7,6 +7,8 @@
 [build.environment]
   NODE_VERSION = "20"
   NEXT_PUBLIC_ADMIN_API_URL = "/api/v1"
+  # Runtime proxy target for app/api/v1 and app/api/admin route handlers.
+  BACKEND_URL = "https://eschool-backend-8322.onrender.com"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

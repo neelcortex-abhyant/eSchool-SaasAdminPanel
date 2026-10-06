@@ -50,8 +50,9 @@ export default function LoginForm() {
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/");
       router.refresh();
-    } catch {
-      setError("Network error contacting /api/v1/auth/login.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`Network error contacting /api/v1/auth/login. (${message})`);
     } finally {
       setPending(false);
     }
