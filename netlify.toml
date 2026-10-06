@@ -1,6 +1,8 @@
 [build]
+  # Next app lives in admin-web; publish must NOT equal base (plugin requirement).
   base = "admin-web"
   command = "npm run build"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"

@@ -23,16 +23,24 @@ Optional env:
 
 ## Netlify deploy
 
-Repo root has `netlify.toml` (`base = admin-web`, `@netlify/plugin-nextjs`).
+Repo root has `netlify.toml` (`base = admin-web`, `publish = .next`, `@netlify/plugin-nextjs`).
 
-In Netlify → Site configuration → Environment variables, set:
+In Netlify → Site configuration → Build settings:
+
+| Setting | Value |
+| --- | --- |
+| Base directory | `admin-web` (or leave blank and rely on `netlify.toml`) |
+| Publish directory | `.next` (**required** — must not equal base / `admin-web`) |
+| Build command | `npm run build` |
+
+Environment variables:
 
 | Variable | Example |
 | --- | --- |
 | `BACKEND_URL` | `https://eschool-backend-8322.onrender.com` |
 | `NEXT_PUBLIC_ADMIN_API_URL` | `/api/v1` |
 
-Do not set Publish directory to `.next` or `out`. Trigger a new deploy after pushing these changes.
+Trigger a new deploy after pushing these changes.
 
 ## Non-negotiables
 
