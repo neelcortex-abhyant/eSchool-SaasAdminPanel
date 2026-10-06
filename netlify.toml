@@ -1,20 +1,13 @@
 [build]
-  # Next app lives in admin-web; publish must NOT equal base (plugin requirement).
   base = "admin-web"
   command = "npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
-  # Call Render directly from the browser (avoids Netlify function timeout on Render cold start).
   NEXT_PUBLIC_ADMIN_API_URL = "https://eschool-backend-8322.onrender.com/api/v1"
   NEXT_PUBLIC_BACKEND_URL = "https://eschool-backend-8322.onrender.com"
-  # Server-side proxy fallback (local relative /api routes, legacy modules).
   BACKEND_URL = "https://eschool-backend-8322.onrender.com"
-
-[functions]
-  # Allow waiting for Render free-tier cold starts when using the proxy.
-  timeout = 26
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
