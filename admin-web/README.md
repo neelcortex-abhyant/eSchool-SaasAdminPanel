@@ -12,14 +12,27 @@ npm run dev
 
 - UI: `http://127.0.0.1:3000`
 - FastAPI: `http://127.0.0.1:8001` (Laravel keeps `8000`)
-- Rewrites: `/api/admin/*` → `${BACKEND_URL}/api/admin/*` (default `BACKEND_URL=http://127.0.0.1:8001`)
+- Rewrites: `/api/v1/*` and `/api/admin/*` → `${BACKEND_URL}/...`
 
 Optional env:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BACKEND_URL` | `http://127.0.0.1:8001` | Server-side rewrite target |
-| `NEXT_PUBLIC_ADMIN_API_URL` | `/api/admin` | Browser client base (same-origin preferred) |
+| `NEXT_PUBLIC_ADMIN_API_URL` | `/api/v1` | Browser client base (same-origin preferred) |
+
+## Netlify deploy
+
+Repo root has `netlify.toml` (`base = admin-web`, `@netlify/plugin-nextjs`).
+
+In Netlify → Site configuration → Environment variables, set:
+
+| Variable | Example |
+| --- | --- |
+| `BACKEND_URL` | `https://eschool-backend-8322.onrender.com` |
+| `NEXT_PUBLIC_ADMIN_API_URL` | `/api/v1` |
+
+Do not set Publish directory to `.next` or `out`. Trigger a new deploy after pushing these changes.
 
 ## Non-negotiables
 

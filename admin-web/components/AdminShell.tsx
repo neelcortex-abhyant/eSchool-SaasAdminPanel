@@ -3,22 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { api } from "@/lib/api";
+import { api, clearSession } from "@/lib/api";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
-  { href: "/students", label: "Students" },
-  { href: "/classes", label: "Classes" },
-  { href: "/subjects", label: "Subjects" },
-  { href: "/attendances", label: "Attendances" },
-  { href: "/exams", label: "Exams" },
-  { href: "/fees", label: "Fees" },
-  { href: "/announcements", label: "Announcements" },
-  { href: "/leaves", label: "Leaves" },
-  { href: "/expenses", label: "Expenses" },
-  { href: "/schools", label: "Schools" },
-  { href: "/packages", label: "Packages" },
   { href: "/settings", label: "Settings" },
+  { href: "/students", label: "Students (legacy)" },
+  { href: "/classes", label: "Classes (legacy)" },
+  { href: "/subjects", label: "Subjects (legacy)" },
+  { href: "/schools", label: "Schools (legacy)" },
+  { href: "/packages", label: "Packages (legacy)" },
 ] as const;
 
 export default function AdminShell({ children }: { children: ReactNode }) {
@@ -26,7 +20,12 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   async function logout() {
-    await api("/logout", { method: "POST" });
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Clear local session even if the network call fails.
+    }
+    clearSession();
     router.push("/login");
     router.refresh();
   }

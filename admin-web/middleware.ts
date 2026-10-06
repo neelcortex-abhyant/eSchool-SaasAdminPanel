@@ -2,20 +2,21 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Redirect unauthenticated users to /login.
- * Cookie name matches FastAPI `/api/admin/login` (`eschool_session`).
+ * Route guard for the v1 Bearer auth flow.
+ * Presence cookie `v1_session` is set client-side after /api/v1/auth/login.
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hasSession = Boolean(request.cookies.get("v1_session")?.value);
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
-    if (request.cookies.get("eschool_session")) {
+    if (hasSession) {
       return NextResponse.redirect(new URL("/", request.url));
     }
     return NextResponse.next();
   }
 
-  if (!request.cookies.get("eschool_session")) {
+  if (!hasSession) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", pathname);
     return NextResponse.redirect(login);
@@ -26,10 +27,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Protect app routes; skip Next internals and public assets.
-     * `/api/*` is rewritten to FastAPI and is not matched here.
-     */
     "/((?!_next/static|_next/image|favicon.ico|api/).*)",
   ],
 };

@@ -1,13 +1,17 @@
 import type { NextConfig } from "next";
 
 /**
- * Local FastAPI listens on 8001 while Laravel owns 8000.
- * Production cutover is reverse-proxy only; do not hardcode temporary FastAPI hostnames in client payloads.
+ * Proxy same-origin `/api/v1/*` to FastAPI (local or Render via BACKEND_URL).
  */
 const nextConfig: NextConfig = {
   async rewrites() {
-    const backend = process.env.BACKEND_URL || "http://127.0.0.1:8001";
+    const backend = (process.env.BACKEND_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
     return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${backend}/api/v1/:path*`,
+      },
+      // Keep legacy admin rewrite available for MySQL-backed modules.
       {
         source: "/api/admin/:path*",
         destination: `${backend}/api/admin/:path*`,

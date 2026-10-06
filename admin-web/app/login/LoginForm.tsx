@@ -2,14 +2,25 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage, setSession } from "@/lib/api";
+
+type LoginResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_at?: string;
+  user?: {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  detail?: string;
+};
 
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -19,34 +30,28 @@ export default function LoginForm() {
     setPending(true);
 
     try {
-      const result = await api<{
-        error?: boolean;
-        message?: string;
-        requires_2fa?: boolean;
-      }>("/login", {
+      const result = await api<LoginResponse>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-          code: code || null,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
-      if (!result.ok || result.data.error) {
-        setError(result.data.message || "Login failed.");
+      if (!result.ok || !result.data.access_token) {
+        if (result.status >= 500) {
+          setError(
+            "Server error (500). Check Render logs and NEON_DATABASE_URL on the backend.",
+          );
+        } else {
+          setError(apiErrorMessage(result.data, "Invalid email or password."));
+        }
         return;
       }
 
-      if (result.data.requires_2fa) {
-        setError("Two-factor authentication is required before continuing.");
-        return;
-      }
-
+      setSession(result.data.access_token);
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/");
       router.refresh();
     } catch {
-      setError("Network error contacting /api/admin.");
+      setError("Network error contacting /api/v1/auth/login.");
     } finally {
       setPending(false);
     }
@@ -56,16 +61,17 @@ export default function LoginForm() {
     <main className="container py-5" style={{ maxWidth: 480 }}>
       <h1 className="h3 mb-3">Admin login</h1>
       <p className="text-muted small mb-3">
-        Posts to <code>/api/admin/login</code> via FastAPI.
+        Posts to <code>/api/v1/auth/login</code> on FastAPI (Bearer token).
       </p>
       <form onSubmit={onSubmit} className="border rounded p-4">
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
         <label className="form-label" htmlFor="email">
-          Email or mobile
+          Email
         </label>
         <input
           id="email"
+          type="email"
           className="form-control mb-3"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -84,17 +90,6 @@ export default function LoginForm() {
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
           required
-        />
-
-        <label className="form-label" htmlFor="code">
-          School code
-        </label>
-        <input
-          id="code"
-          className="form-control mb-3"
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          placeholder="Leave empty for super admin"
         />
 
         <button className="btn btn-primary w-100" type="submit" disabled={pending}>

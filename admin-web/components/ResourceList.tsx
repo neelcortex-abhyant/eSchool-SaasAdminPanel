@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
 
 type Column<T> = {
   key: keyof T & string;
@@ -33,14 +32,22 @@ export default function ResourceList<T extends object>({
     async function load() {
       setLoading(true);
       setError("");
-      const result = await api<ListResponse<T>>(endpoint);
+      // Legacy lists still hit /api/admin via absolute path through the Next rewrite.
+      const response = await fetch(`/api/admin${endpoint}`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const payload = (await response.json().catch(() => ({}))) as ListResponse<T>;
       if (cancelled) return;
 
-      if (!result.ok || result.data.error) {
-        setError(result.data.message || `Failed to load ${title.toLowerCase()}.`);
+      if (!response.ok || payload.error) {
+        setError(
+          payload.message ||
+            `Failed to load ${title.toLowerCase()}. This module needs the legacy /api/admin backend.`,
+        );
         setRows([]);
       } else {
-        setRows(result.data.data || []);
+        setRows(payload.data || []);
       }
       setLoading(false);
     }
@@ -55,7 +62,8 @@ export default function ResourceList<T extends object>({
     <div>
       <h1 className="h3 mb-3">{title}</h1>
       <p className="text-muted small mb-3">
-        GET <code>/api/admin{endpoint}</code>
+        Legacy MySQL module — GET <code>/api/admin{endpoint}</code> (not part of{" "}
+        <code>/api/v1</code> on Render).
       </p>
 
       {loading ? <div className="text-muted">Loading…</div> : null}

@@ -3,9 +3,8 @@ export default function SettingsPage() {
     <div>
       <h1 className="h3 mb-3">Settings</h1>
       <p className="text-muted">
-        Placeholder — admin settings, payroll hooks, transport, provisioning,
-        backups, and installer screens will land here once their{" "}
-        <code>/api/admin</code> contracts exist.
+        Auth is on <code>/api/v1</code>. School modules labeled “legacy” still call{" "}
+        <code>/api/admin</code> and need the MySQL-backed admin API.
       </p>
     </div>
   );

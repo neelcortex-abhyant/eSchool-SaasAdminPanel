@@ -1,45 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage, clearSession } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
-type DashboardData = {
-  students?: number;
-  classes?: number;
-  subjects?: number;
-  attendances?: number;
-  exams?: number;
-  fees?: number;
-  announcements?: number;
-  leaves?: number;
-  expenses?: number;
-  schools?: number;
-  packages?: number;
+type UserMe = {
+  id?: number;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  mobile?: string | null;
+  detail?: string;
 };
-
-type DashboardResponse = {
-  error?: boolean;
-  message?: string;
-  data?: DashboardData;
-};
-
-const CARDS: { key: keyof DashboardData; label: string; href: string }[] = [
-  { key: "students", label: "Students", href: "/students" },
-  { key: "classes", label: "Classes", href: "/classes" },
-  { key: "subjects", label: "Subjects", href: "/subjects" },
-  { key: "attendances", label: "Attendances", href: "/attendances" },
-  { key: "exams", label: "Exams", href: "/exams" },
-  { key: "fees", label: "Fees", href: "/fees" },
-  { key: "announcements", label: "Announcements", href: "/announcements" },
-  { key: "leaves", label: "Leaves", href: "/leaves" },
-  { key: "expenses", label: "Expenses", href: "/expenses" },
-  { key: "schools", label: "Schools", href: "/schools" },
-  { key: "packages", label: "Packages", href: "/packages" },
-];
 
 export default function DashboardPage() {
-  const [counts, setCounts] = useState<DashboardData>({});
+  const router = useRouter();
+  const [user, setUser] = useState<UserMe | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -47,13 +23,19 @@ export default function DashboardPage() {
     let cancelled = false;
 
     async function load() {
-      const result = await api<DashboardResponse>("/dashboard");
+      const result = await api<UserMe>("/auth/me");
       if (cancelled) return;
 
-      if (!result.ok || result.data.error) {
-        setError(result.data.message || "Failed to load dashboard.");
+      if (result.status === 401) {
+        clearSession();
+        router.replace("/login");
+        return;
+      }
+
+      if (!result.ok) {
+        setError(apiErrorMessage(result.data, "Failed to load profile."));
       } else {
-        setCounts(result.data.data || {});
+        setUser(result.data);
       }
       setLoading(false);
     }
@@ -62,32 +44,34 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   return (
     <div>
       <h1 className="h3 mb-3">Dashboard</h1>
       <p className="text-muted small mb-4">
-        Counts from <code>/api/admin/dashboard</code>
+        Signed-in user from <code>/api/v1/auth/me</code>
       </p>
 
       {loading ? <div className="text-muted">Loading…</div> : null}
       {error ? <div className="alert alert-danger">{error}</div> : null}
 
-      {!loading && !error ? (
-        <div className="row g-3">
-          {CARDS.map((card) => (
-            <div key={card.key} className="col-6 col-md-4 col-xl-3">
-              <Link href={card.href} className="text-decoration-none">
-                <div className="border rounded p-3 h-100">
-                  <div className="text-muted small">{card.label}</div>
-                  <div className="fs-4 fw-semibold text-dark">
-                    {counts[card.key] ?? 0}
-                  </div>
-                </div>
-              </Link>
-            </div>
-          ))}
+      {!loading && !error && user ? (
+        <div className="border rounded p-4" style={{ maxWidth: 520 }}>
+          <div className="mb-2">
+            <span className="text-muted small d-block">Name</span>
+            <strong>
+              {user.first_name} {user.last_name}
+            </strong>
+          </div>
+          <div className="mb-2">
+            <span className="text-muted small d-block">Email</span>
+            <strong>{user.email}</strong>
+          </div>
+          <div>
+            <span className="text-muted small d-block">Mobile</span>
+            <strong>{user.mobile || "—"}</strong>
+          </div>
         </div>
       ) : null}
     </div>

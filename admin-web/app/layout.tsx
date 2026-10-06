@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "eSchool SaaS Admin",
-  description: "School administration (Next.js → FastAPI /api/admin)",
+  description: "School administration (Next.js → FastAPI /api/v1)",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
