@@ -38,7 +38,10 @@ export default function LoginForm() {
       if (!result.ok || !result.data.access_token) {
         if (result.status >= 500) {
           setError(
-            "Server error (500). Check Render logs and NEON_DATABASE_URL on the backend.",
+            apiErrorMessage(
+              result.data,
+              `Server error (${result.status}). If Render was asleep, wait ~30s and retry. Check BACKEND_URL / NEON_DATABASE_URL.`,
+            ),
           );
         } else {
           setError(apiErrorMessage(result.data, "Invalid email or password."));

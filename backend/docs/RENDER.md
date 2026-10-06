@@ -8,7 +8,7 @@
 | `APP_ENV` | Yes | `production` |
 | `SESSION_SECRET` | Yes | Strong random value |
 | `ALLOW_DDL` | Yes | Must be `false` |
-| `FRONTEND_ORIGIN` | Recommended | Comma-separated browser origins |
+| `FRONTEND_ORIGIN` | Recommended | Comma-separated browser origins (localhost). Netlify `*.netlify.app` is allowed via CORS regex in `main.py`. |
 | `V1_SESSION_TTL_MINUTES` | Optional | Default `10080` |
 
 **Remove** obsolete MySQL variables if present: `DB_CONNECTION`, `DB_HOST`, `DB_PORT`,

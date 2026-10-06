@@ -48,7 +48,8 @@ export async function api<T = Record<string, unknown>>(
 
   const response = await fetch(url, {
     ...options,
-    credentials: "include",
+    // Bearer auth only — avoid credentialed CORS failures against Render from Netlify.
+    credentials: "same-origin",
     headers,
   });
 

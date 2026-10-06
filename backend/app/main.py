@@ -26,6 +26,8 @@ app = FastAPI(title="eSchool SaaS API", docs_url="/docs" if settings.app_debug e
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    # Netlify preview/production hosts (admin-web). Exact origins still come from FRONTEND_ORIGIN.
+    allow_origin_regex=r"https://.*\.netlify\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[

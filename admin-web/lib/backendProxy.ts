@@ -10,7 +10,13 @@ export async function proxyToBackend(
   segments: string[],
   apiPrefix: "/api/v1" | "/api/admin",
 ): Promise<NextResponse> {
-  const backend = (process.env.BACKEND_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
+  const backend = (
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://eschool-backend-8322.onrender.com"
+      : "http://127.0.0.1:8001")
+  ).replace(/\/$/, "");
   const path = segments.map(encodeURIComponent).join("/");
   const target = `${backend}${apiPrefix}/${path}${request.nextUrl.search}`;
 
