@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, apiErrorMessage, CLIENT_BUILD, setSession } from "@/lib/api";
+import { api, apiErrorMessage, setSession } from "@/lib/api";
+import { IconLogoMark } from "@/lib/icons";
 
 type LoginResponse = {
   access_token?: string;
@@ -40,7 +41,7 @@ export default function LoginForm() {
           setError(
             apiErrorMessage(
               result.data,
-              `Server error (${result.status}). If Render was asleep, wait ~30s and retry. Check BACKEND_URL / NEON_DATABASE_URL.`,
+              `Server error (${result.status}). If the API was asleep, wait ~30s and retry.`,
             ),
           );
         } else {
@@ -51,56 +52,64 @@ export default function LoginForm() {
 
       setSession(result.data.access_token);
       const next = searchParams.get("next");
-      router.push(next && next.startsWith("/") ? next : "/");
+      router.push(next && next.startsWith("/") && next !== "/" ? next : "/dashboard");
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setError(`Network error contacting /api/v1/auth/login. (${message})`);
+      setError(`Network error contacting login API. (${message})`);
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <main className="container py-5" style={{ maxWidth: 480 }}>
-      <h1 className="h3 mb-3">Admin login</h1>
-      <p className="text-muted small mb-3">
-        Posts to Render <code>/api/v1/auth/login</code> (Bearer). Build{" "}
-        <code>{CLIENT_BUILD}</code>
-      </p>
-      <form onSubmit={onSubmit} className="border rounded p-4">
-        {error ? <div className="alert alert-danger">{error}</div> : null}
+    <main className="login-page">
+      <div className="login-card">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <div className="sidebar-logo" aria-hidden>
+            <IconLogoMark width={22} height={22} />
+          </div>
+          <div>
+            <div className="sidebar-brand-name">SchoolSarthi</div>
+            <div className="sidebar-brand-sub">Admin sign in</div>
+          </div>
+        </div>
 
-        <label className="form-label" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          className="form-control mb-3"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoComplete="username"
-          required
-        />
+        <h1>Welcome back</h1>
+        <p className="muted">Enter your credentials to access the administration portal.</p>
 
-        <label className="form-label" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          className="form-control mb-3"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-        />
+        <form onSubmit={onSubmit}>
+          {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <button className="btn btn-primary w-100" type="submit" disabled={pending}>
-          {pending ? "Signing in…" : "Login"}
-        </button>
-      </form>
+          <div className="form-field">
+            <label htmlFor="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="username"
+              required
+            />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+
+          <button className="btn-primary" type="submit" disabled={pending}>
+            {pending ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

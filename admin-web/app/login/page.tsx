@@ -5,8 +5,10 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <main className="container py-5" style={{ maxWidth: 480 }}>
-          <p className="text-muted">Loading…</p>
+        <main className="login-page">
+          <div className="login-card">
+            <p className="muted">Loading…</p>
+          </div>
         </main>
       }
     >

@@ -6,6 +6,15 @@ import type { NextConfig } from "next";
  *   app/api/admin/[...path]/route.ts
  * Those read BACKEND_URL at runtime (required on Netlify).
  */
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
+};
 
 export default nextConfig;

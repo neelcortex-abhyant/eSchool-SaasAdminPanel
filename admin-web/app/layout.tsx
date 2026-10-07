@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "eSchool SaaS Admin",
-  description: "School administration (Next.js → FastAPI /api/v1)",
+  title: "SchoolSarthi",
+  description: "School management SaaS — marketing site and admin console",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-        />
-      </head>
-      <body>{children}</body>
+      <body className={`${inter.variable} ${inter.className}`}>{children}</body>
     </html>
   );
 }
