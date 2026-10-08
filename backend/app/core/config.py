@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Optional isolated Postgres URL for pytest (never the live app DB).
     test_database_url: str = ""
     v1_session_ttl_minutes: int = 10080
+    # If set, matching existing v1_users.email is promoted to super_admin on startup.
+    # Does not create users; never accept role from public signup.
+    v1_super_admin_email: str = ""
 
     @property
     def cors_origins(self) -> list[str]:

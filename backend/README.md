@@ -27,6 +27,9 @@ School isolation is **logical** (`school_id` + school-code). Do not create per-s
 Docs:
 - [docs/RENDER.md](docs/RENDER.md) — Render env vars
 - [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md) — MySQL import status (pending without dumps)
+- [docs/PHASE9_AUDIT.md](docs/PHASE9_AUDIT.md) — payments **BLOCKED / DEFERRED** (no gateway)
+- [docs/PHASE10_SECURITY.md](docs/PHASE10_SECURITY.md) — auth model, roles, isolation, security
+- [docs/PHASE10_REPORT.md](docs/PHASE10_REPORT.md) — Phase 10 final report
 
 ## Rules
 

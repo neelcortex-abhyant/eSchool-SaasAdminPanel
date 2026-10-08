@@ -1,3 +1,15 @@
 {"type": "store-fees", "at": "2026-10-03T07:44:15.494481", "school_id": 1, "guardian_id": 3, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
 {"type": "store-fees", "at": "2026-10-03T07:44:57.768095", "school_id": 1, "guardian_id": 3, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
 {"type": "store-fees", "at": "2026-10-03T07:45:36.231833", "school_id": 1, "guardian_id": 3, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-04T20:26:05.612415", "school_id": 1, "guardian_id": 3, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-04T20:27:03.980228", "school_id": 1, "guardian_id": 3, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-05T18:37:10.606516", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-05T18:41:54.178614", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T14:37:28.622602", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T15:16:31.417628", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T16:32:27.312928", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T17:06:54.696252", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T17:57:26.359729", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T18:31:41.710510", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T19:02:36.763229", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}
+{"type": "store-fees", "at": "2026-10-07T21:09:22.731214", "school_id": 1, "guardian_id": 4, "child_id": 1, "child_user_id": 1, "transaction_id": "txn_test_1", "payment_id": null, "payment_signature": null}

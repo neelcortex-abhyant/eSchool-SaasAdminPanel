@@ -8,8 +8,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.v1_database import get_v1_db
+from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
 from app.models.v1.session import AuthSession
-from app.models.v1.user import User
+from app.models.v1.user import STATUS_ACTIVE, User
 from app.services.v1 import auth_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -36,3 +37,33 @@ def get_current_auth(
 
 def get_current_user(auth: Annotated[AuthContext, Depends(get_current_auth)]) -> User:
     return auth.user
+
+
+def require_super_admin(auth: Annotated[AuthContext, Depends(get_current_auth)]) -> AuthContext:
+    """Allow only v1 users with role=super_admin. Unauthenticated → 401 via get_current_auth."""
+    if auth.user.role != ROLE_SUPER_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return auth
+
+
+def require_school_admin(auth: Annotated[AuthContext, Depends(get_current_auth)]) -> AuthContext:
+    """Allow only active school_admin with a bound school_id."""
+    if auth.user.role != ROLE_SCHOOL_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if auth.user.status != STATUS_ACTIVE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account inactive")
+    if auth.user.school_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No school assigned")
+    return auth
+
+
+def assert_school_scope(auth: AuthContext, school_id: int) -> None:
+    """Deny access when authenticated school_admin targets another school.
+
+    Super Admin bypasses. Never trusts client-supplied school_id as identity —
+    compares path/resource school_id to server-side auth.user.school_id.
+    """
+    if auth.user.role == ROLE_SUPER_ADMIN:
+        return
+    if auth.user.role != ROLE_SCHOOL_ADMIN or auth.user.school_id != school_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")

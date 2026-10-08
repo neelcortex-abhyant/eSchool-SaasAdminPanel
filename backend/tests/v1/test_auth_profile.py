@@ -41,6 +41,7 @@ def test_signup_valid(v1_client):
     assert data["user"]["first_name"] == "Amit"
     assert data["user"]["last_name"] == "Sharma"
     assert data["user"]["mobile"] == "9876543210"
+    assert data["user"]["role"] == "user"
     assert "password" not in data["user"]
     assert "password_hash" not in data["user"]
 

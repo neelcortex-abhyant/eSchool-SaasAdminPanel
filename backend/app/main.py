@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +22,33 @@ logging.basicConfig(level=getattr(logging, get_settings().log_level.upper(), log
 logger = logging.getLogger("eschool")
 
 settings = get_settings()
-app = FastAPI(title="eSchool SaaS API", docs_url="/docs" if settings.app_debug else None)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Promote V1_SUPER_ADMIN_EMAIL to super_admin if that user already exists."""
+    if settings.neon_configured and (settings.v1_super_admin_email or "").strip():
+        try:
+            from app.core.v1_database import get_v1_session_factory
+            from app.services.v1 import auth_service
+
+            db = get_v1_session_factory()()
+            try:
+                promoted = auth_service.bootstrap_super_admin(db)
+                if promoted is not None:
+                    logger.info("v1_super_admin_bootstrap email=%s", promoted.email)
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("v1_super_admin_bootstrap_failed")
+    yield
+
+
+app = FastAPI(
+    title="eSchool SaaS API",
+    docs_url="/docs" if settings.app_debug else None,
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

@@ -14,6 +14,9 @@ class UserResponse(BaseModel):
     first_name: str
     last_name: str
     mobile: Optional[str] = None
+    role: str
+    school_id: Optional[int] = None
+    status: int = 1
 
 
 class ProfileUpdateRequest(BaseModel):
