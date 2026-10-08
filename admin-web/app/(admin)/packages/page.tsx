@@ -6,7 +6,7 @@ type Package = {
   id: number;
   name: string | null;
   description: string | null;
-  status: string | number | null;
+  status: number | null;
 };
 
 export default function PackagesPage() {
@@ -19,6 +19,11 @@ export default function PackagesPage() {
         { key: "name", label: "Name" },
         { key: "description", label: "Description" },
         { key: "status", label: "Status" },
+      ]}
+      fields={[
+        { key: "name", label: "Name", required: true },
+        { key: "description", label: "Description", type: "textarea" },
+        { key: "status", label: "Status (1 active)", type: "number", required: true },
       ]}
     />
   );

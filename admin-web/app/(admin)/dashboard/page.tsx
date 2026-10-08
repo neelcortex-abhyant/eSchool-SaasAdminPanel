@@ -67,7 +67,7 @@ export default function DashboardPage() {
       />
 
       {error ? <div className="alert alert-danger">{error}</div> : null}
-      {dashboard?.message ? <div className="alert alert-info">{dashboard.message}</div> : null}
+      {dashboard?.message ? <div className="alert alert-danger">{dashboard.message}</div> : null}
 
       <section className="stat-grid" aria-label="Key metrics">
         {loading
@@ -115,7 +115,7 @@ export default function DashboardPage() {
       <section className="lower-grid">
         <div className="panel-card">
           <div className="panel-card-header">
-            <h2>Recent Transactions</h2>
+            <h2>Fee plans</h2>
           </div>
           {loading ? (
             <div className="skeleton" style={{ height: 180 }} />
@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
         <div className="panel-card">
           <div className="panel-card-header">
-            <h2>Recent Activity</h2>
+            <h2>Announcements</h2>
           </div>
           {loading ? (
             <div className="skeleton" style={{ height: 180 }} />

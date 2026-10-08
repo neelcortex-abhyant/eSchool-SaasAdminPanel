@@ -16,7 +16,7 @@ function statusClass(status: TransactionRow["status"]) {
 
 export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
   if (!rows.length) {
-    return <div className="empty-state">No transaction data available</div>;
+    return <div className="empty-state">No fee records</div>;
   }
 
   return (
@@ -24,12 +24,12 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Transaction ID</th>
-            <th>School</th>
-            <th>Plan</th>
-            <th>Amount</th>
-            <th>Payment Status</th>
-            <th>Date</th>
+            <th>Fee</th>
+            <th>Scope</th>
+            <th>Name</th>
+            <th>Due charges</th>
+            <th>Status</th>
+            <th>Due date</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -45,7 +45,7 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
               </td>
               <td>{row.date}</td>
               <td>
-                <Link href="/packages" className="link-btn">
+                <Link href="/fees" className="link-btn">
                   View
                 </Link>
               </td>
@@ -59,7 +59,7 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
 
 export function RecentActivity({ items }: { items: ActivityItem[] }) {
   if (!items.length) {
-    return <div className="empty-state">No recent activity</div>;
+    return <div className="empty-state">No announcements</div>;
   }
 
   return (
