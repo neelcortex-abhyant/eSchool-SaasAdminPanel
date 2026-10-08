@@ -13,6 +13,7 @@ type LoginResponse = {
     email?: string;
     first_name?: string;
     last_name?: string;
+    role?: string;
   };
   detail?: string;
 };
@@ -52,7 +53,8 @@ export default function LoginForm() {
 
       setSession(result.data.access_token);
       const next = searchParams.get("next");
-      router.push(next && next.startsWith("/") && next !== "/" ? next : "/dashboard");
+      const home = result.data.user?.role === "school_admin" ? "/school" : "/dashboard";
+      router.push(next && next.startsWith("/") && next !== "/" ? next : home);
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

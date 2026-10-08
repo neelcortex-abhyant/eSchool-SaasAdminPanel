@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { adminErrorMessage } from "@/lib/adminApi";
+import { apiErrorMessage } from "@/lib/api";
 import { loadSchool } from "@/lib/school";
 import { PageHeading } from "@/components/dashboard/StatCard";
 import { SchoolForm, type SchoolFormValues } from "@/components/schools/SchoolForm";
@@ -20,12 +20,12 @@ export default function EditSchoolPage() {
     async function load() {
       const result = await loadSchool(params.id);
       if (cancelled) return;
-      if (!result.ok || !result.data.data) {
-        setError(adminErrorMessage(result.data, "Unable to load this school."));
+      if (!result.ok || !result.data.id) {
+        setError(apiErrorMessage(result.data, "Unable to load this school."));
         setLoading(false);
         return;
       }
-      const school = result.data.data;
+      const school = result.data;
       setSchoolId(school.id);
       setInitial({
         name: school.name || "",

@@ -11,6 +11,7 @@ type Profile = {
   first_name?: string;
   last_name?: string;
   mobile?: string | null;
+  role?: string;
   detail?: string;
   message?: string;
 };
@@ -115,6 +116,112 @@ export default function SettingsPage() {
           </div>
         </form>
       )}
+      {profile?.role === "super_admin" ? <PlatformSettings /> : null}
     </div>
+  );
+}
+
+const PLATFORM_KEYS = [
+  "app_name",
+  "support_email",
+  "support_phone",
+  "currency",
+  "timezone",
+  "web_maintenance",
+  "frontend_url",
+  "default_language",
+  "tagline",
+] as const;
+
+type SettingValue = { value?: string | null; secret?: boolean; configured?: boolean };
+
+function PlatformSettings() {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await api<{ settings?: Record<string, SettingValue> }>("/super-admin/settings");
+      if (cancelled) return;
+      if (!result.ok) {
+        setError(
+          result.status === 403
+            ? "This account cannot edit platform settings. Sign in with a super admin account."
+            : apiErrorMessage(result.data, "Unable to load platform settings."),
+        );
+        setLoading(false);
+        return;
+      }
+      const next: Record<string, string> = {};
+      PLATFORM_KEYS.forEach((key) => {
+        next[key] = result.data.settings?.[key]?.value || "";
+      });
+      setValues(next);
+      setLoading(false);
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    const settings: Record<string, string> = {};
+    PLATFORM_KEYS.forEach((key) => {
+      settings[key] = values[key] ?? "";
+    });
+    setSaving(true);
+    setError("");
+    setNotice("");
+    const result = await api("/super-admin/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ settings }),
+    });
+    setSaving(false);
+    if (!result.ok) {
+      setError(apiErrorMessage(result.data, "Unable to save platform settings."));
+      return;
+    }
+    setNotice("Platform settings saved.");
+  }
+
+  if (loading) {
+    return (
+      <div className="panel-card" style={{ maxWidth: 720, marginTop: 16 }}>
+        <div className="skeleton" style={{ height: 140 }} />
+      </div>
+    );
+  }
+
+  return (
+    <form className="panel-card resource-form" style={{ maxWidth: 720, marginTop: 16 }} onSubmit={onSubmit}>
+      <div className="panel-card-header">
+        <h2>Platform settings</h2>
+      </div>
+      {error ? <div className="alert alert-danger">{error}</div> : null}
+      {notice ? <div className="alert alert-info">{notice}</div> : null}
+      <div className="resource-fields">
+        {PLATFORM_KEYS.map((key) => (
+          <div className="form-field" key={key}>
+            <label htmlFor={`setting-${key}`}>{key.replace(/_/g, " ")}</label>
+            <input
+              id={`setting-${key}`}
+              value={values[key] || ""}
+              onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="resource-actions">
+        <button className="btn-pill btn-pill-green" type="submit" disabled={saving}>
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+      </div>
+    </form>
   );
 }

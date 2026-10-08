@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { adminApi, adminErrorMessage } from "@/lib/adminApi";
+import { api, apiErrorMessage } from "@/lib/api";
+import type { SchoolRecord } from "@/lib/school";
 
 export type SchoolFormValues = {
   name: string;
@@ -82,7 +83,7 @@ export function SchoolForm({
     }
     setSaving(true);
     setError("");
-    const body: Record<string, unknown> = {
+    const body = {
       name: values.name.trim(),
       code: values.code.trim(),
       address: values.address.trim(),
@@ -90,23 +91,46 @@ export function SchoolForm({
       support_phone: values.support_phone.trim(),
       tagline: values.tagline.trim(),
       domain: values.domain.trim() || null,
-      status: Number(values.status),
     };
-    if (mode === "create") {
-      body.admin_first_name = values.admin_first_name.trim();
-      body.admin_last_name = values.admin_last_name.trim();
-      body.admin_password = values.admin_password;
-    }
-    const result = await adminApi<{ data?: { id?: number }; detail?: string; message?: string }>(
-      mode === "create" ? "/schools" : `/schools/${schoolId}`,
-      { method: mode === "create" ? "POST" : "PATCH", body: JSON.stringify(body) },
-    );
-    setSaving(false);
-    if (!result.ok || !result.data.data?.id) {
-      setError(adminErrorMessage(result.data, "Unable to save this school."));
+    const result = await api<SchoolRecord>(mode === "create" ? "/super-admin/schools" : `/super-admin/schools/${schoolId}`, {
+      method: mode === "create" ? "POST" : "PATCH",
+      body: JSON.stringify(body),
+    });
+    if (!result.ok || !result.data.id) {
+      setSaving(false);
+      setError(apiErrorMessage(result.data, "Unable to save this school."));
       return;
     }
-    router.push(`/schools/${result.data.data.id}`);
+    const savedId = result.data.id;
+    if (mode === "edit" && schoolId && values.status !== initial.status) {
+      const action = values.status === "1" ? "activate" : "suspend";
+      const statusResult = await api<SchoolRecord>(`/super-admin/schools/${schoolId}/${action}`, { method: "POST" });
+      if (!statusResult.ok) {
+        setSaving(false);
+        setError(apiErrorMessage(statusResult.data, "School details were saved, but the status did not update."));
+        return;
+      }
+    }
+    if (mode === "create") {
+      const adminResult = await api(`/super-admin/schools/${savedId}/admins`, {
+        method: "POST",
+        body: JSON.stringify({
+          email: values.support_email.trim(),
+          password: values.admin_password,
+          first_name: values.admin_first_name.trim(),
+          last_name: values.admin_last_name.trim(),
+          mobile: values.support_phone.trim(),
+        }),
+      });
+      if (!adminResult.ok) {
+        setSaving(false);
+        setError(apiErrorMessage(adminResult.data, "School was created, but the admin account was not."));
+        router.push(`/schools/${savedId}`);
+        return;
+      }
+    }
+    setSaving(false);
+    router.push(`/schools/${savedId}`);
     router.refresh();
   }
 

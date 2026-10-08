@@ -15,6 +15,7 @@ type UserMe = {
   first_name?: string;
   last_name?: string;
   mobile?: string | null;
+  role?: string;
   detail?: string;
 };
 
@@ -42,6 +43,11 @@ export default function DashboardPage() {
       if (!result.ok) {
         setError(apiErrorMessage(result.data, "Failed to load profile."));
         setLoading(false);
+        return;
+      }
+
+      if (result.data.role === "school_admin") {
+        router.replace("/school");
         return;
       }
 

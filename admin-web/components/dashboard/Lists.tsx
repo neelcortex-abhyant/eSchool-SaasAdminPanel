@@ -83,12 +83,12 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
 
 export function QuickActions() {
   const actions = [
-    { href: "/schools", label: "Add School", icon: IconBuilding },
-    { href: "/students", label: "Add Student", icon: IconUsers },
-    { href: "/classes", label: "Add Class", icon: IconTeacher },
-    { href: "/packages", label: "Create Package", icon: IconPackage },
+    { href: "/schools/new", label: "Add School", icon: IconBuilding },
+    { href: "/packages", label: "Create Plan", icon: IconPackage },
+    { href: "/addons", label: "Add Add-on", icon: IconUsers },
     { href: "/announcements", label: "Send Notice", icon: IconBell },
-    { href: "/fees", label: "Generate Report", icon: IconChart },
+    { href: "/reports", label: "View Reports", icon: IconChart },
+    { href: "/settings", label: "Settings", icon: IconTeacher },
   ] as const;
 
   return (

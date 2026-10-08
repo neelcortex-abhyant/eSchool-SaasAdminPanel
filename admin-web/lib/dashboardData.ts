@@ -131,14 +131,6 @@ function statsFromCounts(c: DashboardCounts): StatCardData[] {
 const PACKAGE_COLORS = ["#3dbb8a", "#2f5bff", "#f59e0b", "#ec4899", "#0d9488", "#7c3aed"];
 
 type NamedRow = { id?: number; name?: string | null; status?: number | null };
-type FeeRow = {
-  id?: number;
-  name?: string | null;
-  due_charges?: number | null;
-  due_date?: string | null;
-  school_id?: number | null;
-};
-type NoticeRow = { id?: number; title?: string | null; description?: string | null };
 
 function emptyPayload(message: string): DashboardPayload {
   return {
@@ -154,44 +146,31 @@ function emptyPayload(message: string): DashboardPayload {
 }
 
 export async function loadDashboardPayload(): Promise<DashboardPayload> {
-  const { adminApi, adminErrorMessage } = await import("@/lib/adminApi");
+  const { api, apiErrorMessage } = await import("@/lib/api");
   try {
-    const dashboard = await adminApi<{ data?: Partial<DashboardCounts>; detail?: string; message?: string }>(
-      "/dashboard",
+    const dashboard = await api<Partial<DashboardCounts> & { packages_active?: number; detail?: string }>(
+      "/super-admin/dashboard",
     );
-    if (!dashboard.ok || !dashboard.data.data) {
-      return emptyPayload(adminErrorMessage(dashboard.data, "Unable to load dashboard data. Try again."));
+    if (!dashboard.ok) {
+      return emptyPayload(
+        dashboard.status === 403
+          ? "This account cannot open the platform dashboard. Sign in with a super admin account."
+          : apiErrorMessage(dashboard.data, "Unable to load dashboard data. Try again."),
+      );
     }
 
-    const counts: DashboardCounts = { ...EMPTY_COUNTS, ...dashboard.data.data };
-    const [packages, fees, notices] = await Promise.all([
-      adminApi<{ data?: NamedRow[] }>("/packages"),
-      adminApi<{ data?: FeeRow[] }>("/fees"),
-      adminApi<{ data?: NoticeRow[] }>("/announcements"),
-    ]);
-
-    const packageRows = packages.ok ? packages.data.data || [] : [];
+    const counts: DashboardCounts = {
+      ...EMPTY_COUNTS,
+      ...dashboard.data,
+      packages: dashboard.data.packages_active ?? dashboard.data.packages ?? 0,
+    };
+    const plans = await api<{ items?: NamedRow[] }>("/super-admin/plans?page=1&page_size=20");
+    const packageRows = plans.ok ? plans.data.items || [] : [];
     const share = packageRows.length ? 100 / packageRows.length : 0;
     const slices: PackageSlice[] = packageRows.map((row, index) => ({
-      label: row.name || `Package ${row.id ?? index + 1}`,
+      label: row.name || `Plan ${row.id ?? index + 1}`,
       value: Math.round(share * 10) / 10,
       color: PACKAGE_COLORS[index % PACKAGE_COLORS.length],
-    }));
-
-    const transactions: TransactionRow[] = (fees.ok ? fees.data.data || [] : []).slice(0, 8).map((fee) => ({
-      id: `FEE-${fee.id ?? "—"}`,
-      school: fee.school_id == null ? "—" : `School ${fee.school_id}`,
-      plan: fee.name || "Fee",
-      amount: fee.due_charges == null ? "—" : String(fee.due_charges),
-      status: "Pending",
-      date: fee.due_date || "—",
-    }));
-
-    const activity: ActivityItem[] = (notices.ok ? notices.data.data || [] : []).slice(0, 6).map((notice) => ({
-      id: String(notice.id ?? notice.title),
-      title: notice.title || "Announcement",
-      description: notice.description || "School announcement",
-      time: "Announcement",
     }));
 
     return {
@@ -200,8 +179,8 @@ export async function loadDashboardPayload(): Promise<DashboardPayload> {
       stats: statsFromCounts(counts),
       revenue: [],
       packages: slices,
-      transactions,
-      activity,
+      transactions: [],
+      activity: [],
     };
   } catch {
     return emptyPayload("Unable to load dashboard data. Try again.");

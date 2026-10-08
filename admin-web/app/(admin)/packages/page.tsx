@@ -1,29 +1,32 @@
 "use client";
 
-import ResourceList from "@/components/ResourceList";
+import PlatformResource from "@/components/platform/PlatformResource";
 
-type Package = {
-  id: number;
-  name: string | null;
-  description: string | null;
-  status: number | null;
-};
-
-export default function PackagesPage() {
+export default function PlansPage() {
   return (
-    <ResourceList<Package>
-      title="Packages"
-      endpoint="/packages"
+    <PlatformResource
+      title="Plans"
+      description="Subscription plans from /api/v1/super-admin/plans"
+      endpoint="/super-admin/plans"
+      canCreate
+      canEdit
+      statusToggle
       columns={[
         { key: "id", label: "ID" },
         { key: "name", label: "Name" },
-        { key: "description", label: "Description" },
+        { key: "monthly_price", label: "Monthly" },
+        { key: "yearly_price", label: "Yearly" },
+        { key: "student_limit", label: "Student limit" },
+        { key: "staff_limit", label: "Staff limit" },
         { key: "status", label: "Status" },
       ]}
       fields={[
         { key: "name", label: "Name", required: true },
         { key: "description", label: "Description", type: "textarea" },
-        { key: "status", label: "Status (1 active)", type: "number", required: true },
+        { key: "monthly_price", label: "Monthly price", type: "number" },
+        { key: "yearly_price", label: "Yearly price", type: "number" },
+        { key: "student_limit", label: "Student limit", type: "number" },
+        { key: "staff_limit", label: "Staff limit", type: "number" },
       ]}
     />
   );

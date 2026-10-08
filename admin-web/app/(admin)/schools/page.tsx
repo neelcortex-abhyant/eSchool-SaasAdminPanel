@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { adminApi, adminErrorMessage } from "@/lib/adminApi";
-import { schoolStatusLabel, type SchoolRecord } from "@/lib/school";
+import { api, apiErrorMessage } from "@/lib/api";
+import { loadSchools, schoolStatusLabel, type SchoolRecord } from "@/lib/school";
 import { PageHeading } from "@/components/dashboard/StatCard";
 import { IconBuilding } from "@/lib/icons";
 
@@ -16,12 +16,16 @@ export default function SchoolsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const result = await adminApi<{ data?: SchoolRecord[] }>("/schools");
+    const result = await loadSchools();
     if (!result.ok) {
-      setError(adminErrorMessage(result.data, "Unable to load schools."));
+      setError(
+        result.status === 403
+          ? "This account cannot manage schools. Sign in with a super admin account."
+          : apiErrorMessage(result.data, "Unable to load schools."),
+      );
       setRows([]);
     } else {
-      setRows(result.data.data || []);
+      setRows(result.data.items || []);
     }
     setLoading(false);
   }, []);
@@ -34,9 +38,9 @@ export default function SchoolsPage() {
     if (!window.confirm(`Delete ${school.name || "this school"}?`)) return;
     setNotice("");
     setError("");
-    const result = await adminApi(`/schools/${school.id}`, { method: "DELETE" });
+    const result = await api(`/super-admin/schools/${school.id}`, { method: "DELETE" });
     if (!result.ok) {
-      setError(adminErrorMessage(result.data, "Unable to delete this school."));
+      setError(apiErrorMessage(result.data, "Unable to delete this school."));
       return;
     }
     setNotice("School deleted.");
@@ -47,7 +51,7 @@ export default function SchoolsPage() {
     <div>
       <PageHeading
         title="Schools"
-        description="Schools stored through /api/admin/schools"
+        description="Schools on the platform"
         icon={<IconBuilding width={20} height={20} />}
       />
       <div className="page-actions">
