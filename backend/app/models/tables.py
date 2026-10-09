@@ -2,7 +2,7 @@ from datetime import date as DateType
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -75,6 +75,16 @@ class School(Base, TimestampMixin):
     # Idempotent provisioning marker (shared Neon; not a physical DB create).
     provisioned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+# Non-blank support emails are unique case-insensitively. Blank emails stay allowed
+# (column default is "") so existing and future empty values do not collide.
+Index(
+    "ix_schools_support_email_nonblank",
+    func.lower(func.btrim(School.support_email)),
+    unique=True,
+    postgresql_where=text("btrim(support_email) <> ''"),
+)
 
 
 class Role(Base, TimestampMixin):

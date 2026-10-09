@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.models.v1.roles import ROLE_SUPER_ADMIN, ROLE_USER
 from app.models.v1.user import User
@@ -40,10 +42,12 @@ def _create_school(client, headers, **overrides):
         "name": "Alpha School",
         "address": "1 Main St",
         "support_phone": "111",
-        "support_email": "alpha@eschool.com",
         "code": "ALPHA1",
         **overrides,
     }
+    if "support_email" not in overrides:
+        code = (body.get("code") or "school").lower()
+        body["support_email"] = f"{code}@eschool.com"
     return client.post("/api/v1/super-admin/schools", headers=headers, json=body)
 
 
@@ -285,3 +289,202 @@ def test_signup_user_still_role_user_after_schools_ops(v1_client):
     res = _signup(v1_client, email="still-user@eschool.com")
     assert res.status_code == 201
     assert res.json()["user"]["role"] == ROLE_USER
+
+
+# --- email search, validation, profile fields ---
+
+
+def test_support_email_search_is_case_insensitive_partial(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="email-search-sa@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        name="Email Campus",
+        code="EML01",
+        support_email="Alpha.Desk@Example.com",
+    )
+    assert created.status_code == 201
+    school_id = created.json()["id"]
+    other = _create_school(
+        v1_client,
+        headers,
+        name="Other Campus",
+        code="EML02",
+        support_email="other@example.com",
+    )
+    assert other.status_code == 201
+
+    found = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"support_email": "ALPHA.DESK"},
+    )
+    assert found.status_code == 200
+    assert found.json()["total"] == 1
+    assert found.json()["items"][0]["id"] == school_id
+
+    paged = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"support_email": "example.com", "page": 1, "page_size": 1, "status": 1},
+    )
+    assert paged.status_code == 200
+    assert paged.json()["page_size"] == 1
+    assert len(paged.json()["items"]) == 1
+    assert paged.json()["total"] == 2
+
+
+def test_valid_email_create_and_update(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="email-valid-sa@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        code="VAL01",
+        support_email="Office@eschool.com",
+    )
+    assert created.status_code == 201
+    school_id = created.json()["id"]
+    assert "@" in created.json()["support_email"]
+
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/schools/{school_id}",
+        headers=headers,
+        json={"support_email": "desk@eschool.com"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["support_email"] == "desk@eschool.com"
+
+    got = v1_client.get(f"/api/v1/super-admin/schools/{school_id}", headers=headers)
+    assert got.status_code == 200
+    assert got.json()["support_email"] == "desk@eschool.com"
+
+
+def test_invalid_email_rejected_on_create_and_patch(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="email-bad-sa@eschool.com")
+    created = v1_client.post(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        json={"name": "Bad Email", "code": "BAD01", "support_email": "not-an-email"},
+    )
+    assert created.status_code == 422
+
+    school_id = _create_school(v1_client, headers, code="BAD02").json()["id"]
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/schools/{school_id}",
+        headers=headers,
+        json={"support_email": "still-not-an-email"},
+    )
+    assert patched.status_code == 422
+    current = v1_client.get(f"/api/v1/super-admin/schools/{school_id}", headers=headers)
+    assert current.json()["support_email"] == "bad02@eschool.com"
+
+
+def test_blank_email_allowed_and_not_unique(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="email-blank-sa@eschool.com")
+    first = _create_school(v1_client, headers, code="BLK01", support_email="")
+    second = _create_school(v1_client, headers, code="BLK02", support_email="   ")
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["support_email"] == ""
+    assert second.json()["support_email"] == ""
+
+    cleared = v1_client.patch(
+        f"/api/v1/super-admin/schools/{first.json()['id']}",
+        headers=headers,
+        json={"support_email": "kept@eschool.com"},
+    )
+    assert cleared.status_code == 200
+    cleared_again = v1_client.patch(
+        f"/api/v1/super-admin/schools/{first.json()['id']}",
+        headers=headers,
+        json={"support_email": ""},
+    )
+    assert cleared_again.status_code == 200
+    assert cleared_again.json()["support_email"] == ""
+
+
+def test_duplicate_nonblank_email_conflict_is_case_insensitive(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="email-dup-sa@eschool.com")
+    assert (
+        _create_school(
+            v1_client, headers, code="DUPM1", support_email="shared@eschool.com"
+        ).status_code
+        == 201
+    )
+    again = _create_school(
+        v1_client, headers, code="DUPM2", name="Second", support_email="SHARED@eschool.com"
+    )
+    assert again.status_code == 409
+    assert again.json()["detail"] == "School email already in use"
+
+    school_id = _create_school(
+        v1_client, headers, code="DUPM3", support_email="unique@eschool.com"
+    ).json()["id"]
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/schools/{school_id}",
+        headers=headers,
+        json={"support_email": "shared@eschool.com"},
+    )
+    assert patched.status_code == 409
+
+
+def test_phone_address_logo_round_trip(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="profile-sa@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        code="PROF1",
+        address="12 Lake Road",
+        support_phone="9876543210",
+        logo="logo-a.png",
+    )
+    assert created.status_code == 201
+    school_id = created.json()["id"]
+    assert created.json()["address"] == "12 Lake Road"
+    assert created.json()["support_phone"] == "9876543210"
+    assert created.json()["logo"] == "logo-a.png"
+
+    got = v1_client.get(f"/api/v1/super-admin/schools/{school_id}", headers=headers)
+    assert got.status_code == 200
+    assert got.json()["address"] == "12 Lake Road"
+    assert got.json()["support_phone"] == "9876543210"
+    assert got.json()["logo"] == "logo-a.png"
+
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/schools/{school_id}",
+        headers=headers,
+        json={"address": "99 Hill St", "support_phone": "5550001", "logo": "logo-b.png"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["address"] == "99 Hill St"
+    assert patched.json()["support_phone"] == "5550001"
+    assert patched.json()["logo"] == "logo-b.png"
+    assert patched.json()["status"] == 1
+
+
+def test_nonblank_email_unique_index_blocks_direct_insert(v1_client, v1_db):
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def row(name: str, code: str, email: str) -> School:
+        return School(
+            name=name,
+            address="",
+            support_phone="",
+            support_email=email,
+            tagline="",
+            logo="",
+            status=1,
+            code=code,
+            installed=1,
+            created_at=now,
+            updated_at=now,
+        )
+
+    v1_db.add(row("One", "RACE1", "race@eschool.com"))
+    v1_db.commit()
+    v1_db.add(row("Two", "RACE2", "RACE@eschool.com"))
+    with pytest.raises(IntegrityError):
+        v1_db.commit()
+    v1_db.rollback()

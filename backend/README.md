@@ -24,7 +24,10 @@ All APIs use **one** `NEON_DATABASE_URL` (PostgreSQL via psycopg):
 
 School isolation is **logical** (`school_id` + school-code). Do not create per-school databases.
 
+Super Admin school list: `GET /api/v1/super-admin/schools` keeps `page`, `page_size`, `status`, `code`, `name`, and `include_deleted`. `support_email` is an added case-insensitive partial match. Blank `support_email` is allowed and is not unique. A non-blank email must be valid and is unique ignoring case. Duplicate non-blank emails return `409` with `School email already in use`. Invalid non-blank emails return `422`. OpenAPI documents the query and field on the school schemas.
+
 Docs:
+- [docs/SCHOOL_API_CONTRACT.md](docs/SCHOOL_API_CONTRACT.md) — Super Admin school API for frontend integration
 - [docs/RENDER.md](docs/RENDER.md) — Render env vars
 - [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md) — MySQL import status (pending without dumps)
 - [docs/PHASE9_AUDIT.md](docs/PHASE9_AUDIT.md) — payments **BLOCKED / DEFERRED** (no gateway)

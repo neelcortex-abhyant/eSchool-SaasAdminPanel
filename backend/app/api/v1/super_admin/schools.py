@@ -66,7 +66,11 @@ def list_schools(
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: int | None = Query(default=None, alias="status"),
     code: str | None = Query(default=None),
-    name: str | None = Query(default=None),
+    name: str | None = Query(default=None, description="Case-insensitive partial match on school name."),
+    support_email: str | None = Query(
+        default=None,
+        description="Case-insensitive partial match on support_email. Combine with other filters.",
+    ),
     include_deleted: bool = Query(default=False),
 ) -> SchoolListResponse:
     try:
@@ -77,6 +81,7 @@ def list_schools(
             status=status_filter,
             code=code,
             name=name,
+            support_email=support_email,
             include_deleted=include_deleted,
         )
     except school_service.SchoolServiceError as exc:

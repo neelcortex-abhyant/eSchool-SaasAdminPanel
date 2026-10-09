@@ -6,7 +6,9 @@ import re
 import secrets
 from datetime import datetime, timezone
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.tables import School
@@ -25,6 +27,20 @@ class SchoolServiceError(Exception):
         self.detail = detail
         self.status_code = status_code
         super().__init__(detail)
+
+
+_EMAIL = TypeAdapter(EmailStr)
+
+
+def normalize_support_email(value: str | None) -> str:
+    """Blank stays blank. A non-blank value must be a valid email. Does not rewrite stored rows."""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    try:
+        return str(_EMAIL.validate_python(text))
+    except ValidationError as exc:
+        raise SchoolServiceError("Invalid support email", status_code=422) from exc
 
 
 def _utcnow() -> datetime:
@@ -56,6 +72,34 @@ def _ensure_code_available(db: Session, code: str, *, exclude_id: int | None = N
         raise SchoolServiceError("School code already in use", status_code=409)
 
 
+def _ensure_email_available(db: Session, email: str, *, exclude_id: int | None = None) -> None:
+    """Reject another school with the same non-blank email, ignoring case and surrounding space."""
+    if not email:
+        return
+    query = select(School.id).where(
+        func.lower(func.btrim(School.support_email)) == email.lower(),
+        func.btrim(School.support_email) != "",
+    )
+    if exclude_id is not None:
+        query = query.where(School.id != exclude_id)
+    if db.scalar(query) is not None:
+        raise SchoolServiceError("School email already in use", status_code=409)
+
+
+def _commit_school(db: Session) -> None:
+    """Commit, mapping the non-blank email unique index to the same 409 as the pre-check."""
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        message = str(getattr(exc, "orig", exc)).lower()
+        if "ix_schools_support_email_nonblank" in message:
+            raise SchoolServiceError("School email already in use", status_code=409) from exc
+        if "ix_schools_code" in message:
+            raise SchoolServiceError("School code already in use", status_code=409) from exc
+        raise
+
+
 def get_school(db: Session, school_id: int, *, include_deleted: bool = False) -> School:
     school = db.get(School, school_id)
     if school is None or (not include_deleted and school.deleted_at is not None):
@@ -81,12 +125,14 @@ def create_school(
         _ensure_code_available(db, normalized)
     else:
         normalized = _generate_code(db, name)
+    email = normalize_support_email(support_email)
+    _ensure_email_available(db, email)
 
     school = School(
         name=name.strip(),
         address=address or "",
         support_phone=support_phone or "",
-        support_email=support_email or "",
+        support_email=email,
         tagline=tagline or "",
         logo=logo or "",
         code=normalized,
@@ -100,7 +146,7 @@ def create_school(
         updated_at=now,
     )
     db.add(school)
-    db.commit()
+    _commit_school(db)
     db.refresh(school)
     return school
 
@@ -113,6 +159,7 @@ def list_schools(
     status: int | None = None,
     code: str | None = None,
     name: str | None = None,
+    support_email: str | None = None,
     include_deleted: bool = False,
 ) -> tuple[list[School], int]:
     page = max(page, 1)
@@ -134,6 +181,10 @@ def list_schools(
         like = f"%{name.strip()}%"
         query = query.where(School.name.ilike(like))
         count_query = count_query.where(School.name.ilike(like))
+    if support_email:
+        like = f"%{support_email.strip()}%"
+        query = query.where(School.support_email.ilike(like))
+        count_query = count_query.where(School.support_email.ilike(like))
 
     total = int(db.scalar(count_query) or 0)
     rows = list(
@@ -163,7 +214,9 @@ def update_school(
     if support_phone is not None:
         school.support_phone = support_phone
     if support_email is not None:
-        school.support_email = support_email
+        email = normalize_support_email(support_email)
+        _ensure_email_available(db, email, exclude_id=school.id)
+        school.support_email = email
     if tagline is not None:
         school.tagline = tagline
     if logo is not None:
@@ -175,7 +228,7 @@ def update_school(
     if domain is not None:
         school.domain = domain.strip() or None
     school.updated_at = _utcnow()
-    db.commit()
+    _commit_school(db)
     db.refresh(school)
     return school
 
