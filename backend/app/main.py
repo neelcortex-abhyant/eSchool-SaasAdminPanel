@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.admin import router as admin_router
+from app.api.admin_writes import router as admin_writes_router
 from app.api.deps import ApiError
 from app.api.mobile import router as mobile_router
 from app.api.staff_and_writes import router as staff_and_writes_router
@@ -146,5 +147,6 @@ app.include_router(student_reads_router, prefix="/api")
 app.include_router(staff_and_writes_router, prefix="/api")
 app.include_router(stub_router, prefix="/api")
 app.include_router(admin_router, prefix="/api/admin")
+app.include_router(admin_writes_router, prefix="/api/admin")
 app.include_router(v1_router)
 

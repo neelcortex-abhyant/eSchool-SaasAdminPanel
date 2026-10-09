@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
@@ -53,10 +53,24 @@ def assert_user_in_school(user: User, school: School) -> bool:
 def admin_context(
     request: Request,
     central: Session = Depends(central_db),
-) -> Tuple[Session, User, Optional[int]]:
+) -> Tuple[Session, Any, Optional[int]]:
     token = request.cookies.get("eschool_session")
     payload = read_session(token) if token else None
     if not payload:
+        bearer = _bearer(request.headers.get("authorization"))
+        if bearer:
+            from app.services.v1 import auth_service
+
+            try:
+                v1_user, _session = auth_service.resolve_user_from_token(central, bearer)
+            except auth_service.AuthError as exc:
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+            # Platform operator via /api/v1. school_id stays unset so lists are not tenant-filtered.
+            request.state.admin_db_owned = False
+            request.state.admin_db = central
+            return central, v1_user, None
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Unauthenticated")

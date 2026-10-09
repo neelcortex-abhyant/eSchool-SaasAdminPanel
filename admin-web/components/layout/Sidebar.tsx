@@ -23,23 +23,28 @@ export default function Sidebar({
   collapsed,
   mobileOpen,
   onNavigate,
+  navItems = NAV_ITEMS,
+  secondaryItems = SECONDARY_NAV,
+  subtitle = "Admin Panel",
 }: {
   collapsed: boolean;
   mobileOpen: boolean;
   onNavigate?: () => void;
+  navItems?: NavItem[];
+  secondaryItems?: NavItem[];
+  subtitle?: string;
 }) {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const items = useMemo(() => {
-    const primary = NAV_ITEMS.filter((item) => itemMatches(pathname, item, query));
-    // Keep secondary lean — only show when searching or as compact end links
+    const primary = navItems.filter((item) => itemMatches(pathname, item, query));
     const secondary = query
-      ? SECONDARY_NAV.filter((item) => itemMatches(pathname, item, query))
-      : SECONDARY_NAV.slice(0, 3);
+      ? secondaryItems.filter((item) => itemMatches(pathname, item, query))
+      : secondaryItems.slice(0, 3);
     return [...primary, ...secondary];
-  }, [pathname, query]);
+  }, [pathname, query, navItems, secondaryItems]);
 
   function toggleGroup(label: string) {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -53,7 +58,7 @@ export default function Sidebar({
         </div>
         <div className="sidebar-brand-text">
           <div className="sidebar-brand-name">SchoolSarthi</div>
-          <div className="sidebar-brand-sub">Admin Panel</div>
+          <div className="sidebar-brand-sub">{subtitle}</div>
         </div>
       </div>
 

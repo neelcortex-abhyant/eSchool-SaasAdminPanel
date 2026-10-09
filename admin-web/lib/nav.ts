@@ -2,7 +2,6 @@ import type { ComponentType, SVGProps } from "react";
 import {
   IconBell,
   IconBuilding,
-  IconClasses,
   IconFees,
   IconHome,
   IconPackage,
@@ -33,42 +32,35 @@ export const NAV_ITEMS: NavItem[] = [
     icon: IconBuilding,
     children: [
       { href: "/schools", label: "Schools" },
-      { href: "/packages", label: "Packages" },
+      { href: "/packages", label: "Plans" },
+      { href: "/addons", label: "Add-ons" },
     ],
   },
   {
-    label: "Academics",
-    icon: IconClasses,
-    children: [
-      { href: "/students", label: "Students" },
-      { href: "/classes", label: "Classes" },
-      { href: "/subjects", label: "Subjects / Courses" },
-      { href: "/attendances", label: "Attendance" },
-      { href: "/exams", label: "Exams" },
-    ],
-  },
-  {
-    label: "Finance",
+    label: "Insights",
     icon: IconFees,
     children: [
-      { href: "/fees", label: "Fees / Payments" },
-      { href: "/expenses", label: "Expenses" },
+      { href: "/reports", label: "Reports" },
+      { href: "/audit-logs", label: "Audit logs" },
     ],
   },
   {
     label: "People",
     icon: IconUsers,
-    children: [
-      { href: "/leaves", label: "Leaves" },
-      { href: "/announcements", label: "Announcements" },
-    ],
+    children: [{ href: "/announcements", label: "Notifications" }],
   },
+  { href: "/settings", label: "Settings", icon: IconSettings },
+];
+
+/** School Admin sees only the school bound to their account. */
+export const SCHOOL_ADMIN_NAV: NavItem[] = [
+  { href: "/school", label: "My school", icon: IconHome },
   { href: "/settings", label: "Settings", icon: IconSettings },
 ];
 
 /** Extra links mapped only to existing pages (no fake routes). */
 export const SECONDARY_NAV: NavItem[] = [
   { href: "/announcements", label: "Notifications", icon: IconBell },
-  { href: "/packages", label: "Subscriptions", icon: IconPackage },
-  { href: "/settings", label: "Support", icon: IconSupport },
+  { href: "/packages", label: "Plans", icon: IconPackage },
+  { href: "/reports", label: "Reports", icon: IconSupport },
 ];

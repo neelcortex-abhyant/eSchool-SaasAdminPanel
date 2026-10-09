@@ -1,7 +1,6 @@
 /**
  * Dashboard data layer.
- * Prefer live `/api/admin/dashboard` when session allows; otherwise use
- * clearly marked placeholder analytics so the UI remains usable.
+ * Live counts from `/api/admin/dashboard`. Fee rows and announcements fill the lower panels.
  */
 
 export type DashboardCounts = {
@@ -129,142 +128,61 @@ function statsFromCounts(c: DashboardCounts): StatCardData[] {
   ];
 }
 
-/** Placeholder analytics — not production billing data. */
-function placeholderAnalytics(counts: DashboardCounts | null): Omit<DashboardPayload, "source" | "counts" | "stats" | "message"> {
-  const schools = counts?.schools ?? 3;
+const PACKAGE_COLORS = ["#3dbb8a", "#2f5bff", "#f59e0b", "#ec4899", "#0d9488", "#7c3aed"];
+
+type NamedRow = { id?: number; name?: string | null; status?: number | null };
+
+function emptyPayload(message: string): DashboardPayload {
   return {
-    revenue: [
-      { month: "Jan", value: 12 },
-      { month: "Feb", value: 18 },
-      { month: "Mar", value: 14 },
-      { month: "Apr", value: 22 },
-      { month: "May", value: 28 },
-      { month: "Jun", value: 24 },
-      { month: "Jul", value: 31 },
-      { month: "Aug", value: 27 },
-      { month: "Sep", value: 35 },
-      { month: "Oct", value: 30 },
-      { month: "Nov", value: 38 },
-      { month: "Dec", value: 42 },
-    ],
-    packages: [
-      { label: "Basic", value: 37.5, color: "#22c55e" },
-      { label: "Standard", value: 12.5, color: "#f59e0b" },
-      { label: "Pro", value: 25, color: "#2563eb" },
-      { label: "Premium", value: 25, color: "#ec4899" },
-    ],
-    transactions: [
-      {
-        id: "TX-1042",
-        school: "North Campus",
-        plan: "Pro",
-        amount: "₹12,500",
-        status: "Paid" as const,
-        date: "2026-10-05",
-      },
-      {
-        id: "TX-1041",
-        school: "Riverdale High",
-        plan: "Basic",
-        amount: "₹4,800",
-        status: "Pending" as const,
-        date: "2026-10-04",
-      },
-      {
-        id: "TX-1038",
-        school: "Green Valley",
-        plan: "Premium",
-        amount: "₹18,000",
-        status: "Paid" as const,
-        date: "2026-10-02",
-      },
-      {
-        id: "TX-1035",
-        school: "City Academy",
-        plan: "Standard",
-        amount: "₹7,200",
-        status: "Failed" as const,
-        date: "2026-09-28",
-      },
-    ].slice(0, Math.max(1, schools)),
-    activity: [
-      {
-        id: "a1",
-        title: "New school registered",
-        description: "Awaiting package assignment",
-        time: "2 minutes ago",
-      },
-      {
-        id: "a2",
-        title: "Payment received",
-        description: "Pro plan renewal",
-        time: "15 minutes ago",
-      },
-      {
-        id: "a3",
-        title: "Student roster updated",
-        description: "Bulk import completed",
-        time: "1 hour ago",
-      },
-      {
-        id: "a4",
-        title: "Subscription upgraded",
-        description: "Basic → Pro",
-        time: "3 hours ago",
-      },
-    ],
+    source: "placeholder",
+    counts: null,
+    stats: [],
+    revenue: [],
+    packages: [],
+    transactions: [],
+    activity: [],
+    message,
   };
 }
 
 export async function loadDashboardPayload(): Promise<DashboardPayload> {
+  const { api, apiErrorMessage } = await import("@/lib/api");
   try {
-    const response = await fetch("/api/admin/dashboard", {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: boolean;
-      message?: string;
-      data?: Partial<DashboardCounts>;
-    };
-
-    if (response.ok && !payload.error && payload.data) {
-      const counts: DashboardCounts = { ...EMPTY_COUNTS, ...payload.data };
-      const analytics = placeholderAnalytics(counts);
-      return {
-        source: "api",
-        counts,
-        stats: statsFromCounts(counts),
-        ...analytics,
-        message:
-          "Counts from /api/admin/dashboard. Chart/transaction samples are placeholders until billing APIs exist.",
-      };
+    const dashboard = await api<Partial<DashboardCounts> & { packages_active?: number; detail?: string }>(
+      "/super-admin/dashboard",
+    );
+    if (!dashboard.ok) {
+      return emptyPayload(
+        dashboard.status === 403
+          ? "This account cannot open the platform dashboard. Sign in with a super admin account."
+          : apiErrorMessage(dashboard.data, "Unable to load dashboard data. Try again."),
+      );
     }
 
-    const analytics = placeholderAnalytics(null);
+    const counts: DashboardCounts = {
+      ...EMPTY_COUNTS,
+      ...dashboard.data,
+      packages: dashboard.data.packages_active ?? dashboard.data.packages ?? 0,
+    };
+    const plans = await api<{ items?: NamedRow[] }>("/super-admin/plans?page=1&page_size=20");
+    const packageRows = plans.ok ? plans.data.items || [] : [];
+    const share = packageRows.length ? 100 / packageRows.length : 0;
+    const slices: PackageSlice[] = packageRows.map((row, index) => ({
+      label: row.name || `Plan ${row.id ?? index + 1}`,
+      value: Math.round(share * 10) / 10,
+      color: PACKAGE_COLORS[index % PACKAGE_COLORS.length],
+    }));
+
     return {
-      source: "placeholder",
-      counts: null,
-      stats: statsFromCounts(EMPTY_COUNTS).map((s, i) => ({
-        ...s,
-        value: ["125", "4,850", "320", "87", "64", "24"][i] ?? s.value,
-        meta: ["+0 this month", "↑ 12.5% this month", "Active roster", "14 addons available", "Published", "Awaiting review"][i] ?? s.meta,
-      })),
-      ...analytics,
-      message:
-        "Live dashboard counts need /api/admin session. Showing placeholder analytics for UI preview.",
+      source: "api",
+      counts,
+      stats: statsFromCounts(counts),
+      revenue: [],
+      packages: slices,
+      transactions: [],
+      activity: [],
     };
   } catch {
-    const analytics = placeholderAnalytics(null);
-    return {
-      source: "placeholder",
-      counts: null,
-      stats: statsFromCounts(EMPTY_COUNTS).map((s, i) => ({
-        ...s,
-        value: ["125", "4,850", "320", "87", "64", "24"][i] ?? s.value,
-      })),
-      ...analytics,
-      message: "Unable to reach dashboard API. Showing placeholder data.",
-    };
+    return emptyPayload("Unable to load dashboard data. Try again.");
   }
 }

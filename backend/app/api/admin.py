@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,8 +16,9 @@ from app.models.tables import (
     SchoolClass,
     Student,
     Subject,
+    User,
 )
-from app.services.admin_data import dashboard, login_admin, maintenance_blocks, rows
+from app.services.admin_data import count, dashboard, login_admin, maintenance_blocks, rows
 from app.services.mobile_auth import find_school
 
 router = APIRouter()
@@ -29,6 +30,14 @@ class AdminLogin(BaseModel):
     code: str | None = None
 
 
+def _iso(value) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 def _student(row: Student) -> dict:
     return {
         "id": row.id,
@@ -37,43 +46,121 @@ def _student(row: Student) -> dict:
         "class_section_id": row.class_section_id,
         "session_year_id": row.session_year_id,
         "user_id": row.user_id,
+        "guardian_id": row.guardian_id,
+        "admission_date": _iso(row.admission_date),
+        "school_id": row.school_id,
     }
 
 
 def _class(row: SchoolClass) -> dict:
-    return {"id": row.id, "name": row.name, "medium_id": row.medium_id}
+    return {
+        "id": row.id,
+        "name": row.name,
+        "medium_id": row.medium_id,
+        "include_semesters": row.include_semesters,
+        "school_id": row.school_id,
+    }
 
 
 def _subject(row: Subject) -> dict:
-    return {"id": row.id, "name": row.name, "code": row.code, "type": row.type}
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "type": row.type,
+        "medium_id": row.medium_id,
+        "school_id": row.school_id,
+    }
 
 
 def _attendance(row: Attendance) -> dict:
-    return {"id": row.id, "student_id": row.student_id, "type": row.type, "date": row.date.isoformat(), "remark": row.remark}
+    return {
+        "id": row.id,
+        "student_id": row.student_id,
+        "class_section_id": row.class_section_id,
+        "session_year_id": row.session_year_id,
+        "type": row.type,
+        "date": _iso(row.date),
+        "remark": row.remark,
+        "school_id": row.school_id,
+    }
 
 
 def _exam(row: Exam) -> dict:
-    return {"id": row.id, "name": row.name, "class_id": row.class_id, "publish": row.publish}
+    return {
+        "id": row.id,
+        "name": row.name,
+        "description": row.description,
+        "class_id": row.class_id,
+        "session_year_id": row.session_year_id,
+        "publish": row.publish,
+        "school_id": row.school_id,
+    }
 
 
 def _fee(row: Fee) -> dict:
-    return {"id": row.id, "name": row.name, "due_date": row.due_date.isoformat(), "due_charges": row.due_charges}
+    return {
+        "id": row.id,
+        "name": row.name,
+        "due_date": _iso(row.due_date),
+        "due_charges": row.due_charges,
+        "session_year_id": row.session_year_id,
+        "school_id": row.school_id,
+    }
 
 
 def _announcement(row: Announcement) -> dict:
-    return {"id": row.id, "title": row.title, "description": row.description}
+    return {
+        "id": row.id,
+        "title": row.title,
+        "description": row.description,
+        "session_year_id": row.session_year_id,
+        "school_id": row.school_id,
+    }
 
 
 def _leave(row: Leave) -> dict:
-    return {"id": row.id, "user_id": row.user_id, "reason": row.reason, "status": row.status}
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "reason": row.reason,
+        "status": row.status,
+        "from_date": _iso(row.from_date),
+        "to_date": _iso(row.to_date),
+        "session_year_id": row.session_year_id,
+        "school_id": row.school_id,
+    }
 
 
 def _expense(row: Expense) -> dict:
-    return {"id": row.id, "title": row.title, "amount": row.amount, "date": row.date.isoformat()}
+    return {
+        "id": row.id,
+        "title": row.title,
+        "amount": row.amount,
+        "date": _iso(row.date),
+        "session_year_id": row.session_year_id,
+        "school_id": row.school_id,
+    }
 
 
 def _school(row: School) -> dict:
-    return {"id": row.id, "name": row.name, "code": row.code, "status": row.status, "database_name": row.database_name}
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "status": row.status,
+        "address": row.address,
+        "support_email": row.support_email,
+        "support_phone": row.support_phone,
+        "tagline": row.tagline,
+        "domain": row.domain,
+        "logo": row.logo,
+        "installed": row.installed,
+        "admin_id": row.admin_id,
+        "database_name": row.database_name,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
 
 
 def _package(row: Package) -> dict:
@@ -127,7 +214,7 @@ def me(request: Request, context=Depends(admin_context)):
                 "first_name": user.first_name,
                 "last_name": user.last_name,
                 "email": user.email,
-                "school_id": user.school_id,
+                "school_id": getattr(user, "school_id", None),
             },
         }
     finally:
@@ -204,6 +291,43 @@ def expenses(request: Request, context=Depends(_guard)):
 def schools(request: Request, central: Session = Depends(central_db), context=Depends(_guard)):
     try:
         return {"error": False, "data": rows(central, School, None, _school)}
+    finally:
+        close_admin_db(request)
+
+
+@router.get("/schools/{row_id}")
+def school_detail(row_id: int, request: Request, context=Depends(_guard)):
+    db, _user, actor_school = context
+    try:
+        if actor_school is not None and actor_school != row_id:
+            raise HTTPException(status_code=403, detail="Cross-school access denied")
+        row = db.get(School, row_id)
+        if row is None or row.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="School not found")
+        admin = db.get(User, row.admin_id) if row.admin_id else None
+        if admin is not None and admin.deleted_at is not None:
+            admin = None
+        data = _school(row)
+        data["admin"] = (
+            None
+            if admin is None
+            else {
+                "id": admin.id,
+                "first_name": admin.first_name,
+                "last_name": admin.last_name,
+                "email": admin.email,
+                "mobile": admin.mobile,
+            }
+        )
+        data["counts"] = {
+            "students": count(db, Student, row.id),
+            "classes": count(db, SchoolClass, row.id),
+            "subjects": count(db, Subject, row.id),
+            "exams": count(db, Exam, row.id),
+            "fees": count(db, Fee, row.id),
+            "announcements": count(db, Announcement, row.id),
+        }
+        return {"error": False, "data": data}
     finally:
         close_admin_db(request)
 

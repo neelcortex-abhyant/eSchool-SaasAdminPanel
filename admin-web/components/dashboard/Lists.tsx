@@ -16,7 +16,7 @@ function statusClass(status: TransactionRow["status"]) {
 
 export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
   if (!rows.length) {
-    return <div className="empty-state">No transaction data available</div>;
+    return <div className="empty-state">No fee records</div>;
   }
 
   return (
@@ -24,12 +24,12 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Transaction ID</th>
-            <th>School</th>
-            <th>Plan</th>
-            <th>Amount</th>
-            <th>Payment Status</th>
-            <th>Date</th>
+            <th>Fee</th>
+            <th>Scope</th>
+            <th>Name</th>
+            <th>Due charges</th>
+            <th>Status</th>
+            <th>Due date</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -45,7 +45,7 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
               </td>
               <td>{row.date}</td>
               <td>
-                <Link href="/packages" className="link-btn">
+                <Link href="/fees" className="link-btn">
                   View
                 </Link>
               </td>
@@ -59,7 +59,7 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
 
 export function RecentActivity({ items }: { items: ActivityItem[] }) {
   if (!items.length) {
-    return <div className="empty-state">No recent activity</div>;
+    return <div className="empty-state">No announcements</div>;
   }
 
   return (
@@ -83,12 +83,12 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
 
 export function QuickActions() {
   const actions = [
-    { href: "/schools", label: "Add School", icon: IconBuilding },
-    { href: "/students", label: "Add Student", icon: IconUsers },
-    { href: "/classes", label: "Add Class", icon: IconTeacher },
-    { href: "/packages", label: "Create Package", icon: IconPackage },
+    { href: "/schools/new", label: "Add School", icon: IconBuilding },
+    { href: "/packages", label: "Create Plan", icon: IconPackage },
+    { href: "/addons", label: "Add Add-on", icon: IconUsers },
     { href: "/announcements", label: "Send Notice", icon: IconBell },
-    { href: "/fees", label: "Generate Report", icon: IconChart },
+    { href: "/reports", label: "View Reports", icon: IconChart },
+    { href: "/settings", label: "Settings", icon: IconTeacher },
   ] as const;
 
   return (
