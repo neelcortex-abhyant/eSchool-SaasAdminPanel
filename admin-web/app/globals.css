@@ -783,6 +783,31 @@ img {
   background: #fff;
 }
 
+.form-field input.invalid,
+.form-field select.invalid {
+  border-color: #fca5a5;
+}
+
+.field-error {
+  margin: 6px 0 0;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.field-span {
+  grid-column: 1 / -1;
+}
+
+.logo-preview {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin-top: 10px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+}
+
 .school-detail {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -923,6 +948,7 @@ img {
 
 .resource-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 8px;
 }

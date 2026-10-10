@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage } from "@/lib/api";
 import { SchoolBilling } from "@/components/schools/SchoolBilling";
 import { loadSchool, loadSchoolAdmins, schoolStatusLabel, type SchoolAdmin, type SchoolRecord } from "@/lib/school";
@@ -155,6 +155,9 @@ export default function SchoolProfilePage() {
           </header>
 
           {error ? <div className="alert alert-danger">{error}</div> : null}
+          <Suspense fallback={null}>
+            <SavedNotice />
+          </Suspense>
           {notice ? <div className="alert alert-info">{notice}</div> : null}
 
           {!school.name && !school.code ? (
@@ -249,6 +252,26 @@ export default function SchoolProfilePage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function SavedNotice() {
+  const searchParams = useSearchParams();
+  const saved = searchParams.get("saved");
+  const warning = searchParams.get("warning") || "";
+  const warnings = warning.split(",").filter(Boolean);
+  if (!saved && warnings.length === 0) return null;
+  const savedText = saved === "created" ? "School created." : saved === "updated" ? "School details saved." : "";
+  return (
+    <>
+      {savedText ? <div className="alert alert-info">{savedText}</div> : null}
+      {warnings.includes("admin") ? (
+        <div className="alert alert-danger">The school was saved, but the school admin account could not be created.</div>
+      ) : null}
+      {warnings.includes("status") ? (
+        <div className="alert alert-danger">The school details were saved, but the status did not update.</div>
+      ) : null}
+    </>
   );
 }
 

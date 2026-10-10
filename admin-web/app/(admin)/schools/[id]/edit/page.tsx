@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiErrorMessage } from "@/lib/api";
 import { loadSchool } from "@/lib/school";
 import { PageHeading } from "@/components/dashboard/StatCard";
-import { SchoolForm, type SchoolFormValues } from "@/components/schools/SchoolForm";
+import { SchoolForm } from "@/components/schools/SchoolForm";
+import type { SchoolFormValues } from "@/lib/schoolForm";
 import { IconBuilding } from "@/lib/icons";
 
 export default function EditSchoolPage() {
@@ -13,40 +15,51 @@ export default function EditSchoolPage() {
   const [initial, setInitial] = useState<SchoolFormValues | null>(null);
   const [schoolId, setSchoolId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      const result = await loadSchool(params.id);
-      if (cancelled) return;
-      if (!result.ok || !result.data.id) {
-        setError(apiErrorMessage(result.data, "Unable to load this school."));
-        setLoading(false);
-        return;
-      }
-      const school = result.data;
-      setSchoolId(school.id);
-      setInitial({
-        name: school.name || "",
-        code: school.code || "",
-        address: school.address || "",
-        support_email: school.support_email || "",
-        support_phone: school.support_phone || "",
-        tagline: school.tagline || "",
-        domain: school.domain || "",
-        status: school.status === 0 ? "0" : "1",
-        admin_first_name: "",
-        admin_last_name: "",
-        admin_password: "",
-      });
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setNotFound(false);
+    setInitial(null);
+    const result = await loadSchool(params.id);
+    if (result.status === 404) {
+      setNotFound(true);
       setLoading(false);
+      return;
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
+    if (!result.ok || !result.data.id) {
+      setError(
+        result.status === 403
+          ? "This account cannot edit schools. Sign in with a super admin account."
+          : apiErrorMessage(result.data, "Unable to load this school."),
+      );
+      setLoading(false);
+      return;
+    }
+    const school = result.data;
+    setSchoolId(school.id);
+    setInitial({
+      name: school.name || "",
+      code: school.code || "",
+      address: school.address || "",
+      support_email: school.support_email || "",
+      support_phone: school.support_phone || "",
+      tagline: school.tagline || "",
+      logo: school.logo || "",
+      domain: school.domain || "",
+      status: school.status === 0 ? "0" : "1",
+      admin_first_name: "",
+      admin_last_name: "",
+      admin_password: "",
+    });
+    setLoading(false);
   }, [params.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <div>
@@ -55,7 +68,26 @@ export default function EditSchoolPage() {
         description="Update the saved school details"
         icon={<IconBuilding width={20} height={20} />}
       />
-      {error ? <div className="alert alert-danger">{error}</div> : null}
+      {notFound ? (
+        <section className="panel-card">
+          <div className="empty-state">This school was not found.</div>
+          <div className="page-actions">
+            <Link className="btn-pill btn-pill-green" href="/schools">
+              Back to schools
+            </Link>
+          </div>
+        </section>
+      ) : null}
+      {error ? (
+        <section className="panel-card">
+          <div className="alert alert-danger">{error}</div>
+          <div className="page-actions">
+            <button className="btn-pill btn-pill-green" type="button" onClick={() => void load()}>
+              Retry
+            </button>
+          </div>
+        </section>
+      ) : null}
       {loading ? (
         <div className="panel-card">
           <div className="skeleton" style={{ height: 180 }} />

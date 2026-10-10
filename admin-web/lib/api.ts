@@ -101,6 +101,12 @@ export function apiErrorMessage(data: unknown, fallback = "Request failed."): st
   if (!data || typeof data !== "object") return fallback;
   const record = data as Record<string, unknown>;
   if (typeof record.detail === "string") return record.detail;
+  if (Array.isArray(record.detail)) {
+    const first = record.detail.find((item) => item && typeof item === "object" && typeof (item as { msg?: unknown }).msg === "string") as
+      | { msg: string }
+      | undefined;
+    if (first) return first.msg;
+  }
   if (typeof record.message === "string") return record.message;
   return fallback;
 }

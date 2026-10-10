@@ -1,7 +1,8 @@
 "use client";
 
 import { PageHeading } from "@/components/dashboard/StatCard";
-import { EMPTY_SCHOOL_FORM, SchoolForm } from "@/components/schools/SchoolForm";
+import { SchoolForm } from "@/components/schools/SchoolForm";
+import { EMPTY_SCHOOL_FORM } from "@/lib/schoolForm";
 import { IconBuilding } from "@/lib/icons";
 
 export default function NewSchoolPage() {
