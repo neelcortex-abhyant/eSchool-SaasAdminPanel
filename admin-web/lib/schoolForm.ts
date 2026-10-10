@@ -61,11 +61,7 @@ export function validateSchool(values: SchoolFormValues, mode: "create" | "edit"
   if (domain.length > 255) errors.domain = "Domain must be 255 characters or fewer.";
   else if (domain && /\s/.test(domain)) errors.domain = "Domain cannot contain spaces.";
 
-  const logo = values.logo.trim();
-  if (logo.length > 255) errors.logo = "Logo URL must be 255 characters or fewer.";
-  else if (logo && !/^https?:\/\//i.test(logo) && !logo.startsWith("/")) {
-    errors.logo = "Enter a logo URL starting with http://, https://, or /.";
-  }
+  if (values.logo.trim().length > 255) errors.logo = "Logo must be 255 characters or fewer.";
 
   if (values.status !== "0" && values.status !== "1") errors.status = "Choose active or inactive.";
 

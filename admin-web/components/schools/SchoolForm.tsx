@@ -124,10 +124,10 @@ export function SchoolForm({
           {fieldErrors.status ? <p className="field-error">{fieldErrors.status}</p> : null}
         </div>
         <div className="form-field field-span">
-          <label htmlFor="school-logo">Logo URL</label>
+          <label htmlFor="school-logo">Logo</label>
           <input
             id="school-logo"
-            type="url"
+            type="text"
             value={values.logo}
             maxLength={255}
             className={fieldErrors.logo ? "invalid" : undefined}
@@ -135,6 +135,7 @@ export function SchoolForm({
             placeholder="https://example.com/logo.png"
             onChange={(event) => setField("logo", event.target.value)}
           />
+          <p className="field-hint">Image URL or stored filename. Leave blank if there is no logo.</p>
           {fieldErrors.logo ? <p className="field-error">{fieldErrors.logo}</p> : null}
           <LogoPreview value={values.logo} />
         </div>

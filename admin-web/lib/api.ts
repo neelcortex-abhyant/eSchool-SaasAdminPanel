@@ -105,7 +105,7 @@ export function apiErrorMessage(data: unknown, fallback = "Request failed."): st
     const first = record.detail.find((item) => item && typeof item === "object" && typeof (item as { msg?: unknown }).msg === "string") as
       | { msg: string }
       | undefined;
-    if (first) return first.msg;
+    if (first) return first.msg.replace(/^Value error,\s*/i, "");
   }
   if (typeof record.message === "string") return record.message;
   return fallback;
