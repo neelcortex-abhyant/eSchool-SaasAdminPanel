@@ -55,8 +55,8 @@ def require_school_admin(
 ) -> AuthContext:
     """Allow only an active school_admin bound to an active, installed school.
 
-    Suspended schools have status=0. Deactivated schools have status=0 and installed=0.
-    Both are denied. A missing or soft-deleted school is also denied.
+    Login keeps auth_service.assert_school_admin_login_allowed. That helper returns
+    when status is 1, even if installed is 0, so it is not used for these routes.
     """
     if auth.user.role != ROLE_SCHOOL_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -66,13 +66,23 @@ def require_school_admin(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No school assigned")
     school = db.get(School, auth.user.school_id)
     if (
-        school is None
-        or school.deleted_at is not None
-        or school.status != SCHOOL_STATUS_ACTIVE
-        or school.installed != INSTALLED_YES
+        school is not None
+        and school.deleted_at is None
+        and school.status == SCHOOL_STATUS_ACTIVE
+        and school.installed == INSTALLED_YES
     ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="School access is suspended")
-    return auth
+        return auth
+    if (
+        school is not None
+        and school.deleted_at is None
+        and school.status != SCHOOL_STATUS_ACTIVE
+        and school.installed != INSTALLED_YES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This school is waiting for approval. You can sign in after it is activated.",
+        )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="School access is suspended")
 
 
 def assert_school_scope(auth: AuthContext, school_id: int) -> None:

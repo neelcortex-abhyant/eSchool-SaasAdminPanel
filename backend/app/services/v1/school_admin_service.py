@@ -44,6 +44,7 @@ def create_school_admin(
     first_name: str,
     last_name: str,
     mobile: str | None,
+    commit: bool = True,
 ) -> User:
     school = get_school(db, school_id)
     normalized = normalize_email(email)
@@ -65,8 +66,9 @@ def create_school_admin(
     db.flush()
     if not school.v1_admin_id:
         school.v1_admin_id = str(user.id)
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
     return user
 
 
