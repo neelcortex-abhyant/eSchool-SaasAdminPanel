@@ -128,7 +128,7 @@ function statsFromCounts(c: DashboardCounts): StatCardData[] {
   ];
 }
 
-const PACKAGE_COLORS = ["#3dbb8a", "#2f5bff", "#f59e0b", "#ec4899", "#0d9488", "#7c3aed"];
+const PACKAGE_COLORS = ["#fbbf24", "#1f2937", "#f59e0b", "#ec4899", "#059669", "#7c3aed"];
 
 type NamedRow = { id?: number; name?: string | null; status?: number | null };
 

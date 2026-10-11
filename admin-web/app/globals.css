@@ -1,27 +1,29 @@
 /* Admin Console design system — SaaS light theme */
 
 :root {
-  /* Brand tokens inspired by the education SaaS marketing UI (green CTA + blue accents). */
-  --color-bg: #f5f8fc;
+  /* EaseMySeat: cream page, amber actions, charcoal text. */
+  --color-bg: #fefce8;
   --color-surface: #ffffff;
-  --color-border: #e7eef7;
-  --color-border-strong: #d5dee9;
-  --color-text: #101828;
-  --color-text-muted: #667085;
-  --color-text-subtle: #98a2b3;
-  --color-primary: #3dbb8a;
-  --color-primary-soft: #e8f8f1;
-  --color-primary-hover: #2ea574;
-  --color-accent: #2f5bff;
-  --color-accent-soft: #eef2ff;
-  --color-success: #16a34a;
+  --color-border: #f0e6c8;
+  --color-border-strong: #e7d7a8;
+  --color-text: #171717;
+  --color-text-muted: #4b5563;
+  --color-text-subtle: #6b7280;
+  --color-primary: #fbbf24;
+  --color-primary-ink: #b45309;
+  --color-primary-soft: #fffbeb;
+  --color-primary-hover: #f59e0b;
+  --color-on-primary: #1f2937;
+  --color-accent: #1f2937;
+  --color-accent-soft: #f3f4f6;
+  --color-success: #059669;
   --color-success-soft: #ecfdf5;
-  --color-warning: #ea580c;
-  --color-warning-soft: #fff7ed;
+  --color-warning: #d97706;
+  --color-warning-soft: #fffbeb;
   --color-danger: #dc2626;
   --color-danger-soft: #fef2f2;
   --color-purple-soft: #f5f3ff;
-  --color-orange-soft: #fff7ed;
+  --color-orange-soft: #fffbeb;
   --color-teal-soft: #f0fdfa;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
   --shadow-md: 0 10px 30px rgba(16, 24, 40, 0.08);
@@ -164,12 +166,12 @@ img {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(145deg, #4fd19c, #3dbb8a);
-  color: #fff;
+  background: linear-gradient(145deg, #fbbf24, #f59e0b);
+  color: var(--color-on-primary);
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  box-shadow: 0 6px 16px rgba(61, 187, 138, 0.28);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
 }
 
 .sidebar-brand-name {
@@ -201,8 +203,8 @@ img {
 }
 
 .sidebar-search input:focus {
-  border-color: #bfdbfe;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
 }
 
 .sidebar-search-icon {
@@ -240,13 +242,13 @@ img {
 }
 
 .sidebar-link:hover {
-  background: #f1f5f9;
+  background: #fff7d6;
   color: var(--color-text);
 }
 
 .sidebar-link.is-active {
-  background: var(--color-primary-soft);
-  color: #1f8f66;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-weight: 600;
 }
 
@@ -286,8 +288,8 @@ img {
 
 .sidebar-child:hover,
 .sidebar-child.is-active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .sidebar-backdrop {
@@ -362,7 +364,7 @@ img {
   height: 34px;
   border-radius: 50%;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -420,8 +422,8 @@ img {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(145deg, var(--color-accent), #1d4ed8);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-primary);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -503,7 +505,7 @@ img {
   place-items: center;
 }
 
-.stat-icon.blue { background: var(--color-primary-soft); color: var(--color-primary); }
+.stat-icon.blue { background: var(--color-primary-soft); color: var(--color-primary-ink); }
 .stat-icon.green { background: var(--color-success-soft); color: var(--color-success); }
 .stat-icon.purple { background: var(--color-purple-soft); color: #7c3aed; }
 .stat-icon.orange { background: var(--color-orange-soft); color: var(--color-warning); }
@@ -657,7 +659,7 @@ img {
   height: 36px;
   border-radius: 10px;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -696,9 +698,9 @@ img {
 }
 
 .quick-action:hover {
-  border-color: #bfdbfe;
+  border-color: #f59e0b;
   box-shadow: var(--shadow-sm);
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
 }
 
 .quick-action span {
@@ -733,8 +735,8 @@ img {
 
 .alert-info {
   background: var(--color-primary-soft);
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .empty-state {
@@ -872,7 +874,7 @@ img {
   object-fit: cover;
   flex: 0 0 auto;
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   display: grid;
   place-items: center;
   font-size: 22px;
@@ -985,7 +987,7 @@ img {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 40%),
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.28), transparent 40%),
     var(--color-bg);
 }
 
@@ -1030,8 +1032,8 @@ img {
 }
 
 .form-field input:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
 }
 
 .password-field {
@@ -1071,7 +1073,7 @@ img {
   border-radius: var(--radius-pill);
   padding: 12px 16px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1088,7 +1090,7 @@ img {
 .link-btn {
   border: none;
   background: none;
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   cursor: pointer;
   padding: 0;
   font-size: 13px;
@@ -1180,9 +1182,9 @@ img {
 .site {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 85% 12%, rgba(47, 91, 255, 0.08), transparent 28%),
-    radial-gradient(circle at 12% 18%, rgba(61, 187, 138, 0.1), transparent 26%),
-    #f7fafc;
+    radial-gradient(circle at 85% 12%, rgba(251, 191, 36, 0.22), transparent 28%),
+    radial-gradient(circle at 12% 18%, rgba(245, 158, 11, 0.12), transparent 26%),
+    #fefce8;
   color: var(--color-text);
   overflow-x: hidden;
 }
@@ -1267,8 +1269,8 @@ img {
 
 .btn-pill-green {
   background: var(--color-primary);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(61, 187, 138, 0.28);
+  color: var(--color-on-primary);
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.35);
 }
 
 .btn-pill-green:hover {
@@ -1276,12 +1278,12 @@ img {
 }
 
 .btn-pill-green-soft {
-  background: rgba(61, 187, 138, 0.16);
-  color: #1f8f66;
+  background: rgba(251, 191, 36, 0.28);
+  color: var(--color-on-primary);
 }
 
 .btn-pill-green-soft:hover {
-  background: rgba(61, 187, 138, 0.24);
+  background: rgba(251, 191, 36, 0.45);
 }
 
 .site-menu-btn {
@@ -1409,7 +1411,7 @@ img {
   inset: 8% -6% auto auto;
   width: 140px;
   height: 70px;
-  border: 2px solid rgba(47, 91, 255, 0.35);
+  border: 2px solid rgba(245, 158, 11, 0.45);
   border-radius: 50%;
   border-left-color: transparent;
   border-bottom-color: transparent;
@@ -1502,8 +1504,8 @@ img {
 }
 
 .price-card.is-featured {
-  border-color: rgba(61, 187, 138, 0.45);
-  box-shadow: 0 12px 30px rgba(61, 187, 138, 0.14);
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.18);
 }
 
 .price-card h3 {
@@ -1593,8 +1595,8 @@ img {
   top: 8%;
   width: 42px;
   height: 42px;
-  border-left: 2px solid rgba(47, 91, 255, 0.45);
-  border-bottom: 2px solid rgba(47, 91, 255, 0.45);
+  border-left: 2px solid rgba(245, 158, 11, 0.55);
+  border-bottom: 2px solid rgba(245, 158, 11, 0.55);
   transform: rotate(45deg);
   border-radius: 4px;
 }
@@ -1609,7 +1611,7 @@ img {
 
 .site-float-card.metric strong {
   font-size: 20px;
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
 }
 
 .site-float-card.metric span {
@@ -1646,7 +1648,7 @@ img {
 
 .site-mock-bar {
   width: 42%;
-  background: rgba(61, 187, 138, 0.35);
+  background: rgba(251, 191, 36, 0.45);
 }
 
 .site-mock-row.short {
@@ -1756,7 +1758,7 @@ img {
 }
 
 .check-list svg {
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   flex-shrink: 0;
 }
 
@@ -1785,7 +1787,7 @@ img {
 .step-num {
   display: inline-flex;
   margin-bottom: 10px;
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   font-weight: 800;
   letter-spacing: 0.04em;
 }
@@ -1837,7 +1839,7 @@ img {
 }
 
 .benefit-chip svg {
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
 }
 
 .billing-toggle {
@@ -1878,7 +1880,7 @@ img {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--color-primary-soft);
-  color: #1f8f66;
+  color: var(--color-primary-ink);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1919,7 +1921,7 @@ img {
 
 .faq-trigger svg {
   transition: transform 0.15s ease;
-  color: var(--color-primary);
+  color: var(--color-primary-ink);
   flex-shrink: 0;
 }
 
@@ -1953,8 +1955,8 @@ img {
   padding: 40px 28px;
   text-align: center;
   background:
-    radial-gradient(circle at top right, rgba(61, 187, 138, 0.22), transparent 40%),
-    linear-gradient(135deg, #0f2747, #163a5f);
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.28), transparent 40%),
+    linear-gradient(135deg, #1f2937, #111827);
   color: #fff;
   box-shadow: var(--shadow-md);
 }
@@ -2028,8 +2030,8 @@ img {
 }
 
 .contact-form textarea:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(47, 91, 255, 0.12);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
 }
 
 .form-grid-2 {

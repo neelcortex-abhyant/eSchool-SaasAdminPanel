@@ -29,16 +29,16 @@ export function RevenueChart({ points }: { points: MonthPoint[] }) {
               x2={width - padX}
               y1={y}
               y2={y}
-              stroke="#e8edf5"
+              stroke="#f0e6c8"
               strokeWidth="1"
             />
           );
         })}
-        <path d={area} fill="rgba(61, 187, 138, 0.14)" />
-        <path d={line} fill="none" stroke="#3dbb8a" strokeWidth="2.5" strokeLinejoin="round" />
+        <path d={area} fill="rgba(251, 191, 36, 0.28)" />
+        <path d={line} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round" />
         {coords.map((c) => (
           <g key={c.month}>
-            <circle cx={c.x} cy={c.y} r="3.5" fill="#2f5bff" />
+            <circle cx={c.x} cy={c.y} r="3.5" fill="#1f2937" />
             <title>
               {c.month}: {c.value}
             </title>
@@ -68,7 +68,7 @@ export function SubscriptionChart({ slices }: { slices: PackageSlice[] }) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#eef2f7"
+          stroke="#f0e6c8"
           strokeWidth={stroke}
         />
         {slices.map((slice) => {
@@ -95,7 +95,7 @@ export function SubscriptionChart({ slices }: { slices: PackageSlice[] }) {
           offset += length;
           return el;
         })}
-        <text x="50%" y="48%" textAnchor="middle" fontSize="22" fontWeight="700" fill="#1e293b">
+        <text x="50%" y="48%" textAnchor="middle" fontSize="22" fontWeight="700" fill="#171717">
           {Math.round(total)}%
         </text>
         <text x="50%" y="58%" textAnchor="middle" fontSize="12" fill="#94a3b8">
