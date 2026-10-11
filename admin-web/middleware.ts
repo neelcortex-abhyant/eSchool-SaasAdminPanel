@@ -12,6 +12,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/" || pathname === "/login" || pathname.startsWith("/login/")) {
     return true;
   }
+  if (pathname === "/register-school" || pathname.startsWith("/register-school/")) {
+    return true;
+  }
   // Allow hash-only marketing anchors when requested as bare paths later.
   return PUBLIC_PREFIXES.some((p) => p !== "/" && pathname.startsWith(p));
 }

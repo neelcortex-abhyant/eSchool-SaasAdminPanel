@@ -118,7 +118,14 @@ def create_school(
     logo: str = "",
     code: str | None = None,
     domain: str | None = None,
+    status: int = STATUS_ACTIVE,
+    installed: int = INSTALLED_YES,
+    commit: bool = True,
 ) -> School:
+    if status not in (STATUS_ACTIVE, STATUS_INACTIVE):
+        raise SchoolServiceError("Invalid status", status_code=422)
+    if installed not in (INSTALLED_YES, INSTALLED_NO):
+        raise SchoolServiceError("Invalid installed flag", status_code=422)
     now = _utcnow()
     if code:
         normalized = _normalize_code(code)
@@ -137,8 +144,8 @@ def create_school(
         logo=logo or "",
         code=normalized,
         domain=domain.strip() if domain else None,
-        status=STATUS_ACTIVE,
-        installed=INSTALLED_YES,
+        status=status,
+        installed=installed,
         admin_id=None,
         database_name=None,
         deleted_at=None,
@@ -146,8 +153,11 @@ def create_school(
         updated_at=now,
     )
     db.add(school)
-    _commit_school(db)
-    db.refresh(school)
+    if commit:
+        _commit_school(db)
+        db.refresh(school)
+    else:
+        db.flush()
     return school
 
 

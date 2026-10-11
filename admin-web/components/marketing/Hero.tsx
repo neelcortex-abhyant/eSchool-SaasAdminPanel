@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { IconBuilding } from "@/lib/icons";
 
 export default function Hero() {
   return (
@@ -16,6 +17,10 @@ export default function Hero() {
           school operations from one centralized console built for clarity.
         </p>
         <div className="site-cta-row">
+          <Link href="/register-school" className="btn-pill btn-register-school">
+            <IconBuilding width={18} height={18} />
+            Register your school
+          </Link>
           <Link href="/login" className="btn-pill btn-pill-green">
             Get started
           </Link>

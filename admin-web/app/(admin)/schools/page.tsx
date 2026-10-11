@@ -97,7 +97,7 @@ export default function SchoolsPage() {
                       <td>{school.support_phone || "—"}</td>
                       <td>
                         <span className={`status-badge ${school.status === 1 ? "paid" : "pending"}`}>
-                          {schoolStatusLabel(school.status)}
+                          {schoolStatusLabel(school.status, school.installed)}
                         </span>
                       </td>
                       <td>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { IconChevron, IconGlobe, IconLogoMark, IconMenu } from "@/lib/icons";
+import { IconBuilding, IconChevron, IconGlobe, IconLogoMark, IconMenu } from "@/lib/icons";
 import { BRAND, NAV_LINKS, RESOURCE_LINKS } from "@/lib/marketing/content";
 
 export default function SiteNavbar() {
@@ -68,6 +68,10 @@ export default function SiteNavbar() {
             <IconGlobe width={15} height={15} />
             <span>EN</span>
           </button>
+          <Link href="/register-school" className="btn-pill btn-register-school">
+            <IconBuilding width={16} height={16} />
+            Register your school
+          </Link>
           <Link href="/login" className="btn-pill btn-pill-green-soft">
             Login
           </Link>
@@ -97,6 +101,9 @@ export default function SiteNavbar() {
             {link.label}
           </Link>
         ))}
+        <Link href="/register-school" className="btn-pill btn-register-school" onClick={() => setMenuOpen(false)}>
+          Register your school
+        </Link>
         <Link href="/login" className="btn-pill btn-pill-green" onClick={() => setMenuOpen(false)}>
           Login / Get started
         </Link>

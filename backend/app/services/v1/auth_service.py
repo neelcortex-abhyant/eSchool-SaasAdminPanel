@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password, hash_token, new_plain_token, verify_password
-from app.models.v1.roles import ROLE_SUPER_ADMIN, ROLE_USER
+from app.models.tables import School
+from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN, ROLE_USER
 from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
 
@@ -163,7 +164,27 @@ def login(db: Session, *, email: str, password: str) -> IssuedSession:
         raise AuthError("Invalid email or password", status_code=401)
     if user.status != STATUS_ACTIVE:
         raise AuthError("Account inactive", status_code=403)
+    assert_school_admin_login_allowed(db, user)
     return create_session(db, user)
+
+
+def assert_school_admin_login_allowed(db: Session, user: User) -> None:
+    """Block a school admin until their school is active. Pending registrations stay closed."""
+    if user.role != ROLE_SCHOOL_ADMIN:
+        return
+    if user.school_id is None:
+        raise AuthError("No school assigned", status_code=403)
+    school = db.get(School, user.school_id)
+    if school is None or school.deleted_at is not None:
+        raise AuthError("This school is not available.", status_code=403)
+    if school.status == 1:
+        return
+    if school.installed == 0:
+        raise AuthError(
+            "This school is waiting for approval. You can sign in after it is activated.",
+            status_code=403,
+        )
+    raise AuthError("This school is inactive.", status_code=403)
 
 
 def login_super_admin(db: Session, *, email: str, password: str) -> IssuedSession:

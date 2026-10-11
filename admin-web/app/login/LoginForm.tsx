@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, apiErrorMessage, setSession } from "@/lib/api";
-import { IconLogoMark } from "@/lib/icons";
+import { api, apiErrorMessage, clearSession, setSession } from "@/lib/api";
 
 type LoginResponse = {
   access_token?: string;
@@ -21,15 +22,21 @@ type LoginResponse = {
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const portal = searchParams.get("role");
+  const copy = portalCopy(portal);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [schoolCode, setSchoolCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showCodeHelp, setShowCodeHelp] = useState(false);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setNotice("");
     setPending(true);
 
     try {
@@ -52,10 +59,15 @@ export default function LoginForm() {
         return;
       }
 
+      const destination = portalDestination(result.data.user?.role, portal);
+      if (!destination) {
+        clearSession();
+        setError(portalDeniedMessage(portal));
+        return;
+      }
       setSession(result.data.access_token);
       const next = searchParams.get("next");
-      const home = result.data.user?.role === "school_admin" ? "/school" : "/dashboard";
-      router.push(next && next.startsWith("/") && next !== "/" ? next : home);
+      router.push(!portal && next && next.startsWith("/") && next !== "/" ? next : destination);
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -66,65 +78,239 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="login-page">
-      <div className="login-card">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div className="sidebar-logo" aria-hidden>
-            <IconLogoMark width={22} height={22} />
-          </div>
-          <div>
-            <div className="sidebar-brand-name">SchoolSarthi</div>
-            <div className="sidebar-brand-sub">Admin sign in</div>
-          </div>
-        </div>
+    <main className="login-split">
+      <section className="login-panel">
+        <div className="login-panel-inner">
+          <h1>{copy.title}</h1>
+          <p className="login-lead">{copy.lead}</p>
 
-        <h1>Welcome back</h1>
-        <p className="muted">Enter your credentials to access the administration portal.</p>
+          <form className="login-form" onSubmit={onSubmit}>
+            {error ? <div className="alert alert-danger">{error}</div> : null}
+            {notice ? <div className="alert alert-info">{notice}</div> : null}
 
-        <form onSubmit={onSubmit}>
-          {error ? <div className="alert alert-danger">{error}</div> : null}
+            <div className="form-field">
+              <label htmlFor="email">Email address</label>
+              <div className="login-input">
+                <MailIcon />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+            </div>
 
-          <div className="form-field">
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="username"
-              required
-            />
-          </div>
+            <div className="form-field">
+              <label htmlFor="password">Password</label>
+              <div className="login-input">
+                <LockIcon />
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  className="password-toggle login-eye"
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                >
+                  {showPassword ? <IconEyeOff /> : <IconEye />}
+                </button>
+              </div>
+            </div>
 
-          <div className="form-field">
-            <label htmlFor="password">Password</label>
-            <div className="password-field">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-                required
-              />
+            <div className="form-field">
+              <div className="login-label-row">
+                <label htmlFor="school-code">School code</label>
+                <button className="link-btn" type="button" onClick={() => setShowCodeHelp((open) => !open)}>
+                  What&apos;s this?
+                </button>
+              </div>
+              <div className="login-input">
+                <BuildingIcon />
+                <input
+                  id="school-code"
+                  value={schoolCode}
+                  onChange={(event) => setSchoolCode(event.target.value)}
+                  placeholder="SCH-XXXX"
+                  autoComplete="off"
+                />
+              </div>
+              {showCodeHelp ? (
+                <p className="field-hint">
+                  School code is shown here for reference. This sign-in uses your email and password.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="login-forgot">
               <button
-                className="password-toggle"
+                className="link-btn"
                 type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                aria-pressed={showPassword}
-                onClick={() => setShowPassword((visible) => !visible)}
+                onClick={() =>
+                  setNotice("Password reset is not available in this portal yet. Contact your platform administrator.")
+                }
               >
-                {showPassword ? <IconEyeOff /> : <IconEye />}
+                Forgot password?
               </button>
             </div>
-          </div>
 
-          <button className="btn-primary" type="submit" disabled={pending}>
-            {pending ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-      </div>
+            <button className="login-submit" type="submit" disabled={pending}>
+              {pending ? "Signing in…" : "Sign in →"}
+            </button>
+          </form>
+
+          <p className="login-signup">
+            New user? <Link href="/register-school">Sign up</Link> to manage your school activities seamlessly!
+          </p>
+
+          <div className="login-demo">
+            <p>Portal roles</p>
+            <span>Super admin panels</span>
+            <div className="login-pills">
+              <PortalLink href="/login?role=super_admin" active={portal === "super_admin"} tone="is-green">
+                Super admin
+              </PortalLink>
+              <PortalLink href="/login?role=staff" active={portal === "staff"} tone="is-blue">
+                Staff
+              </PortalLink>
+            </div>
+            <span>School panels</span>
+            <div className="login-pills">
+              <PortalLink href="/login?role=school_admin" active={portal === "school_admin"} tone="is-green">
+                School admin
+              </PortalLink>
+              <PortalLink href="/login?role=teacher" active={portal === "teacher"} tone="is-rose">
+                Teacher
+              </PortalLink>
+              <PortalLink href="/login?role=school_staff" active={portal === "school_staff"} tone="is-blue">
+                Staff
+              </PortalLink>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside className="login-showcase" aria-hidden>
+        <Image
+          src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1400&q=80"
+          alt=""
+          fill
+          priority
+          className="login-showcase-photo"
+        />
+        <div className="login-showcase-shade" />
+        <div className="login-showcase-content">
+          <div className="login-showcase-brand">
+            <span>S</span>
+            SchoolSarthi
+          </div>
+          <p className="login-showcase-badge">School portal</p>
+          <h2>
+            Empowering the
+            <br />
+            next generation of
+            <br />
+            leaders.
+          </h2>
+          <p>
+            Streamline administrative tasks, manage student progress, and connect with your faculty all in one secure
+            place.
+          </p>
+        </div>
+      </aside>
     </main>
+  );
+}
+
+function PortalLink({
+  href,
+  active,
+  tone,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  tone: string;
+  children: string;
+}) {
+  return (
+    <Link href={href} className={`login-pill ${tone}${active ? " is-active" : ""}`} aria-current={active ? "page" : undefined}>
+      {children}
+    </Link>
+  );
+}
+
+function portalCopy(role: string | null): { title: string; lead: string } {
+  if (role === "super_admin") {
+    return { title: "Super admin sign in", lead: "Sign in to the platform administration panel." };
+  }
+  if (role === "staff") {
+    return { title: "Staff sign in", lead: "Sign in to the platform staff panel." };
+  }
+  if (role === "school_admin") {
+    return { title: "School admin sign in", lead: "Sign in to your school panel." };
+  }
+  if (role === "teacher") {
+    return { title: "Teacher sign in", lead: "Sign in to the teacher panel." };
+  }
+  if (role === "school_staff") {
+    return { title: "Staff sign in", lead: "Sign in to the school staff panel." };
+  }
+  return { title: "Welcome back!", lead: "Enter your credentials to access your academic portal." };
+}
+
+function portalDestination(accountRole: string | undefined, requested: string | null): string | null {
+  if (requested === "super_admin") return accountRole === "super_admin" ? "/dashboard" : null;
+  if (requested === "school_admin") return accountRole === "school_admin" ? "/school" : null;
+  if (requested === "teacher" || requested === "staff" || requested === "school_staff") return null;
+  if (accountRole === "school_admin") return "/school";
+  return "/dashboard";
+}
+
+function portalDeniedMessage(requested: string | null): string {
+  if (requested === "super_admin") return "This account cannot sign in to the super admin panel.";
+  if (requested === "school_admin") return "This account cannot sign in to the school admin panel.";
+  if (requested === "teacher") return "Teacher sign-in is not available for this account.";
+  if (requested === "staff" || requested === "school_staff") return "Staff sign-in is not available for this account.";
+  return "This account cannot sign in here.";
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m4 7 8 6 8-6" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function BuildingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16" />
+      <path d="M14 10h5a1 1 0 0 1 1 1v10" />
+      <path d="M8 8h2M8 12h2M8 16h2" />
+    </svg>
   );
 }
 

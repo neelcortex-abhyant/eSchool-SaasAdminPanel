@@ -46,14 +46,21 @@ def require_super_admin(auth: Annotated[AuthContext, Depends(get_current_auth)])
     return auth
 
 
-def require_school_admin(auth: Annotated[AuthContext, Depends(get_current_auth)]) -> AuthContext:
-    """Allow only active school_admin with a bound school_id."""
+def require_school_admin(
+    auth: Annotated[AuthContext, Depends(get_current_auth)],
+    db: Annotated[Session, Depends(get_v1_db)],
+) -> AuthContext:
+    """Allow only an active school admin whose school is approved."""
     if auth.user.role != ROLE_SCHOOL_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     if auth.user.status != STATUS_ACTIVE:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account inactive")
     if auth.user.school_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No school assigned")
+    try:
+        auth_service.assert_school_admin_login_allowed(db, auth.user)
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return auth
 
 

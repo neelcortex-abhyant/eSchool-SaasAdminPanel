@@ -43,8 +43,10 @@ export type SchoolList = {
   page_size: number;
 };
 
-export function schoolStatusLabel(status: number | null | undefined): string {
-  return status === 1 ? "Active" : "Inactive";
+export function schoolStatusLabel(status: number | null | undefined, installed?: number | null): string {
+  if (status === 1) return "Active";
+  if (installed === 0) return "Pending approval";
+  return "Inactive";
 }
 
 export function loadSchools() {

@@ -118,7 +118,7 @@ export default function SchoolProfilePage() {
                 <div className="school-profile-meta">
                   <span className="mono">{text(school.code)}</span>
                   <span className={`status-badge ${school.deleted_at ? "failed" : school.status === 1 ? "paid" : "pending"}`}>
-                    {school.deleted_at ? "Deleted" : schoolStatusLabel(school.status)}
+                    {school.deleted_at ? "Deleted" : schoolStatusLabel(school.status, school.installed)}
                   </span>
                   <span className={`status-badge ${school.installed === 1 ? "paid" : "pending"}`}>
                     {school.installed === 1 ? "Installed" : "Not installed"}
@@ -139,7 +139,7 @@ export default function SchoolProfilePage() {
                 </button>
               ) : (
                 <button className="btn-pill btn-pill-green" type="button" disabled={pending !== ""} onClick={() => void runAction("activate")}>
-                  {pending === "activate" ? "Saving…" : "Activate"}
+                  {pending === "activate" ? "Saving…" : school.installed === 0 ? "Approve registration" : "Activate"}
                 </button>
               )}
               <button className="btn-pill btn-pill-green-soft" type="button" disabled={pending !== ""} onClick={() => void runAction("provision")}>
@@ -178,7 +178,7 @@ export default function SchoolProfilePage() {
                 <Item label="Phone" value={school.support_phone} />
                 <Item label="Website" value={school.website || school.domain} />
                 <Item label="School type" value={school.school_type} />
-                <Item label="Status" value={school.deleted_at ? "Deleted" : schoolStatusLabel(school.status)} />
+                <Item label="Status" value={school.deleted_at ? "Deleted" : schoolStatusLabel(school.status, school.installed)} />
                 <Item label="Tagline" value={school.tagline} />
               </dl>
             </article>
