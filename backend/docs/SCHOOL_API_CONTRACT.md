@@ -124,10 +124,11 @@ Mock response: `200` and the full school object, with those three fields updated
 | `name` | omitted | Case-insensitive partial match |
 | `code` | omitted | Exact match after code normalization |
 | `support_email` | omitted | Case-insensitive partial match |
-| `status` | omitted | Exact integer match. `1` active, `0` inactive |
+| `status` | omitted | `1` active or `0` inactive. Omit to include both. Any other value returns 422 |
+| `sort` | omitted | `name`, `-name`, `created_at` (oldest first), or `-created_at` (newest first). When omitted, schools are ordered by `id` descending. `id` is always the tie-breaker, in the same direction as the chosen sort |
 | `include_deleted` | `false` | `true` includes soft-deleted schools |
 
-Filters combine. Soft-deleted schools are hidden unless `include_deleted=true`.
+`created_at` may be null on older rows. Null timestamps sort last for both `created_at` and `-created_at`. Filters combine. Soft-deleted schools are hidden unless `include_deleted=true`. Pagination uses the same filters and sort for every page.
 
 Examples:
 
@@ -137,6 +138,8 @@ GET /api/v1/super-admin/schools?name=valley
 GET /api/v1/super-admin/schools?code=gvs01
 GET /api/v1/super-admin/schools?support_email=office@green
 GET /api/v1/super-admin/schools?status=0&page=1&page_size=20
+GET /api/v1/super-admin/schools?sort=name
+GET /api/v1/super-admin/schools?sort=-created_at&status=1
 ```
 
 Mock response (`200`):
@@ -186,6 +189,38 @@ These return the full school object. They do not take a JSON body.
 
 `status` for the list filter and badges: `1` active, `0` inactive. `installed` is separate. Suspend leaves `installed` at its previous value. Deactivate sets it to `0`.
 
+Each successful activate, suspend, and deactivate writes one Super Admin audit record. The action is `school.activate`, `school.suspend`, or `school.deactivate`. Metadata contains `previous_status`, `previous_installed`, `status`, and `installed`. The actor is the authenticated Super Admin, and `school_id` is the school in the URL. A failed status change, such as an unknown school, does not write that success record.
+
+`GET /api/v1/super-admin/audit-logs` lists those rows for a Super Admin. Query parameters are `page` (default 1), `page_size` (default 20, maximum 100), `action`, `entity_type`, `school_id`, and `actor_id`. `entity_id` is a string. `metadata` is the stored object.
+
+Mock response (`200`) after suspending school `41`:
+
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "actor_id": "11111111-1111-1111-1111-111111111111",
+      "actor_email": "platform@greenvalley.example",
+      "action": "school.suspend",
+      "entity_type": "school",
+      "entity_id": "41",
+      "school_id": 41,
+      "metadata": {
+        "previous_status": 1,
+        "previous_installed": 1,
+        "status": 0,
+        "installed": 1
+      },
+      "created_at": "2026-10-09T12:00:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
 ## Errors
 
 Service errors use a string `detail`. Validation errors use a list.
@@ -197,9 +232,10 @@ Service errors use a string `detail`. Validation errors use a list.
 | 404 | Unknown or soft-deleted school id | `{"detail":"School not found"}` |
 | 409 | Duplicate school code | `{"detail":"School code already in use"}` |
 | 409 | Duplicate non-blank email, ignoring case | `{"detail":"School email already in use"}` |
-| 422 | Invalid body, empty name, invalid email, or an unknown field | See below |
+| 422 | Invalid body, empty name, invalid email, an unknown field, or `status` other than `0` or `1` | Validation list, see below |
+| 422 | Unknown `sort`, such as `updated_at` | `{"detail":"Invalid sort"}` |
 
-Mock `422`:
+Mock `422` for an invalid email:
 
 ```json
 {
@@ -214,13 +250,20 @@ Mock `422`:
 }
 ```
 
+Mock `422` for `GET /api/v1/super-admin/schools?sort=updated_at`:
+
+```json
+{"detail":"Invalid sort"}
+```
+
 Blank emails are allowed and are not unique. Several schools may have `support_email` equal to `""`.
 
 ## Authorization the UI should expect
 
 - Super Admin school screens call the routes above.
-- School Admin screens must not call them. A School Admin reads only `GET /api/v1/school-admin/school` and `GET /api/v1/school-admin/schools/{school_id}` when that id is their own server-side school. Another school's id returns `403`.
+- School Admin screens must not call them. A School Admin reads only `GET /api/v1/school-admin/me`, `GET /api/v1/school-admin/school`, and `GET /api/v1/school-admin/schools/{school_id}` when that id is their own server-side school. Another school's id returns `403` with `{"detail":"Forbidden"}`.
+- Those School Admin routes also return `403` with `{"detail":"School access is suspended"}` when the admin's own school is suspended (`status=0`), deactivated (`status=0`, `installed=0`), or not installed. `installed` must be `1`, so `status=1` with `installed=0` is denied as well. A missing or soft-deleted school is denied the same way. Reactivating the school with `POST /api/v1/super-admin/schools/{school_id}/activate` sets `status=1` and `installed=1` and restores access for a still-valid School Admin session. Super Admin school routes stay available while the school is suspended or deactivated.
 
 ## OpenAPI
 
-Local OpenAPI at `http://127.0.0.1:8001/openapi.json` includes `support_email` on the list query and the create/update email descriptions. That check was against the local app, not production. `/docs` is available when `APP_DEBUG` is true.
+Local OpenAPI at `http://127.0.0.1:8000/openapi.json` includes `support_email` on the list query and the create/update email descriptions. That check is against the local app, not production. `/docs` is available when `APP_DEBUG` is true.

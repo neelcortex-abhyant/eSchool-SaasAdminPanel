@@ -64,7 +64,13 @@ def list_schools(
     db: Annotated[Session, Depends(central_db)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    status_filter: int | None = Query(default=None, alias="status"),
+    status_filter: int | None = Query(
+        default=None,
+        alias="status",
+        ge=0,
+        le=1,
+        description="Optional. 1 = active, 0 = inactive. Omit to include both. Any other value is rejected.",
+    ),
     code: str | None = Query(default=None),
     name: str | None = Query(default=None, description="Case-insensitive partial match on school name."),
     support_email: str | None = Query(
@@ -72,6 +78,13 @@ def list_schools(
         description="Case-insensitive partial match on support_email. Combine with other filters.",
     ),
     include_deleted: bool = Query(default=False),
+    sort: str | None = Query(
+        default=None,
+        description=(
+            "name, -name, created_at, or -created_at. "
+            "Omitted sort is newest id first. id is the tie-breaker."
+        ),
+    ),
 ) -> SchoolListResponse:
     try:
         rows, total = school_service.list_schools(
@@ -83,6 +96,7 @@ def list_schools(
             name=name,
             support_email=support_email,
             include_deleted=include_deleted,
+            sort=sort,
         )
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
@@ -153,6 +167,15 @@ def delete_school(
     return SchoolResponse.model_validate(school)
 
 
+def _status_audit_metadata(previous_status: int, previous_installed: int, school) -> dict:
+    return {
+        "previous_status": previous_status,
+        "previous_installed": previous_installed,
+        "status": school.status,
+        "installed": school.installed,
+    }
+
+
 @router.post("/{school_id}/activate", response_model=SchoolResponse)
 def activate_school(
     school_id: int,
@@ -160,12 +183,16 @@ def activate_school(
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
     try:
+        current = school_service.get_school(db, school_id)
+        previous_status = current.status
+        previous_installed = current.installed
         school = school_service.activate_school(db, school_id)
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
     audit_service.record_audit(
         db, actor=auth.user, action="school.activate", entity_type="school",
-        entity_id=school.id, school_id=school.id, metadata={"status": school.status},
+        entity_id=school.id, school_id=school.id,
+        metadata=_status_audit_metadata(previous_status, previous_installed, school),
     )
     return SchoolResponse.model_validate(school)
 
@@ -177,12 +204,16 @@ def suspend_school(
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
     try:
+        current = school_service.get_school(db, school_id)
+        previous_status = current.status
+        previous_installed = current.installed
         school = school_service.suspend_school(db, school_id)
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
     audit_service.record_audit(
         db, actor=auth.user, action="school.suspend", entity_type="school",
-        entity_id=school.id, school_id=school.id, metadata={"status": school.status},
+        entity_id=school.id, school_id=school.id,
+        metadata=_status_audit_metadata(previous_status, previous_installed, school),
     )
     return SchoolResponse.model_validate(school)
 
@@ -194,12 +225,16 @@ def deactivate_school(
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
     try:
+        current = school_service.get_school(db, school_id)
+        previous_status = current.status
+        previous_installed = current.installed
         school = school_service.deactivate_school(db, school_id)
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
     audit_service.record_audit(
         db, actor=auth.user, action="school.deactivate", entity_type="school",
-        entity_id=school.id, school_id=school.id, metadata={"status": school.status},
+        entity_id=school.id, school_id=school.id,
+        metadata=_status_audit_metadata(previous_status, previous_installed, school),
     )
     return SchoolResponse.model_validate(school)
 

@@ -462,6 +462,115 @@ def test_phone_address_logo_round_trip(v1_client, v1_db):
     assert patched.json()["status"] == 1
 
 
+def test_list_sort_name_and_created_at(v1_client, v1_db):
+    from datetime import datetime
+
+    headers = _super_admin_headers(v1_client, v1_db, email="sort-sa@eschool.com")
+    first = _create_school(v1_client, headers, name="Cedar School", code="SRT1").json()
+    second = _create_school(v1_client, headers, name="Alder School", code="SRT2").json()
+    third = _create_school(v1_client, headers, name="Birch School", code="SRT3").json()
+    times = {
+        first["id"]: datetime(2024, 1, 1),
+        second["id"]: datetime(2024, 6, 1),
+        third["id"]: datetime(2024, 3, 1),
+    }
+    for school_id, created_at in times.items():
+        row = v1_db.get(School, school_id)
+        assert row is not None
+        row.created_at = created_at
+    v1_db.commit()
+
+    def ids(sort: str) -> list[int]:
+        res = v1_client.get(
+            "/api/v1/super-admin/schools",
+            headers=headers,
+            params={"sort": sort, "page_size": 20},
+        )
+        assert res.status_code == 200
+        return [item["id"] for item in res.json()["items"]]
+
+    assert ids("name") == [second["id"], third["id"], first["id"]]
+    assert ids("-name") == [first["id"], third["id"], second["id"]]
+    assert ids("created_at") == [first["id"], third["id"], second["id"]]
+    assert ids("-created_at") == [second["id"], third["id"], first["id"]]
+
+    default = v1_client.get("/api/v1/super-admin/schools", headers=headers)
+    assert default.status_code == 200
+    assert [item["id"] for item in default.json()["items"]] == [
+        third["id"],
+        second["id"],
+        first["id"],
+    ]
+
+
+def test_list_sort_tie_breaks_on_id(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="sort-tie-sa@eschool.com")
+    older = _create_school(v1_client, headers, name="Same School", code="TIE1").json()
+    newer = _create_school(v1_client, headers, name="Same School", code="TIE2").json()
+    assert older["id"] < newer["id"]
+
+    asc = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"sort": "name"},
+    )
+    desc = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"sort": "-name"},
+    )
+    assert asc.status_code == 200
+    assert desc.status_code == 200
+    assert [item["id"] for item in asc.json()["items"]] == [older["id"], newer["id"]]
+    assert [item["id"] for item in desc.json()["items"]] == [newer["id"], older["id"]]
+
+
+def test_list_sort_and_status_validation(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="sort-val-sa@eschool.com")
+    active = _create_school(v1_client, headers, name="Active Sort", code="ST1").json()
+    inactive = _create_school(v1_client, headers, name="Inactive Sort", code="ST0").json()
+    assert (
+        v1_client.post(
+            f"/api/v1/super-admin/schools/{inactive['id']}/suspend",
+            headers=headers,
+        ).status_code
+        == 200
+    )
+
+    only_active = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"status": 1},
+    )
+    only_inactive = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"status": 0},
+    )
+    assert only_active.status_code == 200
+    assert [item["id"] for item in only_active.json()["items"]] == [active["id"]]
+    assert only_inactive.status_code == 200
+    assert [item["id"] for item in only_inactive.json()["items"]] == [inactive["id"]]
+    assert all(item["status"] == 0 for item in only_inactive.json()["items"])
+
+    assert (
+        v1_client.get(
+            "/api/v1/super-admin/schools",
+            headers=headers,
+            params={"status": 2},
+        ).status_code
+        == 422
+    )
+    assert (
+        v1_client.get(
+            "/api/v1/super-admin/schools",
+            headers=headers,
+            params={"sort": "updated_at"},
+        ).status_code
+        == 422
+    )
+
+
 def test_nonblank_email_unique_index_blocks_direct_insert(v1_client, v1_db):
     from datetime import datetime, timezone
 

@@ -426,3 +426,131 @@ def test_school_admin_me_auth_gates(v1_client, v1_db):
         v1_client.get("/api/v1/school-admin/me", headers=_auth_header(user_token)).status_code
         == 403
     )
+
+
+def _school_admin_token(client, headers, school_id: int, email: str) -> str:
+    created = client.post(
+        f"/api/v1/super-admin/schools/{school_id}/admins",
+        headers=headers,
+        json=_admin_body(email=email),
+    )
+    assert created.status_code == 201
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "adminpass1"})
+    assert login.status_code == 200
+    return login.json()["access_token"]
+
+
+def test_school_admin_blocked_when_school_suspended_or_deactivated(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="p3-restrict-sa@eschool.com")
+    school_id = _create_school(v1_client, headers, code="LOCK1", name="Lock School").json()["id"]
+    token = _school_admin_token(v1_client, headers, school_id, "lock-admin@eschool.com")
+    admin_headers = _auth_header(token)
+
+    assert v1_client.get("/api/v1/school-admin/me", headers=admin_headers).status_code == 200
+    assert v1_client.get("/api/v1/school-admin/school", headers=admin_headers).status_code == 200
+
+    assert (
+        v1_client.post(
+            f"/api/v1/super-admin/schools/{school_id}/suspend",
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    suspended = v1_client.get("/api/v1/school-admin/me", headers=admin_headers)
+    assert suspended.status_code == 403
+    assert suspended.json()["detail"] == "School access is suspended"
+    assert (
+        v1_client.get(f"/api/v1/super-admin/schools/{school_id}", headers=headers).status_code
+        == 200
+    )
+
+    assert (
+        v1_client.post(
+            f"/api/v1/super-admin/schools/{school_id}/activate",
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    assert v1_client.get("/api/v1/school-admin/school", headers=admin_headers).status_code == 200
+
+    assert (
+        v1_client.post(
+            f"/api/v1/super-admin/schools/{school_id}/deactivate",
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    deactivated = v1_client.get(
+        f"/api/v1/school-admin/schools/{school_id}",
+        headers=admin_headers,
+    )
+    assert deactivated.status_code == 403
+    assert deactivated.json()["detail"] == "School access is suspended"
+
+    other = _create_school(
+        v1_client, headers, code="LOCK2", name="Other Lock", support_email="lock2@eschool.com"
+    ).json()["id"]
+    other_token = _school_admin_token(v1_client, headers, other, "lock-other@eschool.com")
+    assert (
+        v1_client.get(
+            f"/api/v1/school-admin/schools/{school_id}",
+            headers=_auth_header(other_token),
+        ).status_code
+        == 403
+    )
+    assert v1_client.get("/api/v1/school-admin/me", headers=_auth_header(other_token)).status_code == 200
+
+
+def test_status_change_audit_records_previous_and_resulting_fields(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="p3-audit-sa@eschool.com")
+    school_id = _create_school(v1_client, headers, code="AUDST", name="Audit Status").json()["id"]
+
+    missing = v1_client.post("/api/v1/super-admin/schools/999999/suspend", headers=headers)
+    assert missing.status_code == 404
+
+    suspended = v1_client.post(
+        f"/api/v1/super-admin/schools/{school_id}/suspend",
+        headers=headers,
+    )
+    assert suspended.status_code == 200
+    deactivated = v1_client.post(
+        f"/api/v1/super-admin/schools/{school_id}/deactivate",
+        headers=headers,
+    )
+    assert deactivated.status_code == 200
+    activated = v1_client.post(
+        f"/api/v1/super-admin/schools/{school_id}/activate",
+        headers=headers,
+    )
+    assert activated.status_code == 200
+
+    logs = v1_client.get("/api/v1/super-admin/audit-logs", headers=headers, params={"page_size": 100})
+    assert logs.status_code == 200
+    items = logs.json()["items"]
+    assert not any(item["entity_id"] == "999999" and item["action"].startswith("school.") for item in items)
+
+    def meta(action: str) -> dict:
+        match = next(item for item in items if item["action"] == action and item["entity_id"] == str(school_id))
+        assert match["school_id"] == school_id
+        assert match["actor_email"] == "p3-audit-sa@eschool.com"
+        assert match["created_at"]
+        return match["metadata"]
+
+    assert meta("school.suspend") == {
+        "previous_status": 1,
+        "previous_installed": 1,
+        "status": 0,
+        "installed": 1,
+    }
+    assert meta("school.deactivate") == {
+        "previous_status": 0,
+        "previous_installed": 1,
+        "status": 0,
+        "installed": 0,
+    }
+    assert meta("school.activate") == {
+        "previous_status": 0,
+        "previous_installed": 0,
+        "status": 1,
+        "installed": 1,
+    }

@@ -7,11 +7,14 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.api.deps import central_db
 from app.core.v1_database import get_v1_db
+from app.models.tables import School
 from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
 from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
 from app.services.v1 import auth_service
+from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE as SCHOOL_STATUS_ACTIVE
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -46,14 +49,29 @@ def require_super_admin(auth: Annotated[AuthContext, Depends(get_current_auth)])
     return auth
 
 
-def require_school_admin(auth: Annotated[AuthContext, Depends(get_current_auth)]) -> AuthContext:
-    """Allow only active school_admin with a bound school_id."""
+def require_school_admin(
+    auth: Annotated[AuthContext, Depends(get_current_auth)],
+    db: Annotated[Session, Depends(central_db)],
+) -> AuthContext:
+    """Allow only an active school_admin bound to an active, installed school.
+
+    Suspended schools have status=0. Deactivated schools have status=0 and installed=0.
+    Both are denied. A missing or soft-deleted school is also denied.
+    """
     if auth.user.role != ROLE_SCHOOL_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     if auth.user.status != STATUS_ACTIVE:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account inactive")
     if auth.user.school_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No school assigned")
+    school = db.get(School, auth.user.school_id)
+    if (
+        school is None
+        or school.deleted_at is not None
+        or school.status != SCHOOL_STATUS_ACTIVE
+        or school.installed != INSTALLED_YES
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="School access is suspended")
     return auth
 
 

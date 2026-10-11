@@ -151,6 +151,14 @@ def create_school(
     return school
 
 
+_SCHOOL_SORTS = {
+    "name": (School.name.asc(), School.id.asc()),
+    "-name": (School.name.desc(), School.id.desc()),
+    "created_at": (School.created_at.asc().nulls_last(), School.id.asc()),
+    "-created_at": (School.created_at.desc().nulls_last(), School.id.desc()),
+}
+
+
 def list_schools(
     db: Session,
     *,
@@ -161,6 +169,7 @@ def list_schools(
     name: str | None = None,
     support_email: str | None = None,
     include_deleted: bool = False,
+    sort: str | None = None,
 ) -> tuple[list[School], int]:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
@@ -172,6 +181,8 @@ def list_schools(
         query = query.where(School.deleted_at.is_(None))
         count_query = count_query.where(School.deleted_at.is_(None))
     if status is not None:
+        if status not in (STATUS_INACTIVE, STATUS_ACTIVE):
+            raise SchoolServiceError("Invalid status", status_code=422)
         query = query.where(School.status == status)
         count_query = count_query.where(School.status == status)
     if code:
@@ -186,9 +197,17 @@ def list_schools(
         query = query.where(School.support_email.ilike(like))
         count_query = count_query.where(School.support_email.ilike(like))
 
+    sort_key = (sort or "").strip()
+    if not sort_key:
+        order = (School.id.desc(),)
+    elif sort_key not in _SCHOOL_SORTS:
+        raise SchoolServiceError("Invalid sort", status_code=422)
+    else:
+        order = _SCHOOL_SORTS[sort_key]
+
     total = int(db.scalar(count_query) or 0)
     rows = list(
-        db.scalars(query.order_by(School.id.desc()).offset((page - 1) * page_size).limit(page_size))
+        db.scalars(query.order_by(*order).offset((page - 1) * page_size).limit(page_size))
     )
     return rows, total
 
