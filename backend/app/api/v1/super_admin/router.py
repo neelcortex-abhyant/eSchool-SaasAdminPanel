@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
@@ -18,10 +18,26 @@ from app.api.v1.super_admin import settings as settings_routes
 from app.api.v1.super_admin import subscriptions as subscriptions_routes
 from app.core.v1_database import get_v1_db
 from app.schemas.v1.auth import AuthTokenResponse, LoginRequest, SignupRequest
-from app.schemas.v1.dashboard import SuperAdminDashboardResponse
+from app.schemas.v1.dashboard import (
+    DashboardStatsResponse,
+    RecentActivitiesResponse,
+    RecentSchoolsResponse,
+    RegistrationAnalyticsResponse,
+    SchoolStatusResponse,
+    SubscriptionDistributionResponse,
+    SuperAdminDashboardResponse,
+)
 from app.schemas.v1.users import UserResponse
 from app.services.v1 import auth_service
-from app.services.v1.dashboard_service import platform_dashboard
+from app.services.v1.dashboard_service import (
+    dashboard_stats,
+    platform_dashboard,
+    recent_activities,
+    recent_schools,
+    registration_analytics,
+    school_status_distribution,
+    subscription_distribution,
+)
 
 router = APIRouter(prefix="/super-admin", tags=["v1-super-admin"])
 router.include_router(schools_routes.router)
@@ -90,6 +106,63 @@ def dashboard(
 ) -> SuperAdminDashboardResponse:
     """Platform dashboard counts from existing School/Package/v1_users models."""
     return SuperAdminDashboardResponse(**platform_dashboard(db))
+
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+def dashboard_statistics(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> DashboardStatsResponse:
+    """Platform counts. Does not change GET /dashboard."""
+    return DashboardStatsResponse(**dashboard_stats(db))
+
+
+@router.get("/dashboard/recent-schools", response_model=RecentSchoolsResponse)
+def dashboard_recent_schools(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> RecentSchoolsResponse:
+    """Newest non-deleted schools. Does not change GET /dashboard or /dashboard/stats."""
+    return RecentSchoolsResponse(**recent_schools(db, limit=limit))
+
+
+@router.get("/dashboard/registrations", response_model=RegistrationAnalyticsResponse)
+def dashboard_registrations(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    year: Annotated[int, Query(ge=2000, le=2100)],
+) -> RegistrationAnalyticsResponse:
+    """Monthly school registrations for one calendar year."""
+    return RegistrationAnalyticsResponse(**registration_analytics(db, year=year))
+
+
+@router.get("/dashboard/school-status", response_model=SchoolStatusResponse)
+def dashboard_school_status(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SchoolStatusResponse:
+    """Active and inactive school counts. Same rules as dashboard stats."""
+    return SchoolStatusResponse(**school_status_distribution(db))
+
+
+@router.get("/dashboard/subscriptions", response_model=SubscriptionDistributionResponse)
+def dashboard_subscriptions(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SubscriptionDistributionResponse:
+    """Plan distribution for non-deleted schools. Does not change other dashboard routes."""
+    return SubscriptionDistributionResponse(**subscription_distribution(db))
+
+
+@router.get("/dashboard/recent-activities", response_model=RecentActivitiesResponse)
+def dashboard_recent_activities(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> RecentActivitiesResponse:
+    """Newest audit activities. Does not change other dashboard routes."""
+    return RecentActivitiesResponse(**recent_activities(db, limit=limit))
 
 
 @router.get("/ping")
