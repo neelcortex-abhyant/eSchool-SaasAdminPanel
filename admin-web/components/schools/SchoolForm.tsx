@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, apiErrorMessage } from "@/lib/api";
+import { api, apiErrorMessage, getAccessToken } from "@/lib/api";
 import {
   applyApiFieldErrors,
   schoolRequestBody,
@@ -29,10 +29,41 @@ export function SchoolForm({
   const [fieldErrors, setFieldErrors] = useState<SchoolFieldErrors>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   function setField(key: keyof SchoolFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => ({ ...current, [key]: undefined }));
+  }
+
+  async function onLogoFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploadingLogo(true);
+    setError("");
+    setFieldErrors((current) => ({ ...current, logo: undefined }));
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      const token = getAccessToken();
+      const response = await fetch("/api/school-logos", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const data = (await response.json().catch(() => ({}))) as { logo?: string; detail?: string };
+      if (!response.ok || typeof data.logo !== "string") {
+        setFieldErrors((current) => ({ ...current, logo: data.detail || "Unable to upload this logo." }));
+        return;
+      }
+      setField("logo", data.logo);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error.";
+      setFieldErrors((current) => ({ ...current, logo: `Unable to upload this logo. (${message})` }));
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   async function onSubmit(event: FormEvent) {
@@ -131,7 +162,20 @@ export function SchoolForm({
           {fieldErrors.status ? <p className="field-error">{fieldErrors.status}</p> : null}
         </div>
         <div className="form-field field-span">
-          <label htmlFor="school-logo">Logo</label>
+          <label htmlFor="school-logo-file">Logo image</label>
+          <input
+            id="school-logo-file"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            disabled={uploadingLogo || saving}
+            onChange={(event) => void onLogoFile(event)}
+          />
+          <p className="field-hint">
+            {uploadingLogo ? "Uploading logo…" : "Upload a PNG, JPEG, WEBP, or GIF up to 2 MB, or paste an image URL below."}
+          </p>
+          <label className="logo-url-label" htmlFor="school-logo">
+            Logo URL
+          </label>
           <input
             id="school-logo"
             type="text"
@@ -142,7 +186,6 @@ export function SchoolForm({
             placeholder="https://example.com/logo.png"
             onChange={(event) => setField("logo", event.target.value)}
           />
-          <p className="field-hint">Image URL or stored filename. Leave blank if there is no logo.</p>
           {fieldErrors.logo ? <p className="field-error">{fieldErrors.logo}</p> : null}
           <LogoPreview value={values.logo} />
         </div>
@@ -183,8 +226,8 @@ export function SchoolForm({
           : "Saving updates the school record. A status change is sent as activate or suspend."}
       </p>
       <div className="resource-actions">
-        <button className="btn-pill btn-pill-green" type="submit" disabled={saving}>
-          {saving ? "Saving…" : mode === "create" ? "Create school" : "Save changes"}
+        <button className="btn-pill btn-pill-green" type="submit" disabled={saving || uploadingLogo}>
+          {saving ? "Saving…" : uploadingLogo ? "Uploading logo…" : mode === "create" ? "Create school" : "Save changes"}
         </button>
         <button
           className="btn-pill btn-pill-green-soft"

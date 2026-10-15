@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import Date, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -30,6 +30,13 @@ class User(V1Base):
     first_name: Mapped[str] = mapped_column(String(128), nullable=False)
     last_name: Mapped[str] = mapped_column(String(128), nullable=False)
     mobile: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    country_code: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    dob: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    current_address: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    permanent_address: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    two_factor_enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # Platform role for /api/v1 only. Signup always ROLE_USER; never client-selectable.
     role: Mapped[str] = mapped_column(String(32), nullable=False, default=ROLE_USER, server_default=ROLE_USER, index=True)
     # Set for school_admin; null for super_admin / plain user.

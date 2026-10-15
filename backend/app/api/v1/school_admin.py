@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
 from app.api.v1.deps import AuthContext, assert_school_scope, require_school_admin
+from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.services.v1 import school_service
@@ -32,6 +34,26 @@ def school_admin_own_school(
     except school_service.SchoolServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return SchoolResponse.model_validate(school)
+
+
+@router.get("/sessions")
+def school_admin_sessions(
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    """Session years for the signed-in school only."""
+    school_id = auth.user.school_id
+    rows = db.scalars(
+        select(SessionYear)
+        .where(SessionYear.school_id == school_id, SessionYear.deleted_at.is_(None))
+        .order_by(SessionYear.start_date.desc())
+    )
+    return {
+        "items": [
+            {"id": row.id, "name": row.name, "default": row.default}
+            for row in rows
+        ]
+    }
 
 
 @router.get("/schools/{school_id}", response_model=SchoolResponse)

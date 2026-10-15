@@ -25,6 +25,9 @@ backend/.venv/
 **/.mypy_cache/
 **/.ruff_cache/
 
+# Uploaded school logo files. The school record stores the path.
+admin-web/data/
+
 # Node
 admin-web/node_modules/
 admin-web/.next/

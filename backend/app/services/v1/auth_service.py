@@ -225,6 +225,34 @@ def resolve_user_from_token(db: Session, plain_token: str) -> tuple[User, AuthSe
     return user, session
 
 
+def change_password(
+    db: Session,
+    user: User,
+    session: AuthSession,
+    *,
+    current_password: str,
+    new_password: str,
+) -> None:
+    """Replace the signed-in user's password after checking the current one."""
+    if not verify_password(current_password, user.password_hash):
+        raise AuthError("Current password is incorrect.", status_code=400)
+    if current_password == new_password:
+        raise AuthError("Choose a different password.", status_code=422)
+    user.password_hash = hash_password(new_password)
+    now = _utcnow()
+    others = db.scalars(
+        select(AuthSession).where(
+            AuthSession.user_id == user.id,
+            AuthSession.id != session.id,
+            AuthSession.revoked_at.is_(None),
+        )
+    )
+    for other in others:
+        other.revoked_at = now
+    db.add(user)
+    db.commit()
+
+
 def logout(db: Session, session: AuthSession) -> None:
     if session.revoked_at is None:
         session.revoked_at = _utcnow()

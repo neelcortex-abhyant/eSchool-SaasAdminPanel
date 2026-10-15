@@ -213,6 +213,43 @@ def test_patch_email_cannot_be_changed(v1_client, v1_db):
     assert v1_db.scalar(select(User).where(User.email == "other@school.com")) is None
 
 
+def test_change_password_updates_hash_and_rejects_old(v1_client):
+    token = _signup(v1_client).json()["access_token"]
+    changed = v1_client.post(
+        "/api/v1/auth/change-password",
+        headers=_auth_header(token),
+        json={
+            "current_password": "secret123",
+            "new_password": "newsecret1",
+            "confirm_password": "newsecret1",
+        },
+    )
+    assert changed.status_code == 200
+    assert changed.json()["message"] == "Password changed."
+    assert "password" not in changed.json()
+
+    old_login = v1_client.post("/api/v1/auth/login", json={"email": "amit@school.com", "password": "secret123"})
+    assert old_login.status_code == 401
+    new_login = v1_client.post("/api/v1/auth/login", json={"email": "amit@school.com", "password": "newsecret1"})
+    assert new_login.status_code == 200
+    assert v1_client.get("/api/v1/auth/me", headers=_auth_header(token)).status_code == 200
+
+
+def test_change_password_wrong_current(v1_client):
+    token = _signup(v1_client).json()["access_token"]
+    res = v1_client.post(
+        "/api/v1/auth/change-password",
+        headers=_auth_header(token),
+        json={
+            "current_password": "not-the-password",
+            "new_password": "newsecret1",
+            "confirm_password": "newsecret1",
+        },
+    )
+    assert res.status_code == 400
+    assert v1_client.post("/api/v1/auth/login", json={"email": "amit@school.com", "password": "secret123"}).status_code == 200
+
+
 def test_patch_rejects_password_field(v1_client):
     token = _signup(v1_client).json()["access_token"]
     res = v1_client.patch(

@@ -25,12 +25,27 @@ def patch_me(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_v1_db)],
 ) -> UserResponse:
+    fields = body.model_fields_set
     updated = user_service.update_profile(
         db,
         user,
         first_name=body.first_name,
         last_name=body.last_name,
         mobile=body.mobile,
-        mobile_set="mobile" in body.model_fields_set,
+        mobile_set="mobile" in fields,
+        country_code=body.country_code,
+        country_code_set="country_code" in fields,
+        gender=body.gender,
+        gender_set="gender" in fields,
+        image=body.image,
+        image_set="image" in fields,
+        dob=body.dob,
+        dob_set="dob" in fields,
+        current_address=body.current_address,
+        current_address_set="current_address" in fields,
+        permanent_address=body.permanent_address,
+        permanent_address_set="permanent_address" in fields,
+        two_factor_enabled=body.two_factor_enabled,
+        two_factor_set="two_factor_enabled" in fields,
     )
     return UserResponse.model_validate(updated)

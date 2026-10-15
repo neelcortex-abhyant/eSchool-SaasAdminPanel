@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.deps import AuthContext, get_current_auth
 from app.core.v1_database import get_v1_db
-from app.schemas.v1.auth import AuthTokenResponse, LoginRequest, SignupRequest
+from app.schemas.v1.auth import AuthTokenResponse, ChangePasswordRequest, LoginRequest, SignupRequest
 from app.schemas.v1.users import UserResponse
 from app.services.v1 import auth_service
 
@@ -46,6 +46,27 @@ def login(body: LoginRequest, db: Annotated[Session, Depends(get_v1_db)]) -> Aut
     except auth_service.AuthError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return _token_response(issued)
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    auth: Annotated[AuthContext, Depends(get_current_auth)],
+    db: Annotated[Session, Depends(get_v1_db)],
+) -> dict[str, str]:
+    if body.new_password != body.confirm_password:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="New password and confirmation must match.")
+    try:
+        auth_service.change_password(
+            db,
+            auth.user,
+            auth.session,
+            current_password=body.current_password,
+            new_password=body.new_password,
+        )
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return {"message": "Password changed."}
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

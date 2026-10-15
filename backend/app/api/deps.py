@@ -67,9 +67,20 @@ def admin_context(
                 from fastapi import HTTPException
 
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-            # Platform operator via /api/v1. school_id stays unset so lists are not tenant-filtered.
+            from fastapi import HTTPException
+
+            from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
+
             request.state.admin_db_owned = False
             request.state.admin_db = central
+            # School admins are always scoped to the school on their account.
+            # A school id in the request body cannot widen that scope.
+            if v1_user.role == ROLE_SCHOOL_ADMIN:
+                if v1_user.school_id is None:
+                    raise HTTPException(status_code=403, detail="No school is assigned to this account")
+                return central, v1_user, v1_user.school_id
+            if v1_user.role != ROLE_SUPER_ADMIN:
+                raise HTTPException(status_code=403, detail="This account cannot use the school admin API")
             return central, v1_user, None
         from fastapi import HTTPException
 
