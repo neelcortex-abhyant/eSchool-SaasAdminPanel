@@ -840,6 +840,43 @@ img {
   word-break: break-word;
 }
 
+.school-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 16px;
+}
+
+.school-filters input,
+.school-filters select {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  min-width: 0;
+}
+
+.school-filters input[type="search"] {
+  flex: 1 1 220px;
+}
+
+.sort-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.school-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
 .page-actions {
   display: flex;
   flex-wrap: wrap;

@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timezone
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -178,8 +178,9 @@ def list_schools(
     code: str | None = None,
     name: str | None = None,
     support_email: str | None = None,
-    include_deleted: bool = False,
+    q: str | None = None,
     sort: str | None = None,
+    include_deleted: bool = False,
 ) -> tuple[list[School], int]:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
@@ -206,18 +207,23 @@ def list_schools(
         like = f"%{support_email.strip()}%"
         query = query.where(School.support_email.ilike(like))
         count_query = count_query.where(School.support_email.ilike(like))
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        search = or_(School.name.ilike(like), School.code.ilike(like))
+        query = query.where(search)
+        count_query = count_query.where(search)
 
     sort_key = (sort or "").strip()
     if not sort_key:
-        order = (School.id.desc(),)
+        ordering = (School.id.desc(),)
     elif sort_key not in _SCHOOL_SORTS:
         raise SchoolServiceError("Invalid sort", status_code=422)
     else:
-        order = _SCHOOL_SORTS[sort_key]
+        ordering = _SCHOOL_SORTS[sort_key]
 
     total = int(db.scalar(count_query) or 0)
     rows = list(
-        db.scalars(query.order_by(*order).offset((page - 1) * page_size).limit(page_size))
+        db.scalars(query.order_by(*ordering).offset((page - 1) * page_size).limit(page_size))
     )
     return rows, total
 

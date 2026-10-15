@@ -49,11 +49,26 @@ export function schoolStatusLabel(status: number | null | undefined, installed?:
   return "Inactive";
 }
 
-export function loadSchools(page = 1, pageSize = 20) {
+export type SchoolListQuery = {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  status?: "" | "0" | "1";
+  sort?: "name" | "created_at";
+  order?: "asc" | "desc";
+};
+
+export function loadSchools(query: SchoolListQuery = {}) {
+  const sortKey = query.sort ?? "created_at";
+  const sortOrder = query.order ?? "desc";
   const params = new URLSearchParams({
-    page: String(page),
-    page_size: String(pageSize),
+    page: String(query.page ?? 1),
+    page_size: String(query.pageSize ?? 20),
+    sort: sortOrder === "desc" ? `-${sortKey}` : sortKey,
   });
+  const search = query.q?.trim();
+  if (search) params.set("q", search);
+  if (query.status === "0" || query.status === "1") params.set("status", query.status);
   return api<SchoolList>(`/super-admin/schools?${params.toString()}`);
 }
 

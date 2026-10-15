@@ -181,6 +181,24 @@ def test_list_pagination_and_filters(v1_client, v1_db):
     assert by_name.status_code == 200
     assert by_name.json()["total"] == 1
 
+    by_q = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"q": "flt1"},
+    )
+    assert by_q.status_code == 200
+    assert by_q.json()["total"] == 1
+    assert by_q.json()["items"][0]["code"] == "FLT1"
+
+    named = v1_client.get(
+        "/api/v1/super-admin/schools",
+        headers=headers,
+        params={"q": "Filter School", "sort": "name", "page_size": 10},
+    )
+    assert named.status_code == 200
+    names = [item["name"] for item in named.json()["items"]]
+    assert names == sorted(names)
+
 
 # --- soft delete ---
 

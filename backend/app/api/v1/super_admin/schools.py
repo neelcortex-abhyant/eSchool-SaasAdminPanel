@@ -77,6 +77,10 @@ def list_schools(
         default=None,
         description="Case-insensitive partial match on support_email. Combine with other filters.",
     ),
+    q: str | None = Query(
+        default=None,
+        description="Case-insensitive partial match on school name or school code.",
+    ),
     include_deleted: bool = Query(default=False),
     sort: str | None = Query(
         default=None,
@@ -95,8 +99,9 @@ def list_schools(
             code=code,
             name=name,
             support_email=support_email,
-            include_deleted=include_deleted,
+            q=q,
             sort=sort,
+            include_deleted=include_deleted,
         )
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc

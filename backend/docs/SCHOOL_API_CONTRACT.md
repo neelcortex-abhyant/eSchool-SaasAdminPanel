@@ -125,6 +125,7 @@ Mock response: `200` and the full school object, with those three fields updated
 | `code` | omitted | Exact match after code normalization |
 | `support_email` | omitted | Case-insensitive partial match |
 | `status` | omitted | `1` active or `0` inactive. Omit to include both. Any other value returns 422 |
+| `q` | omitted | Case-insensitive partial match on name or code |
 | `sort` | omitted | `name`, `-name`, `created_at` (oldest first), or `-created_at` (newest first). When omitted, schools are ordered by `id` descending. `id` is always the tie-breaker, in the same direction as the chosen sort |
 | `include_deleted` | `false` | `true` includes soft-deleted schools |
 
