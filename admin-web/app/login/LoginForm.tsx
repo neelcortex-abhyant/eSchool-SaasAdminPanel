@@ -1,10 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, apiErrorMessage, clearSession, setSession } from "@/lib/api";
+import LoginShowcase from "@/components/login/LoginShowcase";
+import { api, apiErrorMessage, setSession } from "@/lib/api";
 
 type LoginResponse = {
   access_token?: string;
@@ -22,8 +22,7 @@ type LoginResponse = {
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const portal = searchParams.get("role");
-  const copy = portalCopy(portal);
+  const [mode, setMode] = useState<"sign-in" | "forgot">(searchParams.get("forgot") === "1" ? "forgot" : "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [schoolCode, setSchoolCode] = useState("");
@@ -62,17 +61,12 @@ export default function LoginForm() {
         return;
       }
 
-      const destination = portalDestination(result.data.user?.role, portal);
-      if (!destination) {
-        clearSession();
-        setError(portalDeniedMessage(portal));
-        return;
-      }
       signedIn = true;
       setSuccess("Signed in. Opening your panel.");
       setSession(result.data.access_token);
       const next = searchParams.get("next");
-      router.push(!portal && next && next.startsWith("/") && next !== "/" ? next : destination);
+      const destination = result.data.user?.role === "school_admin" ? "/school" : "/dashboard";
+      router.push(next && next.startsWith("/") && next !== "/" ? next : destination);
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -82,13 +76,102 @@ export default function LoginForm() {
     }
   }
 
+  async function onForgot(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setSuccess("");
+    setPending(true);
+    try {
+      const result = await api<{ message?: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email, app_origin: window.location.origin }),
+      });
+      if (!result.ok) {
+        if (result.status === 404) {
+          setError("Password reset is not available on the sign-in service yet.");
+        } else {
+          setError(apiErrorMessage(result.data, "Could not send the reset email."));
+        }
+        return;
+      }
+      setSuccess(result.data.message || "If an account exists for that email, a reset link has been sent.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`Network error contacting login API. (${message})`);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function showSignIn() {
+    setMode("sign-in");
+    setError("");
+    setNotice("");
+    setSuccess("");
+  }
+
   return (
     <main className="login-split">
       <section className="login-panel">
         <div className="login-panel-inner">
-          <h1>{copy.title}</h1>
-          <p className="login-lead">{copy.lead}</p>
+          <Link href="/" className="login-home">
+            ← Home
+          </Link>
+          <h1>{mode === "forgot" ? "Reset your password" : "Welcome back!"}</h1>
+          <p className="login-lead">
+            {mode === "forgot"
+              ? "Enter your account email. We'll send a link to choose a new password."
+              : "Enter your credentials to access your academic portal."}
+          </p>
 
+          {mode === "forgot" ? (
+            <form className="login-form" onSubmit={onForgot} aria-busy={pending}>
+              {pending ? (
+                <div className="alert alert-info login-status" role="status">
+                  <span className="login-spinner is-dark" aria-hidden />
+                  Sending reset link…
+                </div>
+              ) : null}
+              {success ? (
+                <div className="alert alert-success login-status" role="status">
+                  {success}
+                </div>
+              ) : null}
+              {error ? (
+                <div className="alert alert-danger" role="alert">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="form-field">
+                <label htmlFor="reset-email">Email address</label>
+                <div className="login-input">
+                  <MailIcon />
+                  <input
+                    id="reset-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="name@example.com"
+                    autoComplete="username"
+                    required
+                    disabled={pending || Boolean(success)}
+                  />
+                </div>
+              </div>
+
+              <button className="login-submit" type="submit" disabled={pending || Boolean(success)}>
+                {pending ? <span className="login-spinner" aria-hidden /> : null}
+                {success ? "Reset link sent" : pending ? "Sending…" : "Send reset link"}
+              </button>
+              <p className="login-signup">
+                <button className="link-btn" type="button" onClick={showSignIn}>
+                  Back to sign in
+                </button>
+              </p>
+            </form>
+          ) : (
           <form className="login-form" onSubmit={onSubmit} aria-busy={pending}>
             {pending && !success ? (
               <div className="alert alert-info login-status" role="status">
@@ -180,9 +263,12 @@ export default function LoginForm() {
               <button
                 className="link-btn"
                 type="button"
-                onClick={() =>
-                  setNotice("Password reset is not available in this portal yet. Contact your platform administrator.")
-                }
+                onClick={() => {
+                  setMode("forgot");
+                  setError("");
+                  setNotice("");
+                  setSuccess("");
+                }}
               >
                 Forgot password?
               </button>
@@ -192,122 +278,18 @@ export default function LoginForm() {
               {pending && !success ? <span className="login-spinner" aria-hidden /> : null}
               {success ? "Signed in" : pending ? "Signing in…" : "Sign in →"}
             </button>
+
+            <p className="login-signup">
+              New user? <Link href="/register-school">Sign up</Link> to manage your school activities seamlessly!
+            </p>
           </form>
-
-          <p className="login-signup">
-            New user? <Link href="/register-school">Sign up</Link> to manage your school activities seamlessly!
-          </p>
-
-          <div className="login-demo">
-            <p>Portal roles</p>
-            <span>Super admin panels</span>
-            <div className="login-pills">
-              <PortalLink href="/login?role=super_admin" active={portal === "super_admin"} tone="is-green">
-                Super admin
-              </PortalLink>
-              <PortalLink href="/login?role=staff" active={portal === "staff"} tone="is-blue">
-                Staff
-              </PortalLink>
-            </div>
-            <span>School panels</span>
-            <div className="login-pills">
-              <PortalLink href="/login?role=school_admin" active={portal === "school_admin"} tone="is-green">
-                School admin
-              </PortalLink>
-              <PortalLink href="/login?role=teacher" active={portal === "teacher"} tone="is-rose">
-                Teacher
-              </PortalLink>
-              <PortalLink href="/login?role=school_staff" active={portal === "school_staff"} tone="is-blue">
-                Staff
-              </PortalLink>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
-      <aside className="login-showcase" aria-hidden>
-        <Image
-          src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1400&q=80"
-          alt=""
-          fill
-          priority
-          className="login-showcase-photo"
-        />
-        <div className="login-showcase-shade" />
-        <div className="login-showcase-content">
-          <div className="login-showcase-brand">
-            <span>S</span>
-            SchoolSarthi
-          </div>
-          <p className="login-showcase-badge">School portal</p>
-          <h2>
-            Empowering the
-            <br />
-            next generation of
-            <br />
-            leaders.
-          </h2>
-          <p>
-            Streamline administrative tasks, manage student progress, and connect with your faculty all in one secure
-            place.
-          </p>
-        </div>
-      </aside>
+      <LoginShowcase />
     </main>
   );
-}
-
-function PortalLink({
-  href,
-  active,
-  tone,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  tone: string;
-  children: string;
-}) {
-  return (
-    <Link href={href} className={`login-pill ${tone}${active ? " is-active" : ""}`} aria-current={active ? "page" : undefined}>
-      {children}
-    </Link>
-  );
-}
-
-function portalCopy(role: string | null): { title: string; lead: string } {
-  if (role === "super_admin") {
-    return { title: "Super admin sign in", lead: "Sign in to the platform administration panel." };
-  }
-  if (role === "staff") {
-    return { title: "Staff sign in", lead: "Sign in to the platform staff panel." };
-  }
-  if (role === "school_admin") {
-    return { title: "School admin sign in", lead: "Sign in to your school panel." };
-  }
-  if (role === "teacher") {
-    return { title: "Teacher sign in", lead: "Sign in to the teacher panel." };
-  }
-  if (role === "school_staff") {
-    return { title: "Staff sign in", lead: "Sign in to the school staff panel." };
-  }
-  return { title: "Welcome back!", lead: "Enter your credentials to access your academic portal." };
-}
-
-function portalDestination(accountRole: string | undefined, requested: string | null): string | null {
-  if (requested === "super_admin") return accountRole === "super_admin" ? "/dashboard" : null;
-  if (requested === "school_admin") return accountRole === "school_admin" ? "/school" : null;
-  if (requested === "teacher" || requested === "staff" || requested === "school_staff") return null;
-  if (accountRole === "school_admin") return "/school";
-  return "/dashboard";
-}
-
-function portalDeniedMessage(requested: string | null): string {
-  if (requested === "super_admin") return "This account cannot sign in to the super admin panel.";
-  if (requested === "school_admin") return "This account cannot sign in to the school admin panel.";
-  if (requested === "teacher") return "Teacher sign-in is not available for this account.";
-  if (requested === "staff" || requested === "school_staff") return "Staff sign-in is not available for this account.";
-  return "This account cannot sign in here.";
 }
 
 function MailIcon() {
