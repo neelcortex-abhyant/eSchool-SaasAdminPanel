@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.v1.common import PaginatedResponse
+from app.services.v1.plan_service import normalize_money
 
 
 class SubscriptionCreateRequest(BaseModel):
@@ -46,6 +47,7 @@ class SubscriptionResponse(BaseModel):
     end_date: date
     cycle: str
     auto_renew: int
+    agreed_price: Optional[float] = None
     deleted_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -53,6 +55,23 @@ class SubscriptionResponse(BaseModel):
 
 class SubscriptionListResponse(PaginatedResponse):
     items: list[SubscriptionResponse]
+
+
+class PlatformSubscriptionResponse(SubscriptionResponse):
+    """Platform list item. Per-school subscription responses stay SubscriptionResponse."""
+
+    school_name: str
+    plan_name: Optional[str] = None
+
+
+class PlatformSubscriptionListResponse(PaginatedResponse):
+    items: list[PlatformSubscriptionResponse]
+
+
+class SubscriptionExpireResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expired: int
 
 
 class SubscriptionBillCreateRequest(BaseModel):
@@ -64,6 +83,16 @@ class SubscriptionBillCreateRequest(BaseModel):
     due_date: Optional[date] = None
     description: Optional[str] = Field(default=None, max_length=255)
     status: int = Field(default=0, ge=0, le=3)
+
+    @field_validator("amount")
+    @classmethod
+    def _amount_cents(cls, value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return value
+        try:
+            return float(normalize_money(value))
+        except ValueError:
+            raise ValueError("must be from 0 through 9999999999.99") from None
 
 
 class SubscriptionBillStatusRequest(BaseModel):
@@ -91,3 +120,24 @@ class SubscriptionBillResponse(BaseModel):
 
 class SubscriptionBillListResponse(PaginatedResponse):
     items: list[SubscriptionBillResponse]
+
+
+class SubscriptionRenewalResponse(BaseModel):
+    """Immutable renewal snapshot. amount is a JSON number, not a decimal string."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    subscription_id: int
+    school_id: int
+    package_id: int
+    plan_name: str
+    cycle: str
+    amount: float
+    period_start: date
+    period_end: date
+    created_at: datetime
+
+
+class SubscriptionRenewalListResponse(PaginatedResponse):
+    items: list[SubscriptionRenewalResponse]

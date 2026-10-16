@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -14,8 +14,13 @@ from app.schemas.v1.subscriptions import (
     SubscriptionBillListResponse,
     SubscriptionBillResponse,
     SubscriptionBillStatusRequest,
+    PlatformSubscriptionListResponse,
+    PlatformSubscriptionResponse,
     SubscriptionCreateRequest,
+    SubscriptionExpireResponse,
     SubscriptionListResponse,
+    SubscriptionRenewalListResponse,
+    SubscriptionRenewalResponse,
     SubscriptionResponse,
     SubscriptionStatusRequest,
     SubscriptionUpdateRequest,
@@ -23,10 +28,29 @@ from app.schemas.v1.subscriptions import (
 from app.services.v1 import audit_service, subscription_service
 
 router = APIRouter(prefix="/schools/{school_id}/subscriptions", tags=["v1-super-admin-subscriptions"])
+platform_router = APIRouter(prefix="/subscriptions", tags=["v1-super-admin-subscriptions"])
 
 
 def _http(exc: subscription_service.SubscriptionServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _audited(db: Session, detail: str, work, audit):
+    """Run work uncommitted, then commit it with the audit row."""
+    try:
+        result = work()
+    except subscription_service.SubscriptionServiceError as exc:
+        db.rollback()
+        raise _http(exc) from exc
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    try:
+        audit(result)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    return result
 
 
 @router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
@@ -36,8 +60,10 @@ def create_subscription(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SubscriptionResponse:
-    try:
-        sub = subscription_service.create_subscription(
+    sub = _audited(
+        db,
+        "Subscription could not be recorded",
+        lambda: subscription_service.create_subscription(
             db,
             school_id,
             package_id=body.package_id,
@@ -46,12 +72,17 @@ def create_subscription(
             cycle=body.cycle,
             auto_renew=body.auto_renew,
             status=body.status,
-        )
-    except subscription_service.SubscriptionServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="subscription.create", entity_type="subscription",
-        entity_id=sub.id, school_id=school_id, metadata={"package_id": sub.package_id, "status": sub.status},
+            commit=False,
+        ),
+        lambda created: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="subscription.create",
+            entity_type="subscription",
+            entity_id=created.id,
+            school_id=school_id,
+            metadata={"package_id": created.package_id, "status": created.status},
+        ),
     )
     return SubscriptionResponse.model_validate(sub)
 
@@ -105,8 +136,10 @@ def patch_subscription(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SubscriptionResponse:
-    try:
-        sub = subscription_service.update_subscription(
+    sub = _audited(
+        db,
+        "Subscription could not be recorded",
+        lambda: subscription_service.update_subscription(
             db,
             school_id,
             subscription_id,
@@ -115,12 +148,17 @@ def patch_subscription(
             end_date=body.end_date,
             cycle=body.cycle,
             auto_renew=body.auto_renew,
-        )
-    except subscription_service.SubscriptionServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="subscription.update", entity_type="subscription",
-        entity_id=sub.id, school_id=school_id, metadata={"package_id": sub.package_id},
+            commit=False,
+        ),
+        lambda updated: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="subscription.update",
+            entity_type="subscription",
+            entity_id=updated.id,
+            school_id=school_id,
+            metadata={"package_id": updated.package_id},
+        ),
     )
     return SubscriptionResponse.model_validate(sub)
 
@@ -133,17 +171,158 @@ def patch_subscription_status(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SubscriptionResponse:
+    sub = _audited(
+        db,
+        "Subscription could not be recorded",
+        lambda: subscription_service.set_subscription_status(
+            db, school_id, subscription_id, status=body.status, commit=False
+        ),
+        lambda updated: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="subscription.status",
+            entity_type="subscription",
+            entity_id=updated.id,
+            school_id=school_id,
+            metadata={"status": updated.status},
+        ),
+    )
+    return SubscriptionResponse.model_validate(sub)
+
+
+@router.post("/{subscription_id}/renew", response_model=SubscriptionResponse)
+def renew_subscription(
+    school_id: int,
+    subscription_id: int,
+    auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SubscriptionResponse:
     try:
-        sub = subscription_service.set_subscription_status(
-            db, school_id, subscription_id, status=body.status
+        sub = subscription_service.renew_subscription(
+            db, school_id, subscription_id, commit=False
         )
     except subscription_service.SubscriptionServiceError as exc:
         raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="subscription.status", entity_type="subscription",
-        entity_id=sub.id, school_id=school_id, metadata={"status": sub.status},
-    )
+    try:
+        # record_audit commits this session, including the uncommitted renewal.
+        audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="subscription.renew",
+            entity_type="subscription",
+            entity_id=sub.id,
+            school_id=school_id,
+            metadata={
+                "package_id": sub.package_id,
+                "cycle": sub.cycle,
+                "start_date": sub.start_date.isoformat(),
+                "end_date": sub.end_date.isoformat(),
+                "status": sub.status,
+            },
+        )
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Renewal could not be recorded") from None
     return SubscriptionResponse.model_validate(sub)
+
+
+@router.get("/{subscription_id}/renewals", response_model=SubscriptionRenewalListResponse)
+def list_renewals(
+    school_id: int,
+    subscription_id: int,
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> SubscriptionRenewalListResponse:
+    try:
+        rows, total = subscription_service.list_renewals(
+            db,
+            school_id,
+            subscription_id,
+            page=page,
+            page_size=page_size,
+        )
+    except subscription_service.SubscriptionServiceError as exc:
+        raise _http(exc) from exc
+    return SubscriptionRenewalListResponse(
+        items=[SubscriptionRenewalResponse.model_validate(row) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@platform_router.get("", response_model=PlatformSubscriptionListResponse)
+def list_platform_subscriptions(
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, description="Case-insensitive partial match on school name."),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=3),
+    package_id: int | None = Query(default=None, ge=1),
+    school_id: int | None = Query(default=None, ge=1),
+    sort: Literal["end_date", "-end_date", "created_at", "-created_at"] = Query(
+        default="end_date",
+        description="end_date, -end_date, created_at, or -created_at. Default is end_date, then id.",
+    ),
+) -> PlatformSubscriptionListResponse:
+    try:
+        rows, total = subscription_service.list_platform_subscriptions(
+            db,
+            page=page,
+            page_size=page_size,
+            q=q,
+            status=status_filter,
+            package_id=package_id,
+            school_id=school_id,
+            sort=sort,
+        )
+    except subscription_service.SubscriptionServiceError as exc:
+        raise _http(exc) from exc
+    items = []
+    for sub, school_name, plan_name in rows:
+        payload = SubscriptionResponse.model_validate(sub).model_dump()
+        payload["school_name"] = school_name
+        payload["plan_name"] = plan_name
+        items.append(PlatformSubscriptionResponse.model_validate(payload))
+    return PlatformSubscriptionListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@platform_router.post("/expire-due", response_model=SubscriptionExpireResponse)
+def expire_due_subscriptions(
+    auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SubscriptionExpireResponse:
+    """Expire active subscriptions whose end date is before today's UTC date.
+
+    No scheduler calls this. An external cron can invoke it. School activation
+    is not changed.
+    """
+    try:
+        expired = subscription_service.expire_due_subscriptions(db, commit=False)
+        if expired:
+            audit_service.record_audit(
+                db,
+                actor=auth.user,
+                action="subscription.expire",
+                entity_type="subscription",
+                entity_id=None,
+                school_id=None,
+                metadata={"expired": expired},
+            )
+        else:
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Subscriptions could not be expired") from None
+    return SubscriptionExpireResponse(expired=expired)
 
 
 @router.post(
@@ -231,14 +410,20 @@ def patch_bill_status(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SubscriptionBillResponse:
-    try:
-        bill = subscription_service.set_bill_status(
-            db, school_id, subscription_id, bill_id, status=body.status
-        )
-    except subscription_service.SubscriptionServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="bill.status", entity_type="subscription_bill",
-        entity_id=bill.id, school_id=school_id, metadata={"status": bill.status, "amount": bill.amount},
+    bill = _audited(
+        db,
+        "Bill status could not be recorded",
+        lambda: subscription_service.set_bill_status(
+            db, school_id, subscription_id, bill_id, status=body.status, commit=False
+        ),
+        lambda updated: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="bill.status",
+            entity_type="subscription_bill",
+            entity_id=updated.id,
+            school_id=school_id,
+            metadata={"status": updated.status, "amount": updated.amount},
+        ),
     )
     return SubscriptionBillResponse.model_validate(bill)

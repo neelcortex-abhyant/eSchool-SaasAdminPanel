@@ -15,6 +15,7 @@ from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
 from app.services.v1 import auth_service
 from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE as SCHOOL_STATUS_ACTIVE
+from app.services.v1.subscription_access import subscription_expiry_blocks_access
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -71,6 +72,11 @@ def require_school_admin(
         and school.status == SCHOOL_STATUS_ACTIVE
         and school.installed == INSTALLED_YES
     ):
+        if subscription_expiry_blocks_access(auth.user.school_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Subscription access is not available",
+            )
         return auth
     if (
         school is not None

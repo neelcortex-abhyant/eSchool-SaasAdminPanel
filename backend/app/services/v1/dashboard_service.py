@@ -412,6 +412,8 @@ _ACTIVITY_COPY: dict[str, tuple[str, str]] = {
     "school_admin.status": ("School admin status changed", "A school administrator's status was changed."),
     "subscription.create": ("Subscription creation", "A subscription was created."),
     "subscription.update": ("Subscription updated", "A subscription was updated."),
+    "subscription.renew": ("Subscription renewed", "A subscription was renewed."),
+    "subscription.expire": ("Subscriptions expired", "Due subscriptions were marked expired."),
     "subscription.status": ("Subscription status changed", "A subscription's status was changed."),
     "bill.status": ("Bill status changed", "A subscription bill's status was changed."),
     "plan.create": ("Plan created", "A plan was created."),
@@ -432,8 +434,8 @@ _UNKNOWN_ACTIVITY = ("Activity recorded", "An activity was recorded.")
 def recent_activities(db: Session, *, limit: int) -> dict:
     """Newest audit rows by id, matching the audit-log list order.
 
-    Titles are derived from the stored action. There is no subscription.renew
-    action, so renewal events are not invented.
+    Titles are derived from the stored action. subscription.renew is
+    "Subscription renewed". A renewal is shown only when that audit row exists.
     """
     rows = db.execute(
         select(

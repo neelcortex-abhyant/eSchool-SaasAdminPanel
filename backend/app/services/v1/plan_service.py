@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -11,6 +12,9 @@ from app.models.tables import Package
 
 STATUS_INACTIVE = 0
 STATUS_ACTIVE = 1
+
+# Largest value that fits in subscription_renewals.amount numeric(12,2).
+MAX_PLAN_PRICE = Decimal("9999999999.99")
 
 
 class PlanServiceError(Exception):
@@ -42,9 +46,36 @@ def _ensure_name_available(db: Session, name: str, *, exclude_id: int | None = N
         raise PlanServiceError("Plan name already in use", status_code=409)
 
 
-def _validate_prices(monthly_price: float, yearly_price: float) -> None:
-    if monthly_price < 0 or yearly_price < 0:
-        raise PlanServiceError("Prices must be >= 0", status_code=422)
+def quantized_plan_price(value: float) -> Decimal:
+    """Round a plan price to cents, matching the renewal snapshot."""
+    return Decimal(str(value if value is not None else 0)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+def normalize_money(value: float) -> Decimal:
+    """Round to cents. Reject negatives, negative zero, and values above the maximum.
+
+    ``-0.001`` quantizes to ``-0.00``. That result is not less than zero, so the
+    sign of the raw value and of the rounded result are both checked.
+    """
+    raw = 0.0 if value is None else float(value)
+    if raw < 0:
+        raise ValueError("must be from 0 through 9999999999.99")
+    amount = quantized_plan_price(raw)
+    if amount.is_signed() or amount > MAX_PLAN_PRICE:
+        raise ValueError("must be from 0 through 9999999999.99")
+    return amount
+
+
+def _validated_price(value: float) -> float:
+    try:
+        return float(normalize_money(value))
+    except ValueError:
+        raise PlanServiceError(
+            "monthly_price and yearly_price must be from 0 through 9999999999.99",
+            status_code=422,
+        ) from None
 
 
 def _validate_limits(student_limit: int | None, staff_limit: int | None) -> None:
@@ -52,6 +83,27 @@ def _validate_limits(student_limit: int | None, staff_limit: int | None) -> None
         raise PlanServiceError("student_limit must be >= 0", status_code=422)
     if staff_limit is not None and staff_limit < 0:
         raise PlanServiceError("staff_limit must be >= 0", status_code=422)
+
+
+def _save(db: Session, row: Package, *, commit: bool) -> Package:
+    """Commit, or flush so the caller can commit this row with its audit record."""
+    if not commit:
+        try:
+            db.flush()
+        except Exception:
+            db.rollback()
+            raise
+        return row
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    try:
+        db.refresh(row)
+    except Exception:
+        return row
+    return row
 
 
 def get_plan(db: Session, plan_id: int, *, include_deleted: bool = False) -> Package:
@@ -70,18 +122,20 @@ def create_plan(
     yearly_price: float = 0.0,
     student_limit: int | None = None,
     staff_limit: int | None = None,
+    commit: bool = True,
 ) -> Package:
     normalized = _normalize_name(name)
     _ensure_name_available(db, normalized)
-    _validate_prices(monthly_price, yearly_price)
+    monthly = _validated_price(monthly_price)
+    yearly = _validated_price(yearly_price)
     _validate_limits(student_limit, staff_limit)
     now = _utcnow()
     plan = Package(
         name=normalized,
         description=(description or "")[:255],
         status=STATUS_INACTIVE,  # unpublished until Super Admin activates
-        monthly_price=float(monthly_price),
-        yearly_price=float(yearly_price),
+        monthly_price=monthly,
+        yearly_price=yearly,
         student_limit=student_limit,
         staff_limit=staff_limit,
         deleted_at=None,
@@ -89,9 +143,7 @@ def create_plan(
         updated_at=now,
     )
     db.add(plan)
-    db.commit()
-    db.refresh(plan)
-    return plan
+    return _save(db, plan, commit=commit)
 
 
 def list_plans(
@@ -139,6 +191,7 @@ def update_plan(
     student_limit_set: bool = False,
     staff_limit: int | None = None,
     staff_limit_set: bool = False,
+    commit: bool = True,
 ) -> Package:
     plan = get_plan(db, plan_id)
     if name is not None:
@@ -148,9 +201,16 @@ def update_plan(
     if description is not None:
         plan.description = description[:255]
     if monthly_price is not None or yearly_price is not None:
-        mp = float(monthly_price) if monthly_price is not None else float(plan.monthly_price or 0)
-        yp = float(yearly_price) if yearly_price is not None else float(plan.yearly_price or 0)
-        _validate_prices(mp, yp)
+        mp = (
+            _validated_price(monthly_price)
+            if monthly_price is not None
+            else _validated_price(float(plan.monthly_price or 0))
+        )
+        yp = (
+            _validated_price(yearly_price)
+            if yearly_price is not None
+            else _validated_price(float(plan.yearly_price or 0))
+        )
         if monthly_price is not None:
             plan.monthly_price = mp
         if yearly_price is not None:
@@ -162,17 +222,13 @@ def update_plan(
         _validate_limits(None, staff_limit)
         plan.staff_limit = staff_limit
     plan.updated_at = _utcnow()
-    db.commit()
-    db.refresh(plan)
-    return plan
+    return _save(db, plan, commit=commit)
 
 
-def set_plan_status(db: Session, plan_id: int, *, status: int) -> Package:
+def set_plan_status(db: Session, plan_id: int, *, status: int, commit: bool = True) -> Package:
     if status not in (STATUS_ACTIVE, STATUS_INACTIVE):
         raise PlanServiceError("Invalid status", status_code=422)
     plan = get_plan(db, plan_id)
     plan.status = status
     plan.updated_at = _utcnow()
-    db.commit()
-    db.refresh(plan)
-    return plan
+    return _save(db, plan, commit=commit)

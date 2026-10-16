@@ -151,6 +151,14 @@ def test_dashboard_stats_counts_and_skips_deleted_records(v1_client, v1_db):
     )
     assert plan.status_code == 201
     package_id = plan.json()["id"]
+    assert (
+        v1_client.patch(
+            f"/api/v1/super-admin/plans/{package_id}/status",
+            headers=headers,
+            json={"status": 1},
+        ).status_code
+        == 200
+    )
     active_sub = v1_client.post(
         f"/api/v1/super-admin/schools/{active['id']}/subscriptions",
         headers=headers,

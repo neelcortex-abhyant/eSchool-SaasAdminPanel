@@ -46,7 +46,14 @@ def _plan(client, headers, **overrides):
     body = {"name": "Addon Plan", "monthly_price": 40.0, **overrides}
     res = client.post("/api/v1/super-admin/plans", headers=headers, json=body)
     assert res.status_code == 201
-    return res.json()
+    plan = res.json()
+    activated = client.patch(
+        f"/api/v1/super-admin/plans/{plan['id']}/status",
+        headers=headers,
+        json={"status": 1},
+    )
+    assert activated.status_code == 200
+    return plan
 
 
 def _subscribe(client, headers, school_id: int, package_id: int):

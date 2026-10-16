@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.v1.common import PaginatedResponse
+from app.services.v1.plan_service import normalize_money
 
 
 class PlanCreateRequest(BaseModel):
@@ -18,6 +19,14 @@ class PlanCreateRequest(BaseModel):
     student_limit: Optional[int] = Field(default=None, ge=0)
     staff_limit: Optional[int] = Field(default=None, ge=0)
 
+    @field_validator("monthly_price", "yearly_price")
+    @classmethod
+    def _price_fits_renewal_amount(cls, value: float) -> float:
+        try:
+            return float(normalize_money(value))
+        except ValueError:
+            raise ValueError("must be from 0 through 9999999999.99") from None
+
 
 class PlanUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -28,6 +37,16 @@ class PlanUpdateRequest(BaseModel):
     yearly_price: Optional[float] = Field(default=None, ge=0)
     student_limit: Optional[int] = Field(default=None, ge=0)
     staff_limit: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator("monthly_price", "yearly_price")
+    @classmethod
+    def _price_fits_renewal_amount(cls, value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return value
+        try:
+            return float(normalize_money(value))
+        except ValueError:
+            raise ValueError("must be from 0 through 9999999999.99") from None
 
 
 class PlanStatusRequest(BaseModel):

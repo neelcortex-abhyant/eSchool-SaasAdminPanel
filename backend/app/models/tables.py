@@ -1,8 +1,22 @@
 from datetime import date as DateType
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -306,6 +320,10 @@ class Subscription(Base, TimestampMixin):
     # monthly | yearly — amount basis for bills (no gateway charge here)
     cycle: Mapped[str] = mapped_column(String(16), nullable=False, default="monthly")
     auto_renew: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Price agreed at assignment, or when this row's plan or cycle changes.
+    # Null on rows created before the snapshot. Plan edits do not rewrite it.
+    # Renewal bills still use the plan price at renewal time.
+    agreed_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -328,6 +346,32 @@ class SubscriptionBill(Base, TimestampMixin):
     due_date: Mapped[Optional[DateType]] = mapped_column(Date, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SubscriptionRenewal(Base):
+    """Immutable renewal snapshot. Later plan edits do not change these rows."""
+
+    __tablename__ = "subscription_renewals"
+    __table_args__ = (
+        UniqueConstraint(
+            "subscription_id",
+            "period_start",
+            name="uq_subscription_renewals_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subscription_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subscriptions.id"), nullable=False, index=True
+    )
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    package_id: Mapped[int] = mapped_column(Integer, ForeignKey("packages.id"), nullable=False, index=True)
+    plan_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    cycle: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    period_start: Mapped[DateType] = mapped_column(Date, nullable=False)
+    period_end: Mapped[DateType] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class Addon(Base, TimestampMixin):

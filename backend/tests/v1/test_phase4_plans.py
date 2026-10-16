@@ -122,6 +122,36 @@ def test_duplicate_plan_name_409(v1_client, v1_db):
     assert again.json()["detail"] == "Plan name already in use"
 
 
+def test_validation_price_upper_bound(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="p4-price@eschool.com")
+    accepted = v1_client.post(
+        "/api/v1/super-admin/plans",
+        headers=headers,
+        json=_plan_body(name="Max Price Plan", monthly_price=9999999999.99, yearly_price=9999999999.99),
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["monthly_price"] == 9999999999.99
+    plan_id = accepted.json()["id"]
+
+    rejected = v1_client.post(
+        "/api/v1/super-admin/plans",
+        headers=headers,
+        json=_plan_body(name="Too High Plan", yearly_price=10000000000),
+    )
+    assert rejected.status_code == 422
+    assert "9999999999.99" in rejected.text
+
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/plans/{plan_id}",
+        headers=headers,
+        json={"monthly_price": 10000000000},
+    )
+    assert patched.status_code == 422
+    row = v1_db.get(Package, plan_id)
+    assert row is not None
+    assert float(row.monthly_price) == 9999999999.99
+
+
 def test_validation_negative_price(v1_client, v1_db):
     headers = _super_admin_headers(v1_client, v1_db)
     res = v1_client.post(

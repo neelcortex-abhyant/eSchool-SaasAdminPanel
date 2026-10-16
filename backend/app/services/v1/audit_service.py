@@ -58,8 +58,13 @@ def record_audit(
     entity_id: str | int | UUID | None = None,
     school_id: int | None = None,
     metadata: dict[str, Any] | None = None,
+    commit: bool = True,
 ) -> AuditLog:
-    """Persist an audit row. Caller must commit (or we commit with the surrounding txn)."""
+    """Add an audit row. The default commits this session, including earlier uncommitted work.
+
+    Pass commit=False to leave the row in the caller's transaction. A failure while
+    refreshing the row after a successful commit does not undo that commit.
+    """
     safe = sanitize_metadata(metadata)
     row = AuditLog(
         actor_id=str(actor.id) if actor is not None else None,
@@ -72,8 +77,18 @@ def record_audit(
         created_at=_utcnow(),
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    if not commit:
+        db.flush()
+        return row
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    try:
+        db.refresh(row)
+    except Exception:
+        return row
     return row
 
 

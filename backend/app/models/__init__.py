@@ -18,6 +18,7 @@ from app.models.tables import (
     Subject,
     Subscription,
     SubscriptionBill,
+    SubscriptionRenewal,
     SystemSetting,
     User,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "Subject",
     "Subscription",
     "SubscriptionBill",
+    "SubscriptionRenewal",
     "SystemSetting",
     "User",
 ]

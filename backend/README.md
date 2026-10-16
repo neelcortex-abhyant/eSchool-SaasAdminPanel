@@ -29,6 +29,7 @@ Super Admin school list: `GET /api/v1/super-admin/schools` keeps `page`, `page_s
 Docs:
 - [docs/SCHOOL_API_CONTRACT.md](docs/SCHOOL_API_CONTRACT.md) — Super Admin school API for frontend integration
 - [docs/DASHBOARD_API.md](docs/DASHBOARD_API.md) — Super Admin dashboard counts, charts, and activities
+- [docs/SUBSCRIPTION_RENEWAL_API.md](docs/SUBSCRIPTION_RENEWAL_API.md) — Super Admin plans, school subscriptions, bills, renewal, expiry, and platform listing
 - [docs/RENDER.md](docs/RENDER.md) — Render env vars
 - [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md) — MySQL import status (pending without dumps)
 - [docs/PHASE9_AUDIT.md](docs/PHASE9_AUDIT.md) — payments **BLOCKED / DEFERRED** (no gateway)
