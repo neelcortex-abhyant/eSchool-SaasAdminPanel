@@ -1,8 +1,7 @@
 """School-admin academic CRUD. The school id is taken from the authenticated user."""
 
 from __future__ import annotations
-
-from datetime import date
+from datetime import date as Date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -43,7 +42,7 @@ class WriteBody(BaseModel):
     salary: float | None = None
     admission_no: str | None = None
     roll_number: int | None = None
-    admission_date: date | None = None
+    admission_date: Date | None = None
     class_section_id: int | None = None
     class_id: int | None = None
     section_id: int | None = None
@@ -52,14 +51,14 @@ class WriteBody(BaseModel):
     medium_id: int | None = None
     student_id: int | None = None
     user_id: int | None = None
-    start_date: date | None = None
-    end_date: date | None = None
-    from_date: date | None = None
-    to_date: date | None = None
-    due_date: date | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
+    from_date: Date | None = None
+    to_date: Date | None = None
+    due_date: Date | None = None
     due_charges: float | None = None
     amount: float | None = None
-    date: date | None = None
+    date: Date | None = None
     type: str | int | None = None
     code: str | None = None
     description: str | None = None

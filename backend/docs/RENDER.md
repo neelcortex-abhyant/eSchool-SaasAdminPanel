@@ -47,6 +47,18 @@ alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
+## Subscription expiry
+
+Automatic expiry is not running in this deployment. The API process does not start a scheduler.
+
+When an operator wants past subscriptions to become status `2`, schedule an external job against the already deployed API. The job sends:
+
+`POST /api/v1/super-admin/subscriptions/expire-due`
+
+with a Super Admin bearer token. Do not add a worker-local scheduler: more than one Render instance would run the same pass. The endpoint itself is safe to call again. It does not delete schools and it does not change `schools.status` or `schools.installed`.
+
+Confirm the database target with the procedure above before `alembic upgrade head`. The unapplied head in the working tree includes `20261015_0011` and `20261016_0012`. This document does not mean those revisions have been applied.
+
 ## Health checks
 
 - `GET /health` — liveness (no DB open)
