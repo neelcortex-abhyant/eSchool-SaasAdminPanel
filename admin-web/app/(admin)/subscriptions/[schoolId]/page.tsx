@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { PaymentHistory } from "@/components/payments/PaymentHistory";
 import { PageHeading } from "@/components/dashboard/StatCard";
 import { IconFees } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
@@ -180,6 +181,7 @@ function SubscriptionDetailPage() {
           )}
         </div>
       ) : null}
+      {!loading && !error ? <PaymentHistory schoolId={Number(params.schoolId)} /> : null}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { api, apiErrorMessage, clearSession } from "@/lib/api";
 import { loadDashboardPayload, type DashboardPayload } from "@/lib/dashboardData";
 import { IconHome } from "@/lib/icons";
 import { PageHeading, StatCard, StatCardSkeleton } from "@/components/dashboard/StatCard";
+import { PaymentSummaryCards } from "@/components/payments/PaymentSummary";
 import { RevenueChart, SubscriptionChart } from "@/components/dashboard/Charts";
 import { QuickActions, RecentActivity, RecentTransactions } from "@/components/dashboard/Lists";
 
@@ -79,6 +80,11 @@ export default function DashboardPage() {
         {loading
           ? Array.from({ length: 6 }).map((_, i) => <StatCardSkeleton key={i} />)
           : dashboard?.stats.map((stat) => <StatCard key={stat.id} data={stat} />)}
+      </section>
+
+      <section style={{ marginTop: 20 }}>
+        <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Payment summary</h2>
+        <PaymentSummaryCards />
       </section>
 
       <section className="panel-grid">
