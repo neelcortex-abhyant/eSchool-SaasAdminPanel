@@ -182,15 +182,15 @@ Rows come from `audit_logs`, ordered by `id` descending. That is the same order 
 }
 ```
 
-Known dashboard titles include `school.register` ("New school registration"), `school.activate` ("School activation"), `school.deactivate` ("School deactivation"), and `subscription.create` ("Subscription creation"). `subscription.update` is "Subscription updated". It is not a renewal.
+Known dashboard titles include `school.register` ("New school registration"), `school.activate` ("School activation"), `school.deactivate` ("School deactivation"), and `subscription.create` ("Subscription creation"). `subscription.update` is "Subscription updated". It is not a renewal. `subscription.renew` is "Subscription renewed". `subscription.expire` is "Subscriptions expired".
 
-There is no `subscription.renew` audit action. `subscriptions.auto_renew` is only a stored flag. This route does not invent renewal events.
+`subscriptions.auto_renew` is only a stored flag. This route shows a renewal when an audit row has action `subscription.renew`, and an expiry batch when an audit row has action `subscription.expire`. It does not invent those rows.
 
 An empty audit log returns `{"items": []}`.
 
 ## Known limitations
 
-- Renewal activity cannot be shown until a renewal-specific audit action is written.
+- A renewal appears in recent activities only after `subscription.renew` is written. `subscription.update` is still not a renewal.
 - Stats `active_subscriptions` and subscription-distribution school counts answer different questions and are not required to be equal.
 - Stats `total_students` excludes students of soft-deleted schools. The original dashboard `students` field does not.
 - School status does not separate suspended schools from deactivated schools.

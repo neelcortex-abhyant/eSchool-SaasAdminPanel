@@ -1,4 +1,10 @@
-"""Phase 4 audit (plans / packages).
+"""Historical snapshot, written before the v1 plan API existed.
+
+Do not use this file as the current contract. Plans are now implemented.
+See docs/SUBSCRIPTION_RENEWAL_API.md. The findings below are what this
+audit recorded at the time. They are not a claim about the code today.
+
+Phase 4 audit (plans / packages).
 
 Existing Package model (`packages` table):
   id, name, description, status, deleted_at, created_at, updated_at
@@ -21,4 +27,9 @@ Do NOT create a separate plans table.
 Do NOT implement subscriptions/billing/addons (later phases).
 
 Migration 0006: additive columns on packages only.
+
+Current state, after later implementation:
+  POST/GET/PATCH /api/v1/super-admin/plans and PATCH .../status exist.
+  They use the packages table. Migration 20261007_0006 is in the repository.
+  This snapshot's "missing" list was the gap at audit time, not the live API.
 """
