@@ -37,7 +37,9 @@ export const NAV_ITEMS: NavItem[] = [
     icon: IconBuilding,
     children: [
       { href: "/schools", label: "Schools" },
-      { href: "/packages", label: "Plans" },
+      { href: "/plans", label: "Plans" },
+      { href: "/subscriptions", label: "Subscriptions" },
+      { href: "/payments", label: "Payments" },
       { href: "/addons", label: "Add-ons" },
     ],
   },

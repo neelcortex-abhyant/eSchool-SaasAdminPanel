@@ -77,6 +77,11 @@ async function fetchApi<T>(url: string, options: RequestInit): Promise<ApiResult
   return { ok: response.ok, status: response.status, data };
 }
 
+export function apiUrl(path: string): string {
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  return `${resolveApiBase()}${suffix}`;
+}
+
 export async function api<T = Record<string, unknown>>(
   path: string,
   options: RequestInit = {},

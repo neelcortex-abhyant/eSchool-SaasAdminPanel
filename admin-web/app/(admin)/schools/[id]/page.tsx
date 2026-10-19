@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage } from "@/lib/api";
+import { PaymentHistory } from "@/components/payments/PaymentHistory";
 import { SchoolBilling } from "@/components/schools/SchoolBilling";
 import { loadSchool, loadSchoolAdmins, schoolStatusLabel, type SchoolAdmin, type SchoolRecord } from "@/lib/school";
 
@@ -232,6 +233,7 @@ export default function SchoolProfilePage() {
           </section>
 
           <SchoolBilling schoolId={school.id} />
+          <PaymentHistory schoolId={school.id} />
         </>
       ) : null}
 
