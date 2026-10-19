@@ -265,3 +265,29 @@ def test_invalid_payment_query_parameters(v1_client, v1_db):
     )
     assert bad_range.status_code == 422
     assert bad_range.json()["detail"] == "from_date must be on or before to_date"
+
+
+def test_payment_summary_aggregates_real_rows(v1_client, v1_db):
+    headers = _super_headers(v1_client, v1_db, "pay-summary-sa@eschool.com")
+    empty = v1_client.get("/api/v1/super-admin/payments/summary", headers=headers)
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["total_count"] == 0
+    assert empty.json()["successful_amount_paise"] == 0
+    _payment(code="PAYS01", order_id="order_sum_1", status=PAYMENT_STATUS_CAPTURED, payment_ref="pay_sum_1")
+    _payment(code="PAYS02", order_id="order_sum_2", status=PAYMENT_STATUS_CAPTURED, payment_ref="pay_sum_2")
+    _payment(code="PAYS03", order_id="order_sum_3", status=PAYMENT_STATUS_CREATED)
+    _payment(code="PAYS04", order_id="order_sum_4", status=3, payment_ref="pay_sum_4")
+    body = v1_client.get("/api/v1/super-admin/payments/summary", headers=headers).json()
+    assert body == {
+        "currency": "INR",
+        "successful_amount_paise": 499800,
+        "successful_amount": 4998.0,
+        "successful_count": 2,
+        "pending_count": 1,
+        "failed_count": 1,
+        "refunded_count": 0,
+        "total_count": 4,
+    }
+    admin_school = _payment(code="PAYS05", order_id="order_sum_5")
+    admin = _school_admin_headers(v1_client, headers, admin_school["school_id"], "pay-summary-admin@eschool.com")
+    assert v1_client.get("/api/v1/super-admin/payments/summary", headers=admin).status_code == 403

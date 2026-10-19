@@ -29,7 +29,11 @@ def list_school_payments(
     db: Annotated[Session, Depends(central_db)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    status_filter: int | None = Query(default=None, alias="status", ge=0, le=4),
+    status_filter: list[int] | None = Query(
+        default=None,
+        alias="status",
+        description="Repeat to match any of several statuses, e.g. status=0&status=1.",
+    ),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
 ) -> PaymentTransactionListResponse:

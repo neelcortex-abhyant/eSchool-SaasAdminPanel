@@ -79,3 +79,23 @@ class PaymentTransactionResponse(BaseModel):
 
 class PaymentTransactionListResponse(PaginatedResponse):
     items: list[PaymentTransactionResponse]
+
+
+class PaymentSummaryResponse(BaseModel):
+    """Aggregates over payment_transactions in one currency.
+
+    successful = captured, pending = created or authorized, failed = failed.
+    successful_amount_paise is the exact integer total. successful_amount is
+    the same total in major units (rupees) for display.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    currency: str
+    successful_amount_paise: int
+    successful_amount: float
+    successful_count: int
+    pending_count: int
+    failed_count: int
+    refunded_count: int
+    total_count: int
