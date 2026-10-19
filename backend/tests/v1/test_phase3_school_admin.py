@@ -554,3 +554,24 @@ def test_status_change_audit_records_previous_and_resulting_fields(v1_client, v1
         "status": 1,
         "installed": 1,
     }
+
+
+def test_legacy_admin_routes_refuse_an_existing_token_after_suspend_or_deactivate(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="p3-legacy-lock-sa@eschool.com")
+    school_id = _create_school(v1_client, headers, code="LOCK9", name="Legacy Lock School").json()["id"]
+    admin_headers = _auth_header(_school_admin_token(v1_client, headers, school_id, "legacy-lock-admin@eschool.com"))
+
+    assert v1_client.get("/api/admin/students", headers=admin_headers).status_code == 200
+    assert v1_client.get("/api/admin/students", headers=headers).status_code == 200
+
+    assert v1_client.post(f"/api/v1/super-admin/schools/{school_id}/suspend", headers=headers).status_code == 200
+    suspended = v1_client.get("/api/admin/students", headers=admin_headers)
+    assert suspended.status_code == 403
+    assert suspended.json()["detail"] == "School access is suspended"
+    assert v1_client.get("/api/admin/students", headers=headers).status_code == 200
+
+    assert v1_client.post(f"/api/v1/super-admin/schools/{school_id}/activate", headers=headers).status_code == 200
+    assert v1_client.get("/api/admin/students", headers=admin_headers).status_code == 200
+
+    assert v1_client.post(f"/api/v1/super-admin/schools/{school_id}/deactivate", headers=headers).status_code == 200
+    assert v1_client.get("/api/admin/students", headers=admin_headers).status_code == 403

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,6 +42,14 @@ class Settings(BaseSettings):
     # If set, matching existing v1_users.email is promoted to super_admin on startup.
     # Does not create users; never accept role from public signup.
     v1_super_admin_email: str = ""
+
+    # Razorpay. One deployment uses one key pair: test processes use rzp_test_
+    # key ids, and production uses rzp_live_. The secret and webhook secret stay
+    # on the server. Order creation does not read the webhook secret.
+    razorpay_key_id: str = ""
+    razorpay_key_secret: SecretStr = SecretStr("")
+    razorpay_webhook_secret: SecretStr = SecretStr("")
+    razorpay_currency: str = "INR"
 
     @property
     def cors_origins(self) -> list[str]:

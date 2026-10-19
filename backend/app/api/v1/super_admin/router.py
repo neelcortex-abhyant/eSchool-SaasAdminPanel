@@ -16,6 +16,8 @@ from app.api.v1.super_admin import school_addons as school_addons_routes
 from app.api.v1.super_admin import schools as schools_routes
 from app.api.v1.super_admin import settings as settings_routes
 from app.api.v1.super_admin import subscriptions as subscriptions_routes
+from app.api.v1.super_admin import invoices as invoice_routes
+from app.api.v1.super_admin import payments as payment_routes
 from app.core.v1_database import get_v1_db
 from app.schemas.v1.auth import AuthTokenResponse, LoginRequest, SignupRequest
 from app.schemas.v1.dashboard import (
@@ -44,6 +46,8 @@ router.include_router(schools_routes.router)
 router.include_router(plans_routes.router)
 router.include_router(subscriptions_routes.router)
 router.include_router(subscriptions_routes.platform_router)
+router.include_router(payment_routes.router)
+router.include_router(invoice_routes.router)
 router.include_router(addons_routes.router)
 router.include_router(school_addons_routes.router)
 router.include_router(reports_routes.router)

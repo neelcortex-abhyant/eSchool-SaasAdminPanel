@@ -50,6 +50,30 @@ def assert_user_in_school(user: User, school: School) -> bool:
     return user.school_id == school.id
 
 
+def require_active_admin_school(db: Session, school_id: int) -> School:
+    """Deny a school-scoped admin when the school is missing, deleted, suspended, or not installed.
+
+    Applied on every request, so an existing token stops working while the
+    school is suspended or deactivated, and works again after activation.
+    Messages match require_school_admin on the v1 routes.
+    """
+    from fastapi import HTTPException
+
+    from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE
+
+    school = db.get(School, school_id)
+    if school is None or school.deleted_at is not None:
+        raise HTTPException(status_code=403, detail="School access is suspended")
+    if school.status == STATUS_ACTIVE and school.installed == INSTALLED_YES:
+        return school
+    if school.status != STATUS_ACTIVE and school.installed != INSTALLED_YES:
+        raise HTTPException(
+            status_code=403,
+            detail="This school is waiting for approval. You can sign in after it is activated.",
+        )
+    raise HTTPException(status_code=403, detail="School access is suspended")
+
+
 def admin_context(
     request: Request,
     central: Session = Depends(central_db),
@@ -78,6 +102,7 @@ def admin_context(
             if v1_user.role == ROLE_SCHOOL_ADMIN:
                 if v1_user.school_id is None:
                     raise HTTPException(status_code=403, detail="No school is assigned to this account")
+                require_active_admin_school(central, v1_user.school_id)
                 return central, v1_user, v1_user.school_id
             if v1_user.role != ROLE_SUPER_ADMIN:
                 raise HTTPException(status_code=403, detail="This account cannot use the school admin API")
@@ -104,6 +129,8 @@ def admin_context(
             from fastapi import HTTPException
 
             raise HTTPException(status_code=403, detail="Cross-school access denied")
+    if user.school_id is not None:
+        require_active_admin_school(db, user.school_id)
     request.state.admin_db_owned = False
     request.state.admin_db = db
     return db, user, user.school_id

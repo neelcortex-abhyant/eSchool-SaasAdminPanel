@@ -4,6 +4,8 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -372,6 +374,143 @@ class SubscriptionRenewal(Base):
     period_start: Mapped[DateType] = mapped_column(Date, nullable=False)
     period_end: Mapped[DateType] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+# 0=created, 1=authorized, 2=captured, 3=failed, 4=refunded.
+# A capture marks the bill paid through payment_verification_service, not here.
+PAYMENT_STATUS_CREATED = 0
+PAYMENT_STATUS_AUTHORIZED = 1
+PAYMENT_STATUS_CAPTURED = 2
+PAYMENT_STATUS_FAILED = 3
+PAYMENT_STATUS_REFUNDED = 4
+
+
+class PaymentTransaction(Base, TimestampMixin):
+    """Gateway order for one subscription bill. Amount is integer paise.
+
+    One row per gateway order. gateway_payment_id stays null until the
+    gateway reports a payment. Secrets and webhook signatures are not stored.
+    A bill has at most one row that is not refunded, so it has at most one
+    payable order and at most one captured payment.
+    """
+
+    __tablename__ = "payment_transactions"
+    __table_args__ = (
+        Index(
+            "uq_payment_transactions_bill_open",
+            "bill_id",
+            unique=True,
+            postgresql_where=text("status <> 4"),
+        ),
+        UniqueConstraint("gateway_order_id", name="uq_payment_transactions_gateway_order_id"),
+        UniqueConstraint("gateway_payment_id", name="uq_payment_transactions_gateway_payment_id"),
+        UniqueConstraint(
+            "school_id",
+            "idempotency_key",
+            name="uq_payment_transactions_school_idempotency",
+        ),
+        CheckConstraint("amount_paise >= 0", name="ck_payment_transactions_amount_paise_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bill_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subscription_bills.id"), nullable=False, index=True
+    )
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    gateway_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    gateway_payment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    status: Mapped[int] = mapped_column(Integer, nullable=False, default=PAYMENT_STATUS_CREATED, index=True)
+
+
+class PaymentWebhookEvent(Base):
+    """Processed gateway webhook identity. Duplicate deliveries hit the unique key.
+
+    The gateway ids, amount, currency, and outcome are kept for diagnosis.
+    The raw payload and signature are not stored.
+    """
+
+    __tablename__ = "payment_webhook_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider",
+            "event_id",
+            name="uq_payment_webhook_events_provider_event",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="razorpay")
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payment_transaction_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("payment_transactions.id"), nullable=True, index=True
+    )
+    gateway_order_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    gateway_payment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    amount_paise: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    outcome: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class SubscriptionInvoice(Base):
+    """Issued subscription receipt. Rows are not updated after insert.
+
+    A correction or refund needs a separate credit note that references
+    invoice_number. This table has no update path. Tax columns stay null
+    until a tax configuration exists; null is not a zero-rate tax.
+    """
+
+    __tablename__ = "subscription_invoices"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_subscription_invoices_number"),
+        UniqueConstraint("payment_transaction_id", name="uq_subscription_invoices_payment"),
+        CheckConstraint("amount_paise >= 0", name="ck_subscription_invoices_amount_non_negative"),
+        CheckConstraint("total_amount_paise >= 0", name="ck_subscription_invoices_total_non_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invoice_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    payment_transaction_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("payment_transactions.id"), nullable=False
+    )
+    bill_id: Mapped[int] = mapped_column(Integer, ForeignKey("subscription_bills.id"), nullable=False, index=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    subscription_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subscriptions.id"), nullable=False, index=True
+    )
+    package_id: Mapped[int] = mapped_column(Integer, ForeignKey("packages.id"), nullable=False)
+    gateway: Mapped[str] = mapped_column(String(32), nullable=False)
+    gateway_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    gateway_payment_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    tax_label: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    tax_rate_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    tax_amount_paise: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    total_amount_paise: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    school_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    school_address: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    school_email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    school_phone: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    plan_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    plan_description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cycle: Mapped[str] = mapped_column(String(16), nullable=False)
+    period_start: Mapped[DateType] = mapped_column(Date, nullable=False)
+    period_end: Mapped[DateType] = mapped_column(Date, nullable=False)
+
+
+class SubscriptionInvoiceCounter(Base):
+    """Per-year sequence for SUB-YYYY-NNNNNN. Locked with FOR UPDATE."""
+
+    __tablename__ = "subscription_invoice_counters"
+
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_value: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Addon(Base, TimestampMixin):

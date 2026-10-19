@@ -181,7 +181,7 @@ def assert_school_admin_login_allowed(db: Session, user: User) -> None:
         return
     if school.installed == 0:
         raise AuthError(
-            "This school is waiting for approval. You can sign in after it is activated.",
+            "Your school is awaiting approval from the Super Admin. You can sign in once your school has been approved and activated..",
             status_code=403,
         )
     raise AuthError("This school is inactive.", status_code=403)
