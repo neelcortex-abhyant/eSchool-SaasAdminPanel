@@ -58,8 +58,8 @@ def test_super_admin_login_requires_role(v1_client):
         "/api/v1/super-admin/login",
         json={"email": "plain@eschool.com", "password": "secret123"},
     )
-    assert denied.status_code == 403
-    assert denied.json()["detail"] == "Forbidden"
+    assert denied.status_code == 401
+    assert denied.json()["detail"] == "Invalid email or password"
 
     sa = v1_client.post("/api/v1/super-admin/register", json=_register_body(email="login-sa@eschool.com"))
     assert sa.status_code == 201

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, require_school_admin
+from app.api.v1.deps import AuthContext, assert_school_permission, require_school_admin
 from app.models.tables import (
     Announcement,
     Attendance,
@@ -24,6 +24,7 @@ from app.models.tables import (
     SessionYear,
     Subject,
 )
+from app.services.v1 import rbac
 from app.services.v1 import school_academics as academics
 
 router = APIRouter(prefix="/school-admin/academics", tags=["v1-school-admin-academics"])
@@ -74,6 +75,33 @@ def _school_id(auth: AuthContext) -> int:
     return int(auth.user.school_id)  # type: ignore[arg-type]
 
 
+# Permission needed for each resource (reads and writes).
+RESOURCE_PERMISSIONS = {
+    "students": rbac.PERM_STUDENTS,
+    "parents": rbac.PERM_STUDENTS,
+    "teachers": rbac.PERM_TEACHERS,
+    "leaves": rbac.PERM_TEACHERS,
+    "exams": rbac.PERM_EXAMS,
+    "attendances": rbac.PERM_ATTENDANCE,
+    "fees": rbac.PERM_FEES,
+    "expenses": rbac.PERM_FEES,
+    "notices": rbac.PERM_SCHOOL,
+}
+# Academic structure: every role may read it (forms need classes and sessions);
+# only school.manage may change it.
+STRUCTURE_RESOURCES = frozenset({"classes", "sections", "subjects", "mediums", "sessions", "class-sections"})
+
+
+def _allow(auth: AuthContext, db: Session, resource: str, *, write: bool) -> None:
+    if resource in STRUCTURE_RESOURCES:
+        permission = rbac.PERM_SCHOOL if write else rbac.PERM_DASHBOARD
+    else:
+        permission = RESOURCE_PERMISSIONS.get(resource)
+    if permission is None:
+        return  # unknown resource: the handler answers 404
+    assert_school_permission(auth, db, permission)
+
+
 def _run(action):
     try:
         return action()
@@ -87,6 +115,7 @@ def summary(
     db: Annotated[Session, Depends(central_db)],
     session_year_id: int | None = None,
 ):
+    assert_school_permission(auth, db, rbac.PERM_DASHBOARD)
     return academics.summary(db, _school_id(auth), session_year_id)
 
 
@@ -99,6 +128,7 @@ def index(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
 ):
+    _allow(auth, db, resource, write=False)
     school_id = _school_id(auth)
 
     def load():
@@ -137,6 +167,7 @@ def index(
 
 @router.post("/{resource}", status_code=201)
 def create(resource: str, body: WriteBody, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+    _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
     data = body.model_dump(exclude_unset=True)
 
@@ -176,6 +207,7 @@ def create(resource: str, body: WriteBody, auth: Annotated[AuthContext, Depends(
 
 @router.patch("/{resource}/{row_id}")
 def update(resource: str, row_id: int, body: WriteBody, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+    _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
     data = body.model_dump(exclude_unset=True)
 
@@ -198,6 +230,7 @@ def update(resource: str, row_id: int, body: WriteBody, auth: Annotated[AuthCont
         if model is None:
             raise academics.AcademicError(404, "This record cannot be edited here")
         row = academics._owned(db, model, row_id, school_id)
+        academics.check_references(db, school_id, row, data)
         for key, value in data.items():
             if key in {"id", "school_id"} or not hasattr(row, key):
                 continue
@@ -215,6 +248,7 @@ def update(resource: str, row_id: int, body: WriteBody, auth: Annotated[AuthCont
 
 @router.delete("/{resource}/{row_id}")
 def remove(resource: str, row_id: int, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+    _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
     models = {
         "classes": SchoolClass,

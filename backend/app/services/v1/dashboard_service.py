@@ -410,6 +410,7 @@ _ACTIVITY_COPY: dict[str, tuple[str, str]] = {
     "school_admin.create": ("School admin created", "A school administrator was created."),
     "school_admin.update": ("School admin updated", "A school administrator was updated."),
     "school_admin.status": ("School admin status changed", "A school administrator's status was changed."),
+    "school_admin.roles": ("School admin roles changed", "A school administrator's roles were changed."),
     "subscription.create": ("Subscription creation", "A subscription was created."),
     "subscription.update": ("Subscription updated", "A subscription was updated."),
     "subscription.renew": ("Subscription renewed", "A subscription was renewed."),

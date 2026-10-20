@@ -38,6 +38,21 @@ def user_roles(db: Session, user_id: int) -> set[str]:
     return {row[0] for row in rows}
 
 
+# Roles that belong to the student/parent app, never the staff app or admin panel.
+NON_STAFF_ROLES = frozenset({"Student", "Parent", "Guardian"})
+
+
+def is_staff(roles: set[str]) -> bool:
+    """Teacher, School Admin, Driver or custom staff role, read from model_has_roles.
+
+    A School Admin who is also a guardian keeps staff access. An account with no
+    role at all is not staff.
+    """
+    if not roles:
+        return False
+    return "School Admin" in roles or not roles.intersection(NON_STAFF_ROLES)
+
+
 def find_school(central: Session, code: str) -> School | None:
     return central.scalar(select(School).where(School.code == code, School.deleted_at.is_(None)))
 
@@ -302,6 +317,8 @@ def login_parent(school_db: Session, school: School, email: str, password: str, 
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
     if "Guardian" not in user_roles(school_db, user.id):
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
+    if user.status != 1:
+        return fail("your_account_has_been_deactivated_please_contact_admin", code=INACTIVATED_USER)
     session_year = default_session_year(school_db, school.id)
     children = []
     if session_year is not None:
@@ -335,12 +352,11 @@ def login_parent(school_db: Session, school: School, email: str, password: str, 
 
 def login_teacher(school_db: Session, school: School, email: str, password: str, fcm_id: str | None) -> dict:
     user = school_db.scalar(select(User).where(User.email == email, User.school_id == school.id))
-    if user is None:
+    if user is None or not verify_password(password, user.password):
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
-    roles = user_roles(school_db, user.id)
-    if "School Admin" not in roles and roles.intersection({"Student", "Parent", "Guardian"}):
-        return fail("You must have a teacher / Staff role to log in.", code=INVALID_LOGIN)
-    if not verify_password(password, user.password):
+    # Role is checked only after the password, with the same message, so this
+    # endpoint does not reveal which emails belong to students or parents.
+    if not is_staff(user_roles(school_db, user.id)):
         return fail("Invalid Login Credentials", code=INVALID_LOGIN)
     if user.deleted_at is not None or school.status == 0 or user.status == 0:
         return fail("your_account_has_been_deactivated_please_contact_admin", code=INACTIVATED_USER)

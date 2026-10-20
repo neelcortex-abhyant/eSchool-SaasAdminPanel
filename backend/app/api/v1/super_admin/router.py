@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
+from app.api.v1.auth import login_with_limits
 from app.api.v1.deps import AuthContext, require_super_admin
 from app.api.v1.super_admin import addons as addons_routes
 from app.api.v1.super_admin import audit_logs as audit_logs_routes
@@ -13,6 +14,7 @@ from app.api.v1.super_admin import notifications as notifications_routes
 from app.api.v1.super_admin import plans as plans_routes
 from app.api.v1.super_admin import reports as reports_routes
 from app.api.v1.super_admin import school_addons as school_addons_routes
+from app.api.v1.super_admin import school_admins as school_admins_routes
 from app.api.v1.super_admin import schools as schools_routes
 from app.api.v1.super_admin import settings as settings_routes
 from app.api.v1.super_admin import subscriptions as subscriptions_routes
@@ -43,6 +45,7 @@ from app.services.v1.dashboard_service import (
 
 router = APIRouter(prefix="/super-admin", tags=["v1-super-admin"])
 router.include_router(schools_routes.router)
+router.include_router(school_admins_routes.router)
 router.include_router(plans_routes.router)
 router.include_router(subscriptions_routes.router)
 router.include_router(subscriptions_routes.platform_router)
@@ -88,13 +91,13 @@ def register(
 @router.post("/login", response_model=AuthTokenResponse)
 def login(
     body: LoginRequest,
+    request: Request,
     db: Annotated[Session, Depends(get_v1_db)],
 ) -> AuthTokenResponse:
-    """Super Admin login — credentials + role=super_admin required."""
-    try:
-        issued = auth_service.login_super_admin(db, email=body.email, password=body.password)
-    except auth_service.AuthError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    """Super Admin login — credentials + role=super_admin required. Shares the login rate limits."""
+    issued = login_with_limits(
+        request, body.email, lambda: auth_service.login_super_admin(db, email=body.email, password=body.password)
+    )
     return _token_response(issued)
 
 

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_tenant_user
+from app.api.deps import require_guardian_user, require_staff_user, require_tenant_user, tenant_student
 from app.core.responses import VALIDATION_ERROR, fail, ok
 from app.core.security import utcnow
 from app.models.tables import (
@@ -28,6 +28,7 @@ from app.services.mobile_auth import (
     guardian_user_resource,
     staff_user_resource,
     student_user_resource,
+    is_staff,
     user_roles,
     validation_error,
 )
@@ -77,6 +78,7 @@ def _guardian_child(db: Session, guardian: User, child_id: Optional[int]) -> Opt
         select(Student).where(
             Student.id == child_id,
             Student.guardian_id == guardian.id,
+            Student.school_id == guardian.school_id,
             Student.deleted_at.is_(None),
         )
     )
@@ -86,6 +88,7 @@ def _guardian_child(db: Session, guardian: User, child_id: Optional[int]) -> Opt
         select(Student).where(
             Student.user_id == child_id,
             Student.guardian_id == guardian.id,
+            Student.school_id == guardian.school_id,
             Student.deleted_at.is_(None),
         )
     )
@@ -188,7 +191,7 @@ async def profile(
 
 @router.get("/staff/counter")
 async def staff_counter(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_staff_user),
 ):
     db, _user, school = tenant
     try:
@@ -237,7 +240,7 @@ async def classes(
 
 @router.get("/staff/teachers")
 async def staff_teachers(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_staff_user),
 ):
     db, _user, school = tenant
     rows = list(
@@ -342,7 +345,7 @@ async def parent_store_fees(
     child_id: Optional[int] = Form(default=None),
     payment_id: Optional[str] = Form(default=None),
     payment_signature: Optional[str] = Form(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is None:
@@ -370,7 +373,7 @@ async def parent_store_fees(
 @router.post("/parent/fail-payment-transaction")
 async def parent_fail_payment_transaction(
     payment_transaction_id: Optional[str] = Form(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     if not payment_transaction_id:
         return validation_error("The payment transaction id field is required.")
@@ -431,15 +434,28 @@ async def student_details(
     id: Optional[int] = Query(default=None),
     tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
 ):
-    db, _user, school = tenant
+    db, user, school = tenant
     lookup = student_id if student_id is not None else id
     if lookup is None:
         return validation_error("The student id field is required.")
+    # Staff may open any student of their school. A guardian only their own
+    # children, and a student only themself. Same answer as a missing student.
+    roles = user_roles(db, user.id)
+    scope = []
+    if not is_staff(roles):
+        if "Guardian" in roles:
+            scope.append(Student.guardian_id == user.id)
+        else:
+            own = tenant_student(db, user, school)
+            if own is None:
+                return fail("Student not found", code=VALIDATION_ERROR)
+            scope.append(Student.id == own.id)
     student = db.scalar(
         select(Student).where(
             Student.id == lookup,
             Student.school_id == school.id,
             Student.deleted_at.is_(None),
+            *scope,
         )
     )
     if student is None:
@@ -448,6 +464,7 @@ async def student_details(
                 Student.user_id == lookup,
                 Student.school_id == school.id,
                 Student.deleted_at.is_(None),
+                *scope,
             )
         )
     if student is None:

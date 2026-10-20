@@ -13,7 +13,7 @@ from app.models.tables import School
 from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
 from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
-from app.services.v1 import auth_service
+from app.services.v1 import auth_service, rbac
 from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE as SCHOOL_STATUS_ACTIVE
 from app.services.v1.subscription_access import subscription_expiry_blocks_access
 
@@ -89,6 +89,29 @@ def require_school_admin(
             detail="This school is waiting for approval. You can sign in after it is activated.",
         )
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="School access is suspended")
+
+
+def assert_school_permission(auth: AuthContext, db: Session, permission: str) -> None:
+    """Deny a school_admin whose roles do not grant `permission` (services/v1/rbac.py).
+
+    Call after require_school_admin. Roles are read from the DB on every request,
+    so a role change applies to existing sessions immediately.
+    """
+    if permission not in rbac.permissions_for(db, auth.user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
+def require_school_permission(permission: str):
+    """Dependency: an active school_admin (require_school_admin) holding `permission`."""
+
+    def dependency(
+        auth: Annotated[AuthContext, Depends(require_school_admin)],
+        db: Annotated[Session, Depends(central_db)],
+    ) -> AuthContext:
+        assert_school_permission(auth, db, permission)
+        return auth
+
+    return dependency
 
 
 def assert_school_scope(auth: AuthContext, school_id: int) -> None:

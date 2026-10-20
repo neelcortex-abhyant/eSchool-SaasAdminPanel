@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -12,6 +13,7 @@ from app.schemas.v1.school_admins import (
     SchoolAdminCreateRequest,
     SchoolAdminListResponse,
     SchoolAdminResponse,
+    SchoolAdminRolesRequest,
     SchoolAdminStatusRequest,
     SchoolAdminUpdateRequest,
 )
@@ -22,13 +24,33 @@ from app.schemas.v1.schools import (
     SchoolResponse,
     SchoolUpdateRequest,
 )
-from app.services.v1 import audit_service, school_admin_service, school_service
+from app.models.v1.user import STATUS_ACTIVE
+from app.services.v1 import audit_service, password_reset_service, school_admin_service, school_service
 
 router = APIRouter(prefix="/schools", tags=["v1-super-admin-schools"])
+logger = logging.getLogger("eschool.school_admins")
 
 
 def _http(exc: school_service.SchoolServiceError | school_admin_service.SchoolAdminServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _audited(db: Session, detail: str, work, audit):
+    """Run work uncommitted, then commit it with the audit row (same as plans.py)."""
+    try:
+        result = work()
+    except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
+        db.rollback()
+        raise _http(exc) from exc
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    try:
+        audit(result)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    return result
 
 
 @router.post("", response_model=SchoolResponse, status_code=status.HTTP_201_CREATED)
@@ -277,7 +299,14 @@ def create_school_admin(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolAdminResponse:
-    try:
+    """Create a School Admin. Without a password, an invitation link is emailed instead.
+
+    The account, its roles, any setup token and the audit row commit together.
+    Mail is sent only after that commit, and invite_sent reports the real result.
+    """
+    invite = body.password is None
+
+    def work():
         user = school_admin_service.create_school_admin(
             db,
             school_id,
@@ -286,14 +315,73 @@ def create_school_admin(
             first_name=body.first_name,
             last_name=body.last_name,
             mobile=body.mobile,
+            roles=body.roles,
+            status=body.status,
+            commit=False,
         )
+        mail = password_reset_service.prepare_invitation(db, user) if invite else None
+        return user, mail
+
+    user, mail = _audited(
+        db,
+        "School admin could not be created",
+        work,
+        lambda result: audit_service.record_audit(
+            db, actor=auth.user, action="school_admin.create", entity_type="school_admin",
+            entity_id=result[0].id, school_id=school_id,
+            metadata={
+                "email": result[0].email,
+                "roles": school_admin_service.describe_admin(db, result[0])["roles"],
+                "status": result[0].status,
+                "invitation": invite,
+            },
+        ),
+    )
+    invite_sent = _deliver_invitation(db, auth, user, school_id, mail) if invite else None
+    return _admin_response(db, user, invite_sent=invite_sent)
+
+
+def _deliver_invitation(db: Session, auth: AuthContext, user, school_id: int, mail) -> bool:
+    """Send a committed invitation and audit the outcome. Never raises for mail problems."""
+    sent = password_reset_service.send(mail)
+    try:
+        audit_service.record_audit(
+            db, actor=auth.user, action="school_admin.invite", entity_type="school_admin",
+            entity_id=user.id, school_id=school_id, metadata={"invite_sent": sent},
+        )
+    except Exception:
+        logger.exception("school_admin_invite_audit_failed")
+    return sent
+
+
+def _admin_response(db: Session, user, *, invite_sent: bool | None = None) -> SchoolAdminResponse:
+    return SchoolAdminResponse(**school_admin_service.describe_admin(db, user), invite_sent=invite_sent)
+
+
+@router.post("/{school_id}/admins/{admin_id}/invite", response_model=SchoolAdminResponse)
+def invite_school_admin(
+    school_id: int,
+    admin_id: uuid.UUID,
+    auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SchoolAdminResponse:
+    """Email a new password-setup link. Earlier unused links stop working.
+
+    invite_sent=false when mail is not configured or delivery failed.
+    """
+    try:
+        user = school_admin_service.get_school_admin(db, school_id, admin_id)
     except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
         raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="school_admin.create", entity_type="school_admin",
-        entity_id=user.id, school_id=school_id, metadata={"email": user.email},
-    )
-    return SchoolAdminResponse.model_validate(user)
+    if user.status != STATUS_ACTIVE:
+        raise HTTPException(status_code=422, detail="Activate the account before sending an invitation")
+    try:
+        mail = password_reset_service.prepare_invitation(db, user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Invitation could not be created") from None
+    return _admin_response(db, user, invite_sent=_deliver_invitation(db, auth, user, school_id, mail))
 
 
 @router.get("/{school_id}/admins", response_model=SchoolAdminListResponse)
@@ -301,13 +389,24 @@ def list_school_admins(
     school_id: int,
     _auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, description="Case-insensitive partial match on first name, last name, full name or email."),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=1, description="1 = active, 0 = inactive. Omit for both."),
+    role: str | None = Query(default=None, description="Admin role key from GET /super-admin/roles."),
+    sort: str | None = Query(default=None, description=school_admin_service.ADMIN_SORT_HELP),
 ) -> SchoolAdminListResponse:
     try:
-        items = school_admin_service.list_school_admins(db, school_id)
+        rows, total = school_admin_service.list_school_admins(
+            db, school_id, page=page, page_size=page_size, q=q, status=status_filter, role=role, sort=sort,
+        )
     except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
         raise _http(exc) from exc
     return SchoolAdminListResponse(
-        items=[SchoolAdminResponse.model_validate(u) for u in items],
+        items=[SchoolAdminResponse(**item) for item in school_admin_service.describe_admins(db, rows)],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -322,7 +421,7 @@ def get_school_admin(
         user = school_admin_service.get_school_admin(db, school_id, admin_id)
     except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
         raise _http(exc) from exc
-    return SchoolAdminResponse.model_validate(user)
+    return _admin_response(db, user)
 
 
 @router.patch("/{school_id}/admins/{admin_id}", response_model=SchoolAdminResponse)
@@ -334,8 +433,11 @@ def patch_school_admin(
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolAdminResponse:
     fields_set = body.model_fields_set
-    try:
-        user = school_admin_service.update_school_admin(
+    # changed_fields may include "password" as a name; the value is never logged.
+    user, _changed = _audited(
+        db,
+        "School admin could not be updated",
+        lambda: school_admin_service.update_school_admin(
             db,
             school_id,
             admin_id,
@@ -344,14 +446,15 @@ def patch_school_admin(
             mobile=body.mobile,
             mobile_set="mobile" in fields_set,
             password=body.password,
-        )
-    except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="school_admin.update", entity_type="school_admin",
-        entity_id=user.id, school_id=school_id, metadata={"email": user.email},
+            commit=False,
+        ),
+        lambda result: audit_service.record_audit(
+            db, actor=auth.user, action="school_admin.update", entity_type="school_admin",
+            entity_id=result[0].id, school_id=school_id,
+            metadata={"email": result[0].email, "changed_fields": result[1]},
+        ),
     )
-    return SchoolAdminResponse.model_validate(user)
+    return _admin_response(db, user)
 
 
 @router.patch("/{school_id}/admins/{admin_id}/status", response_model=SchoolAdminResponse)
@@ -362,17 +465,38 @@ def patch_school_admin_status(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolAdminResponse:
-    try:
-        user = school_admin_service.set_school_admin_status(
-            db,
-            school_id,
-            admin_id,
-            status=body.status,
-        )
-    except (school_service.SchoolServiceError, school_admin_service.SchoolAdminServiceError) as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db, actor=auth.user, action="school_admin.status", entity_type="school_admin",
-        entity_id=user.id, school_id=school_id, metadata={"status": user.status},
+    user, _previous, _revoked = _audited(
+        db,
+        "School admin status could not be changed",
+        lambda: school_admin_service.set_school_admin_status(
+            db, school_id, admin_id, status=body.status, commit=False,
+        ),
+        lambda result: audit_service.record_audit(
+            db, actor=auth.user, action="school_admin.status", entity_type="school_admin",
+            entity_id=result[0].id, school_id=school_id,
+            metadata={"previous_status": result[1], "status": result[0].status, "sessions_revoked": result[2]},
+        ),
     )
-    return SchoolAdminResponse.model_validate(user)
+    return _admin_response(db, user)
+
+
+@router.patch("/{school_id}/admins/{admin_id}/roles", response_model=SchoolAdminResponse)
+def patch_school_admin_roles(
+    school_id: int,
+    admin_id: uuid.UUID,
+    body: SchoolAdminRolesRequest,
+    auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SchoolAdminResponse:
+    """Replace the admin's roles (keys from GET /super-admin/roles). Super Admin only."""
+    user, _previous, _roles = _audited(
+        db,
+        "School admin roles could not be changed",
+        lambda: school_admin_service.set_school_admin_roles(db, school_id, admin_id, roles=body.roles),
+        lambda result: audit_service.record_audit(
+            db, actor=auth.user, action="school_admin.roles", entity_type="school_admin",
+            entity_id=result[0].id, school_id=school_id,
+            metadata={"previous_roles": result[1], "roles": result[2]},
+        ),
+    )
+    return _admin_response(db, user)

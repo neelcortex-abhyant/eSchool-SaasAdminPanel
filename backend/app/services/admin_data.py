@@ -18,6 +18,7 @@ from app.models.tables import (
     SystemSetting,
     User,
 )
+from app.services.mobile_auth import is_staff, user_roles
 
 
 def _find_admin(db: Session, login: str, school_id: int | None) -> User | None:
@@ -40,6 +41,10 @@ def login_admin(central: Session, school_db: Session | None, school: School | No
     if school is not None and school.installed != 1:
         return {"error": True, "message": "Invalid school identifier."}, 422
     if school is not None and user.school_id is not None and user.school_id != school.id:
+        return {"error": True, "message": "The provided credentials do not match our records."}, 401
+    # School accounts need a staff role from model_has_roles. Students and parents
+    # get the same message as a wrong password.
+    if user.school_id is not None and not is_staff(user_roles(db, user.id)):
         return {"error": True, "message": "The provided credentials do not match our records."}, 401
     payload = {
         "uid": user.id,

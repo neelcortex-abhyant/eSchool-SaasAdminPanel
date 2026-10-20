@@ -30,7 +30,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, assert_school_scope, get_current_auth, require_school_admin
+from app.api.v1.deps import (
+    AuthContext,
+    assert_school_permission,
+    assert_school_scope,
+    get_current_auth,
+    require_school_admin,
+)
 from app.core.config import get_settings
 from app.models.tables import PAYMENT_STATUS_CAPTURED, PaymentTransaction, SubscriptionBill
 from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
@@ -41,6 +47,7 @@ from app.schemas.v1.payments import (
     PaymentVerifyResponse,
     WebhookReceiptResponse,
 )
+from app.services.v1 import rbac
 from app.services.v1.payment_order_service import PaymentCaller, PaymentOrderError, create_payment_order
 from app.services.v1.payment_verification_service import (
     payment_status_name,
@@ -55,11 +62,16 @@ def require_payment_initiator(
     auth: Annotated[AuthContext, Depends(get_current_auth)],
     db: Annotated[Session, Depends(central_db)],
 ) -> AuthContext:
-    """Super Admin, or a school admin whose school is active and installed."""
+    """Super Admin, or a school admin whose school is active and installed.
+
+    School admins also need settings.manage: subscription billing is a school setting.
+    """
     if auth.user.role == ROLE_SUPER_ADMIN:
         return auth
     if auth.user.role == ROLE_SCHOOL_ADMIN:
-        return require_school_admin(auth, db)
+        require_school_admin(auth, db)
+        assert_school_permission(auth, db, rbac.PERM_SETTINGS)
+        return auth
     raise HTTPException(status_code=403, detail="Forbidden")
 
 

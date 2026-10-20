@@ -9,23 +9,26 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, assert_school_scope, require_school_admin
+from app.api.v1.deps import AuthContext, assert_school_scope, require_school_permission
 from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
-from app.services.v1 import school_service
+from app.services.v1 import rbac, school_service
 
 router = APIRouter(prefix="/school-admin", tags=["v1-school-admin"])
 
+# Basic school context. Every admin role grants dashboard.view.
+require_school_context = require_school_permission(rbac.PERM_DASHBOARD)
+
 
 @router.get("/me", response_model=UserResponse)
-def school_admin_me(auth: Annotated[AuthContext, Depends(require_school_admin)]) -> UserResponse:
+def school_admin_me(auth: Annotated[AuthContext, Depends(require_school_context)]) -> UserResponse:
     return UserResponse.model_validate(auth.user)
 
 
 @router.get("/school", response_model=SchoolResponse)
 def school_admin_own_school(
-    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
     """Return the school bound to the authenticated School Admin (server-side school_id)."""
@@ -38,7 +41,7 @@ def school_admin_own_school(
 
 @router.get("/sessions")
 def school_admin_sessions(
-    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
 ) -> dict:
     """Session years for the signed-in school only."""
@@ -59,7 +62,7 @@ def school_admin_sessions(
 @router.get("/schools/{school_id}", response_model=SchoolResponse)
 def school_admin_school_by_id(
     school_id: int,
-    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
     """School data only when school_id matches auth.user.school_id (tenant isolation)."""

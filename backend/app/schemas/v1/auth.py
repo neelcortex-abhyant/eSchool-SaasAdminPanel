@@ -26,6 +26,23 @@ class ChangePasswordRequest(BaseModel):
     confirm_password: str = Field(min_length=8, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    # Sent by the admin panel. Accepted for compatibility and ignored: reset
+    # links always use the server's ADMIN_RESET_URL.
+    app_origin: Optional[str] = Field(default=None, max_length=512)
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

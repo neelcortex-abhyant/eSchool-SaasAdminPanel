@@ -63,7 +63,7 @@ def test_parent_and_teacher_and_staff_login(client):
         "/api/teacher/login",
         data={"email": "student@school.test", "password": "secret", "school_code": "DEMO"},
     )
-    assert student_as_teacher.json()["message"] == "You must have a teacher / Staff role to log in."
+    assert student_as_teacher.json()["message"] == "Invalid Login Credentials"
     teacher = client.post(
         "/api/staff/login",
         data={"email": "teacher@school.test", "password": "secret", "school_code": "DEMO"},
@@ -218,6 +218,9 @@ def test_admin_login_dashboard_and_domain_lists(client):
     counts = client.get("/api/admin/dashboard").json()["data"]
     assert counts["schools"] == 2  # DEMO + OTHER (cross-school isolation fixtures)
     assert counts["packages"] == 1
+    # Platform-wide lists stay available to the platform admin.
+    assert {row["code"] for row in client.get("/api/admin/schools").json()["data"]} == {"DEMO", "OTHER"}
+    assert client.get("/api/admin/packages").json()["data"][0]["name"] == "Basic"
     school_login = client.post(
         "/api/admin/login",
         json={"email": "teacher@school.test", "password": "secret", "code": "DEMO"},
@@ -233,7 +236,11 @@ def test_admin_login_dashboard_and_domain_lists(client):
     assert client.get("/api/admin/announcements").json()["data"][0]["title"] == "Welcome"
     assert client.get("/api/admin/leaves").json()["data"][0]["reason"] == "Trip"
     assert client.get("/api/admin/expenses").json()["data"][0]["title"] == "Books"
-    assert client.get("/api/admin/schools").json()["data"][0]["code"] == "DEMO"
-    assert client.get("/api/admin/packages").json()["data"][0]["name"] == "Basic"
+    # A school-scoped session must not see other schools or the platform package list.
+    school_counts = client.get("/api/admin/dashboard").json()["data"]
+    assert school_counts["schools"] == 0 and school_counts["packages"] == 0
+    assert school_counts["students"] >= 1  # its own school's counts are still reported
+    assert client.get("/api/admin/schools").status_code == 403
+    assert client.get("/api/admin/packages").status_code == 403
     client.post("/api/admin/logout")
     assert client.get("/api/admin/me").status_code == 401

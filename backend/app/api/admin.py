@@ -18,8 +18,11 @@ from app.models.tables import (
     Subject,
     User,
 )
+from app.models.v1.roles import ROLE_SCHOOL_ADMIN
+from app.models.v1.user import User as V1User
 from app.services.admin_data import count, dashboard, login_admin, maintenance_blocks, rows
 from app.services.mobile_auth import find_school
+from app.services.v1 import rbac
 
 router = APIRouter()
 
@@ -221,15 +224,70 @@ def me(request: Request, context=Depends(admin_context)):
         close_admin_db(request)
 
 
+def _is_v1_school_admin(user) -> bool:
+    """True for a v1_users School Admin. Decided by model type, never by role names or id shape:
+    legacy cookie sessions return app.models.tables.User (integer ids, Spatie roles)."""
+    return isinstance(user, V1User) and user.role == ROLE_SCHOOL_ADMIN
+
+
 def _guard(request: Request, context=Depends(admin_context)):
+    """Platform-level guard. Fails closed for v1 School Admins: every route they may use
+    must declare its permission with _guard_for(). Legacy cookie users are unchanged."""
+    _db, user, _school_id = context
+    if _is_v1_school_admin(user):
+        raise HTTPException(status_code=403, detail="Permission denied")
     return context
 
 
+def _guard_for(permission: str):
+    """Guard that requires `permission` (services/v1/rbac.py) from v1 School Admins.
+
+    Legacy cookie users and platform admins pass as before. An unknown permission key
+    fails at import time, so a typo can never grant access.
+    """
+    if permission not in rbac.PERMISSIONS:
+        raise ValueError(f"Unknown permission: {permission}")
+
+    def guard(request: Request, context=Depends(admin_context)):
+        db, user, _school_id = context
+        if _is_v1_school_admin(user) and permission not in rbac.permissions_for(db, user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        return context
+
+    return guard
+
+
+def _platform_guard(request: Request, context=Depends(admin_context)):
+    """Platform-wide data (all schools, all packages). School-scoped callers are refused."""
+    _db, _user, school_id = context
+    if school_id is not None:
+        raise HTTPException(status_code=403, detail="Only a platform admin can view this list")
+    return context
+
+
+# Same permissions as /api/v1/school-admin/academics (see RESOURCE_PERMISSIONS there).
+dashboard_guard = _guard_for(rbac.PERM_DASHBOARD)
+structure_read_guard = _guard_for(rbac.PERM_DASHBOARD)
+structure_write_guard = _guard_for(rbac.PERM_SCHOOL)
+students_guard = _guard_for(rbac.PERM_STUDENTS)
+attendance_guard = _guard_for(rbac.PERM_ATTENDANCE)
+exams_guard = _guard_for(rbac.PERM_EXAMS)
+fees_guard = _guard_for(rbac.PERM_FEES)
+announcements_guard = _guard_for(rbac.PERM_SCHOOL)
+leaves_guard = _guard_for(rbac.PERM_TEACHERS)
+
+
 @router.get("/dashboard")
-def dashboard_route(request: Request, central: Session = Depends(central_db), context=Depends(_guard)):
+def dashboard_route(request: Request, central: Session = Depends(central_db), context=Depends(dashboard_guard)):
     db, _user, school_id = context
     try:
-        return {"error": False, "data": dashboard(db, central, school_id)}
+        data = dashboard(db, central, school_id)
+        if school_id is not None:
+            # schools/packages are platform-wide totals. Keep the keys so the shape is
+            # unchanged, but never reveal them to a school-scoped caller.
+            data["schools"] = 0
+            data["packages"] = 0
+        return {"error": False, "data": data}
     finally:
         close_admin_db(request)
 
@@ -243,52 +301,52 @@ def _list(request: Request, model, serializer, context):
 
 
 @router.get("/students")
-def students(request: Request, context=Depends(_guard)):
+def students(request: Request, context=Depends(students_guard)):
     return _list(request, Student, _student, context)
 
 
 @router.get("/classes")
-def classes(request: Request, context=Depends(_guard)):
+def classes(request: Request, context=Depends(structure_read_guard)):
     return _list(request, SchoolClass, _class, context)
 
 
 @router.get("/subjects")
-def subjects(request: Request, context=Depends(_guard)):
+def subjects(request: Request, context=Depends(structure_read_guard)):
     return _list(request, Subject, _subject, context)
 
 
 @router.get("/attendances")
-def attendances(request: Request, context=Depends(_guard)):
+def attendances(request: Request, context=Depends(attendance_guard)):
     return _list(request, Attendance, _attendance, context)
 
 
 @router.get("/exams")
-def exams(request: Request, context=Depends(_guard)):
+def exams(request: Request, context=Depends(exams_guard)):
     return _list(request, Exam, _exam, context)
 
 
 @router.get("/fees")
-def fees(request: Request, context=Depends(_guard)):
+def fees(request: Request, context=Depends(fees_guard)):
     return _list(request, Fee, _fee, context)
 
 
 @router.get("/announcements")
-def announcements(request: Request, context=Depends(_guard)):
+def announcements(request: Request, context=Depends(announcements_guard)):
     return _list(request, Announcement, _announcement, context)
 
 
 @router.get("/leaves")
-def leaves(request: Request, context=Depends(_guard)):
+def leaves(request: Request, context=Depends(leaves_guard)):
     return _list(request, Leave, _leave, context)
 
 
 @router.get("/expenses")
-def expenses(request: Request, context=Depends(_guard)):
+def expenses(request: Request, context=Depends(fees_guard)):
     return _list(request, Expense, _expense, context)
 
 
 @router.get("/schools")
-def schools(request: Request, central: Session = Depends(central_db), context=Depends(_guard)):
+def schools(request: Request, central: Session = Depends(central_db), context=Depends(_platform_guard)):
     try:
         return {"error": False, "data": rows(central, School, None, _school)}
     finally:
@@ -296,7 +354,7 @@ def schools(request: Request, central: Session = Depends(central_db), context=De
 
 
 @router.get("/schools/{row_id}")
-def school_detail(row_id: int, request: Request, context=Depends(_guard)):
+def school_detail(row_id: int, request: Request, context=Depends(dashboard_guard)):
     db, _user, actor_school = context
     try:
         if actor_school is not None and actor_school != row_id:
@@ -333,7 +391,7 @@ def school_detail(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.get("/packages")
-def packages(request: Request, central: Session = Depends(central_db), context=Depends(_guard)):
+def packages(request: Request, central: Session = Depends(central_db), context=Depends(_platform_guard)):
     try:
         return {"error": False, "data": rows(central, Package, None, _package)}
     finally:

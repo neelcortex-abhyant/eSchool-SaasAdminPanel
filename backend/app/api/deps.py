@@ -7,10 +7,12 @@ from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import session_factory
-from app.core.responses import VALIDATION_ERROR, fail
+from sqlalchemy import select
+
+from app.core.responses import INACTIVATED_USER, VALIDATION_ERROR, fail
 from app.core.security import read_session
-from app.models.tables import School, User
-from app.services.mobile_auth import find_school, find_token_user
+from app.models.tables import School, Student, User
+from app.services.mobile_auth import find_school, find_token_user, is_staff, user_roles
 
 
 class ApiError(Exception):
@@ -113,10 +115,16 @@ def admin_context(
     # Single Neon DB: always use the shared session. Cookie `db` is legacy metadata only.
     db = central
     user = db.get(User, payload.get("uid"))
-    if user is None or user.deleted_at is not None:
+    if user is None or user.deleted_at is not None or user.status != 1:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Unauthenticated")
+    # The signed cookie only carries a user id. Roles are read again on every
+    # request so students and parents never get the school admin API.
+    if user.school_id is not None and not is_staff(user_roles(db, user.id)):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=403, detail="This account cannot use the school admin API")
     # If the cookie carries a school code, enforce school_id match for school admins.
     code = payload.get("code")
     if code:
@@ -171,6 +179,51 @@ def require_tenant_user(
     user = find_token_user(db, _bearer(authorization))
     if user is None or user.deleted_at is not None:
         raise ApiError(fail("Unauthenticated.", code=401))
-    if not assert_user_in_school(user, school):
+    # Mobile tokens are only issued to users of one school. A user without a
+    # school must not pass for every school code.
+    if user.school_id is None or user.school_id != school.id:
         raise ApiError(fail("Unauthenticated.", code=401))
+    # Existing tokens stop working once the account or school is deactivated.
+    if user.status != 1 or school.status == 0:
+        raise ApiError(fail("your_account_has_been_deactivated_please_contact_admin", code=INACTIVATED_USER))
     yield db, user, school
+
+
+def tenant_student(db: Session, user: User, school: School) -> Student | None:
+    return db.scalar(
+        select(Student).where(
+            Student.user_id == user.id,
+            Student.school_id == school.id,
+            Student.deleted_at.is_(None),
+        )
+    )
+
+
+def require_student_user(
+    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+) -> Tuple[Session, User, School]:
+    """Student app routes: the token user must have a student record in this school."""
+    db, user, school = tenant
+    if tenant_student(db, user, school) is None:
+        raise ApiError(fail("Unauthorized Access"))
+    return tenant
+
+
+def require_guardian_user(
+    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+) -> Tuple[Session, User, School]:
+    """Parent app routes: the token user must hold the Guardian role."""
+    db, user, _school = tenant
+    if "Guardian" not in user_roles(db, user.id):
+        raise ApiError(fail("Unauthorized Access"))
+    return tenant
+
+
+def require_staff_user(
+    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+) -> Tuple[Session, User, School]:
+    """Staff app routes: teacher, school admin, driver or other staff role."""
+    db, user, _school = tenant
+    if not is_staff(user_roles(db, user.id)):
+        raise ApiError(fail("Unauthorized Access"))
+    return tenant

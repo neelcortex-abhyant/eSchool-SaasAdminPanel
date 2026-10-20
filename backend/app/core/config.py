@@ -51,6 +51,25 @@ class Settings(BaseSettings):
     razorpay_webhook_secret: SecretStr = SecretStr("")
     razorpay_currency: str = "INR"
 
+    # Outgoing mail for School Admin invitations and password resets. Mail is
+    # only sent when smtp_host, smtp_from and admin_reset_url are all set.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
+    # STARTTLS on smtp_port (587). Set smtp_use_ssl for implicit TLS (465) instead.
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    # Admin panel page that accepts ?token=. Never taken from the client request.
+    admin_reset_url: str = ""
+    password_reset_ttl_minutes: int = 60
+    invite_ttl_minutes: int = 4320
+
+    @property
+    def mail_configured(self) -> bool:
+        return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.frontend_origin.split(",") if origin.strip()]

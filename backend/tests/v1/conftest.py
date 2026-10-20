@@ -24,6 +24,10 @@ from app.core.v1_database import reset_v1_engine
 
 @pytest.fixture()
 def v1_client():
+    from app.core.rate_limit import reset_limits
+
+    # Login/reset limits are in-process; start every test with empty counters.
+    reset_limits()
     get_settings.cache_clear()
     reset_v1_engine()
     reset_engines()

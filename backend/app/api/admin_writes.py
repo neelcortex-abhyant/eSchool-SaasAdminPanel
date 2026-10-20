@@ -13,6 +13,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.admin import (
     _announcement,
+    announcements_guard,
+    attendance_guard,
+    exams_guard,
+    fees_guard,
+    leaves_guard,
+    structure_write_guard,
+    students_guard,
     _attendance,
     _class,
     _exam,
@@ -27,6 +34,7 @@ from app.api.admin import (
 )
 from app.api.deps import close_admin_db
 from app.core.security import hash_password
+from app.services.v1.school_academics import REFERENCE_FIELDS, AcademicError, check_references
 from app.models.tables import (
     Announcement,
     Attendance,
@@ -63,9 +71,19 @@ def _get_owned(db, model, row_id: int, school_id: int | None):
     row = db.get(model, row_id)
     if row is None or getattr(row, "deleted_at", None) is not None:
         raise HTTPException(status_code=404, detail="Record not found")
-    if school_id is not None and getattr(row, "school_id", None) not in (None, school_id):
+    if school_id is not None and getattr(row, "school_id", None) != school_id:
         raise HTTPException(status_code=403, detail="Cross-school access denied")
     return row
+
+
+def _check_refs(db, school_id: int, row, data: dict) -> None:
+    """422 unless every related id in `data` (class, section, session year, medium,
+    class section, student, user, guardian) belongs to `school_id`. Same rule as the
+    v1 academics API: a related row with a NULL or different school_id is rejected."""
+    try:
+        check_references(db, school_id, row, data)
+    except AcademicError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 def _touch(row) -> None:
@@ -206,10 +224,11 @@ class PackageWrite(BaseModel):
 
 
 @router.post("/students", status_code=201)
-def create_student(body: StudentWrite, request: Request, context=Depends(_guard)):
+def create_student(body: StudentWrite, request: Request, context=Depends(students_guard)):
     db, _user, actor_school = context
     try:
         school_id = _school_id(body.school_id, actor_school)
+        _check_refs(db, school_id, Student(), body.model_dump())
         user = User(
             first_name=body.first_name.strip(),
             last_name=body.last_name.strip(),
@@ -247,10 +266,11 @@ def create_student(body: StudentWrite, request: Request, context=Depends(_guard)
 
 
 @router.patch("/students/{row_id}")
-def update_student(row_id: int, body: StudentPatch, request: Request, context=Depends(_guard)):
+def update_student(row_id: int, body: StudentPatch, request: Request, context=Depends(students_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Student, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         data = body.model_dump(exclude_unset=True)
         for key, value in data.items():
             setattr(row, key, value)
@@ -263,7 +283,7 @@ def update_student(row_id: int, body: StudentPatch, request: Request, context=De
 
 
 @router.delete("/students/{row_id}")
-def delete_student(row_id: int, request: Request, context=Depends(_guard)):
+def delete_student(row_id: int, request: Request, context=Depends(students_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Student, row_id, actor_school))
@@ -273,6 +293,8 @@ def delete_student(row_id: int, request: Request, context=Depends(_guard)):
 
 
 def _simple_create(db, row, serializer):
+    if getattr(row, "school_id", None) is not None:
+        _check_refs(db, row.school_id, row, {key: getattr(row, key, None) for key in REFERENCE_FIELDS})
     db.add(row)
     try:
         db.commit()
@@ -284,7 +306,7 @@ def _simple_create(db, row, serializer):
 
 
 @router.post("/classes", status_code=201)
-def create_class(body: ClassWrite, request: Request, context=Depends(_guard)):
+def create_class(body: ClassWrite, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         row = SchoolClass(
@@ -301,10 +323,11 @@ def create_class(body: ClassWrite, request: Request, context=Depends(_guard)):
 
 
 @router.patch("/classes/{row_id}")
-def update_class(row_id: int, body: ClassWrite, request: Request, context=Depends(_guard)):
+def update_class(row_id: int, body: ClassWrite, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, SchoolClass, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.name = body.name.strip()
         row.medium_id = body.medium_id
         row.include_semesters = body.include_semesters
@@ -317,7 +340,7 @@ def update_class(row_id: int, body: ClassWrite, request: Request, context=Depend
 
 
 @router.delete("/classes/{row_id}")
-def delete_class(row_id: int, request: Request, context=Depends(_guard)):
+def delete_class(row_id: int, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, SchoolClass, row_id, actor_school))
@@ -327,7 +350,7 @@ def delete_class(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/subjects", status_code=201)
-def create_subject(body: SubjectWrite, request: Request, context=Depends(_guard)):
+def create_subject(body: SubjectWrite, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         row = Subject(
@@ -345,10 +368,11 @@ def create_subject(body: SubjectWrite, request: Request, context=Depends(_guard)
 
 
 @router.patch("/subjects/{row_id}")
-def update_subject(row_id: int, body: SubjectWrite, request: Request, context=Depends(_guard)):
+def update_subject(row_id: int, body: SubjectWrite, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Subject, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.name = body.name.strip()
         row.code = body.code
         row.type = body.type or "Theory"
@@ -362,7 +386,7 @@ def update_subject(row_id: int, body: SubjectWrite, request: Request, context=De
 
 
 @router.delete("/subjects/{row_id}")
-def delete_subject(row_id: int, request: Request, context=Depends(_guard)):
+def delete_subject(row_id: int, request: Request, context=Depends(structure_write_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Subject, row_id, actor_school))
@@ -372,7 +396,7 @@ def delete_subject(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/attendances", status_code=201)
-def create_attendance(body: AttendanceWrite, request: Request, context=Depends(_guard)):
+def create_attendance(body: AttendanceWrite, request: Request, context=Depends(attendance_guard)):
     db, _user, actor_school = context
     try:
         row = Attendance(
@@ -392,10 +416,11 @@ def create_attendance(body: AttendanceWrite, request: Request, context=Depends(_
 
 
 @router.patch("/attendances/{row_id}")
-def update_attendance(row_id: int, body: AttendanceWrite, request: Request, context=Depends(_guard)):
+def update_attendance(row_id: int, body: AttendanceWrite, request: Request, context=Depends(attendance_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Attendance, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.class_section_id = body.class_section_id
         row.student_id = body.student_id
         row.session_year_id = body.session_year_id
@@ -411,7 +436,7 @@ def update_attendance(row_id: int, body: AttendanceWrite, request: Request, cont
 
 
 @router.delete("/attendances/{row_id}")
-def delete_attendance(row_id: int, request: Request, context=Depends(_guard)):
+def delete_attendance(row_id: int, request: Request, context=Depends(attendance_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Attendance, row_id, actor_school))
@@ -421,7 +446,7 @@ def delete_attendance(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/exams", status_code=201)
-def create_exam(body: ExamWrite, request: Request, context=Depends(_guard)):
+def create_exam(body: ExamWrite, request: Request, context=Depends(exams_guard)):
     db, _user, actor_school = context
     try:
         row = Exam(
@@ -440,10 +465,11 @@ def create_exam(body: ExamWrite, request: Request, context=Depends(_guard)):
 
 
 @router.patch("/exams/{row_id}")
-def update_exam(row_id: int, body: ExamWrite, request: Request, context=Depends(_guard)):
+def update_exam(row_id: int, body: ExamWrite, request: Request, context=Depends(exams_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Exam, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.name = body.name.strip()
         row.description = body.description
         row.class_id = body.class_id
@@ -458,7 +484,7 @@ def update_exam(row_id: int, body: ExamWrite, request: Request, context=Depends(
 
 
 @router.delete("/exams/{row_id}")
-def delete_exam(row_id: int, request: Request, context=Depends(_guard)):
+def delete_exam(row_id: int, request: Request, context=Depends(exams_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Exam, row_id, actor_school))
@@ -468,7 +494,7 @@ def delete_exam(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/fees", status_code=201)
-def create_fee(body: FeeWrite, request: Request, context=Depends(_guard)):
+def create_fee(body: FeeWrite, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         row = Fee(
@@ -486,10 +512,11 @@ def create_fee(body: FeeWrite, request: Request, context=Depends(_guard)):
 
 
 @router.patch("/fees/{row_id}")
-def update_fee(row_id: int, body: FeeWrite, request: Request, context=Depends(_guard)):
+def update_fee(row_id: int, body: FeeWrite, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Fee, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.name = body.name.strip()
         row.due_date = body.due_date
         row.due_charges = body.due_charges
@@ -503,7 +530,7 @@ def update_fee(row_id: int, body: FeeWrite, request: Request, context=Depends(_g
 
 
 @router.delete("/fees/{row_id}")
-def delete_fee(row_id: int, request: Request, context=Depends(_guard)):
+def delete_fee(row_id: int, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Fee, row_id, actor_school))
@@ -513,7 +540,7 @@ def delete_fee(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/announcements", status_code=201)
-def create_announcement(body: AnnouncementWrite, request: Request, context=Depends(_guard)):
+def create_announcement(body: AnnouncementWrite, request: Request, context=Depends(announcements_guard)):
     db, _user, actor_school = context
     try:
         row = Announcement(
@@ -530,10 +557,11 @@ def create_announcement(body: AnnouncementWrite, request: Request, context=Depen
 
 
 @router.patch("/announcements/{row_id}")
-def update_announcement(row_id: int, body: AnnouncementWrite, request: Request, context=Depends(_guard)):
+def update_announcement(row_id: int, body: AnnouncementWrite, request: Request, context=Depends(announcements_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Announcement, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.title = body.title.strip()
         row.description = body.description
         row.session_year_id = body.session_year_id
@@ -546,7 +574,7 @@ def update_announcement(row_id: int, body: AnnouncementWrite, request: Request, 
 
 
 @router.delete("/announcements/{row_id}")
-def delete_announcement(row_id: int, request: Request, context=Depends(_guard)):
+def delete_announcement(row_id: int, request: Request, context=Depends(announcements_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Announcement, row_id, actor_school))
@@ -556,7 +584,7 @@ def delete_announcement(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/leaves", status_code=201)
-def create_leave(body: LeaveWrite, request: Request, context=Depends(_guard)):
+def create_leave(body: LeaveWrite, request: Request, context=Depends(leaves_guard)):
     db, _user, actor_school = context
     try:
         if body.to_date < body.from_date:
@@ -578,12 +606,13 @@ def create_leave(body: LeaveWrite, request: Request, context=Depends(_guard)):
 
 
 @router.patch("/leaves/{row_id}")
-def update_leave(row_id: int, body: LeaveWrite, request: Request, context=Depends(_guard)):
+def update_leave(row_id: int, body: LeaveWrite, request: Request, context=Depends(leaves_guard)):
     db, _user, actor_school = context
     try:
         if body.to_date < body.from_date:
             raise HTTPException(status_code=422, detail="to_date must be on or after from_date")
         row = _get_owned(db, Leave, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.user_id = body.user_id
         row.reason = body.reason.strip()
         row.from_date = body.from_date
@@ -599,7 +628,7 @@ def update_leave(row_id: int, body: LeaveWrite, request: Request, context=Depend
 
 
 @router.delete("/leaves/{row_id}")
-def delete_leave(row_id: int, request: Request, context=Depends(_guard)):
+def delete_leave(row_id: int, request: Request, context=Depends(leaves_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Leave, row_id, actor_school))
@@ -609,7 +638,7 @@ def delete_leave(row_id: int, request: Request, context=Depends(_guard)):
 
 
 @router.post("/expenses", status_code=201)
-def create_expense(body: ExpenseWrite, request: Request, context=Depends(_guard)):
+def create_expense(body: ExpenseWrite, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         row = Expense(
@@ -627,10 +656,11 @@ def create_expense(body: ExpenseWrite, request: Request, context=Depends(_guard)
 
 
 @router.patch("/expenses/{row_id}")
-def update_expense(row_id: int, body: ExpenseWrite, request: Request, context=Depends(_guard)):
+def update_expense(row_id: int, body: ExpenseWrite, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         row = _get_owned(db, Expense, row_id, actor_school)
+        _check_refs(db, row.school_id, row, body.model_dump(exclude_unset=True))
         row.title = body.title.strip()
         row.amount = body.amount
         row.date = body.date
@@ -644,7 +674,7 @@ def update_expense(row_id: int, body: ExpenseWrite, request: Request, context=De
 
 
 @router.delete("/expenses/{row_id}")
-def delete_expense(row_id: int, request: Request, context=Depends(_guard)):
+def delete_expense(row_id: int, request: Request, context=Depends(fees_guard)):
     db, _user, actor_school = context
     try:
         _remove(db, _get_owned(db, Expense, row_id, actor_school))

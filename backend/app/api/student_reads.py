@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, Header, Query, Request
 from sqlalchemy import extract, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import central_db, require_tenant_user
+from app.api.deps import central_db, require_guardian_user, require_staff_user, require_student_user, require_tenant_user
 from app.core.responses import (
     INACTIVE_CHILD,
     INVALID_PASSWORD,
@@ -150,7 +150,13 @@ def _system_settings_map(central: Session) -> Dict[str, str]:
 
 
 def _student_for_user(db: Session, user: User) -> Optional[Student]:
-    return db.scalar(select(Student).where(Student.user_id == user.id, Student.deleted_at.is_(None)))
+    return db.scalar(
+        select(Student).where(
+            Student.user_id == user.id,
+            Student.school_id == user.school_id,
+            Student.deleted_at.is_(None),
+        )
+    )
 
 
 def _guardian_child(db: Session, guardian: User, child_id: Optional[int]) -> Optional[Student]:
@@ -160,6 +166,8 @@ def _guardian_child(db: Session, guardian: User, child_id: Optional[int]) -> Opt
         select(Student).where(
             Student.id == child_id,
             Student.guardian_id == guardian.id,
+            # A guardian linked to children in several schools only sees this school's.
+            Student.school_id == guardian.school_id,
             Student.deleted_at.is_(None),
         )
     )
@@ -369,7 +377,7 @@ async def school_settings(
 
 @router.get("/student/school-settings")
 async def student_school_settings(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     return ok("Settings Fetched Successfully.", _school_settings_bootstrap(db, user, school))
@@ -425,7 +433,8 @@ async def session_years(
     db, user, school = tenant
     school_id = school.id
     if child_id is not None:
-        child = _guardian_child(db, user, child_id) or db.get(Student, child_id)
+        # Only a child linked to this guardian; any other student id is refused.
+        child = _guardian_child(db, user, child_id)
         if child is None:
             return validation_error("Invalid child selected.")
         school_id = child.school_id
@@ -463,7 +472,7 @@ async def school_details(
 
 @router.get("/staff/features-permission")
 async def staff_features_permission(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_staff_user),
 ):
     db, user, _school = tenant
     roles = user_roles(db, user.id)
@@ -558,7 +567,7 @@ async def forgot_password(
 
 @router.get("/student/get-profile-data")
 async def student_profile(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     student = _student_for_user(db, user)
@@ -571,7 +580,7 @@ async def student_profile(
 
 @router.get("/student/subjects")
 async def student_subjects(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     return ok("Student Subject Fetched Successfully.", _subjects_bundle(db, school.id))
@@ -579,7 +588,7 @@ async def student_subjects(
 
 @router.get("/student/timetable")
 async def student_timetable(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     return ok("Timetable Fetched Successfully", [])
 
@@ -588,7 +597,7 @@ async def student_timetable(
 async def student_attendance(
     month: Optional[int] = Query(default=None),
     year: Optional[int] = Query(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     student = _student_for_user(db, user)
@@ -600,14 +609,14 @@ async def student_attendance(
 
 @router.get("/student/assignments")
 async def student_assignments(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     return ok("Data Fetched Successfully", [])
 
 
 @router.get("/student/get-exam-list")
 async def student_exam_list(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     student = _student_for_user(db, user)
@@ -618,7 +627,7 @@ async def student_exam_list(
 @router.get("/student/announcements")
 async def student_announcements(
     page: Optional[int] = Query(default=1),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, school = tenant
     sy = default_session_year(db, school.id)
@@ -632,7 +641,7 @@ async def student_announcements(
 
 @router.get("/student/guradian-details")
 async def student_guardian_details(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_student_user),
 ):
     db, user, _school = tenant
     student = _student_for_user(db, user)
@@ -647,12 +656,9 @@ async def student_guardian_details(
 
 @router.get("/parent/get-data")
 async def parent_get_data(
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
-    roles = user_roles(db, user.id)
-    if "Guardian" not in roles:
-        return fail("Unauthorized Access")
     sy = default_session_year(db, school.id)
     children: List[Student] = []
     if sy is not None:
@@ -672,7 +678,7 @@ async def parent_get_data(
 @router.get("/parent/subjects")
 async def parent_subjects(
     child_id: Optional[int] = Query(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is None:
@@ -688,7 +694,7 @@ async def parent_attendance(
     child_id: Optional[int] = Query(default=None),
     month: Optional[int] = Query(default=None),
     year: Optional[int] = Query(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is None:
@@ -703,7 +709,7 @@ async def parent_attendance(
 @router.get("/parent/get-exam-list")
 async def parent_exam_list(
     child_id: Optional[int] = Query(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is None:
@@ -719,7 +725,7 @@ async def parent_exam_list(
 async def parent_announcements(
     child_id: Optional[int] = Query(default=None),
     page: Optional[int] = Query(default=1),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is not None:
@@ -738,7 +744,7 @@ async def parent_announcements(
 @router.get("/parent/school-settings")
 async def parent_school_settings(
     child_id: Optional[int] = Query(default=None),
-    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
 ):
     db, user, school = tenant
     if child_id is None:

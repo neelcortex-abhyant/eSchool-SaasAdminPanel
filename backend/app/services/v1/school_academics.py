@@ -74,6 +74,28 @@ def _same_school(db: Session, model, row_id: int, school_id: int, label: str):
     return row
 
 
+# Foreign keys a generic PATCH may set, with the model that must belong to the school.
+_REFERENCES = {
+    "class_id": (SchoolClass, "Class"),
+    "section_id": (Section, "Section"),
+    "session_year_id": (SessionYear, "Session year"),
+    "medium_id": (Medium, "Medium"),
+    "class_section_id": (ClassSection, "Class section"),
+    "student_id": (Student, "Student"),
+    "user_id": (User, "User"),
+    "guardian_id": (User, "Guardian"),
+}
+REFERENCE_FIELDS = tuple(_REFERENCES)
+
+
+def check_references(db: Session, school_id: int, row, data: dict) -> None:
+    """Reject updates that point a row at another school's records (422)."""
+    for key, (model, label) in _REFERENCES.items():
+        value = data.get(key)
+        if value is not None and hasattr(row, key):
+            _same_school(db, model, int(value), school_id, label)
+
+
 def _commit(db: Session) -> None:
     try:
         db.commit()

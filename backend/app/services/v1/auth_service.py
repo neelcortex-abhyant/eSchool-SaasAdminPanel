@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from app.models.tables import School
 from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN, ROLE_USER
 from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
+from app.services.v1 import audit_service
 
 
 class AuthError(Exception):
@@ -157,10 +160,23 @@ def register_super_admin(
     return create_session(db, user)
 
 
+@lru_cache(maxsize=1)
+def _dummy_hash() -> str:
+    return hash_password(secrets.token_urlsafe(16))
+
+
+def _check_credentials(user: User | None, password: str) -> bool:
+    """bcrypt runs even for unknown emails, so timing does not reveal which emails exist."""
+    if user is None:
+        verify_password(password, _dummy_hash())
+        return False
+    return verify_password(password, user.password_hash)
+
+
 def login(db: Session, *, email: str, password: str) -> IssuedSession:
     normalized = normalize_email(email)
     user = db.scalar(select(User).where(User.email == normalized))
-    if user is None or not verify_password(password, user.password_hash):
+    if not _check_credentials(user, password):
         raise AuthError("Invalid email or password", status_code=401)
     if user.status != STATUS_ACTIVE:
         raise AuthError("Account inactive", status_code=403)
@@ -191,10 +207,13 @@ def login_super_admin(db: Session, *, email: str, password: str) -> IssuedSessio
     """Login that requires role=super_admin after credential check."""
     normalized = normalize_email(email)
     user = db.scalar(select(User).where(User.email == normalized))
-    if user is None or not verify_password(password, user.password_hash):
+    if not _check_credentials(user, password):
         raise AuthError("Invalid email or password", status_code=401)
+    # Same answer as a wrong password, so this endpoint does not reveal other roles' accounts.
     if user.role != ROLE_SUPER_ADMIN:
-        raise AuthError("Forbidden", status_code=403)
+        raise AuthError("Invalid email or password", status_code=401)
+    if user.status != STATUS_ACTIVE:
+        raise AuthError("Account inactive", status_code=403)
     return create_session(db, user)
 
 
@@ -247,10 +266,22 @@ def change_password(
             AuthSession.revoked_at.is_(None),
         )
     )
+    revoked = 0
     for other in others:
         other.revoked_at = now
+        revoked += 1
     db.add(user)
-    db.commit()
+    db.flush()
+    # Same commit as the password change. Never records the password.
+    audit_service.record_audit(
+        db,
+        actor=user,
+        action="auth.password_change",
+        entity_type="user",
+        entity_id=user.id,
+        school_id=user.school_id,
+        metadata={"other_sessions_revoked": revoked},
+    )
 
 
 def logout(db: Session, session: AuthSession) -> None:
