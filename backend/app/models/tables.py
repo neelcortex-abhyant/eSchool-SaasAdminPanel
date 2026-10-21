@@ -136,59 +136,140 @@ class PersonalAccessToken(Base, TimestampMixin):
 
 
 class SessionYear(Base, TimestampMixin):
+    """School academic year. Soft-deleted rows keep history; names may be reused after delete.
+
+    Uniqueness (active): (school_id, lower(btrim(name))) — migration 0018.
+    At most one active default=1 per school — migration 0022.
+    Legacy school_id is an integer (no DB FK to schools); tenant checks are app-level.
+    """
+
     __tablename__ = "session_years"
+    __table_args__ = (
+        Index(
+            "uq_session_years_school_name_active",
+            "school_id",
+            text("lower(btrim(name))"),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_session_years_school_default_active",
+            "school_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND \"default\" = 1"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
     default: Mapped[int] = mapped_column(Integer, default=0)
     start_date: Mapped[DateType] = mapped_column(Date)
     end_date: Mapped[DateType] = mapped_column(Date)
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Medium(Base, TimestampMixin):
+    """Instruction medium (e.g. English). School-scoped; soft-deleteable."""
+
     __tablename__ = "mediums"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Section(Base, TimestampMixin):
+    """School-level section name catalog (no class_id). Linked to classes via ClassSection."""
+
     __tablename__ = "sections"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class SchoolClass(Base, TimestampMixin):
+    """School class within a medium. Soft-deleted rows keep history.
+
+    Uniqueness (active): (school_id, medium_id, lower(btrim(name))) — migration 0019.
+    medium_id is a legacy integer reference (no DB FK); validated in services.
+    """
+
     __tablename__ = "classes"
+    __table_args__ = (
+        Index(
+            "uq_classes_school_medium_name_active",
+            "school_id",
+            "medium_id",
+            text("lower(btrim(name))"),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_classes_medium_id", "medium_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
     include_semesters: Mapped[int] = mapped_column(Integer, default=0)
     medium_id: Mapped[int] = mapped_column(Integer)
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class ClassSection(Base, TimestampMixin):
+    """Maps a school Section onto a SchoolClass (and medium) within one school.
+
+    Uniqueness (active): (school_id, class_id, section_id) — migration 0020.
+    class_id / section_id / medium_id are legacy integers (no DB FKs); validated in services.
+    """
+
     __tablename__ = "class_sections"
+    __table_args__ = (
+        Index(
+            "uq_class_sections_school_class_section_active",
+            "school_id",
+            "class_id",
+            "section_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_class_sections_class_id", "class_id"),
+        Index("ix_class_sections_section_id", "section_id"),
+        Index("ix_class_sections_medium_id", "medium_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     class_id: Mapped[int] = mapped_column(Integer)
     section_id: Mapped[int] = mapped_column(Integer)
     medium_id: Mapped[int] = mapped_column(Integer)
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Subject(Base, TimestampMixin):
+    """School subject within a medium. Soft-deleted rows keep history.
+
+    Uniqueness (active non-blank code): (school_id, medium_id, lower(btrim(code))) — migration 0021.
+    type values used by API: Theory | Practical (not Compulsory/Elective).
+    """
+
     __tablename__ = "subjects"
+    __table_args__ = (
+        Index(
+            "uq_subjects_school_medium_code_active",
+            "school_id",
+            "medium_id",
+            text("lower(btrim(code))"),
+            unique=True,
+            postgresql_where=text(
+                "deleted_at IS NULL AND code IS NOT NULL AND btrim(code) <> ''"
+            ),
+        ),
+        Index("ix_subjects_medium_id", "medium_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
@@ -197,7 +278,64 @@ class Subject(Base, TimestampMixin):
     image: Mapped[str] = mapped_column(String(512), default="")
     medium_id: Mapped[int] = mapped_column(Integer)
     type: Mapped[str] = mapped_column(String(64), default="Theory")
-    school_id: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ClassSubject(Base, TimestampMixin):
+    """Maps a subject onto a class within one school. Soft-deleted rows are kept for history."""
+
+    __tablename__ = "class_subjects"
+    __table_args__ = (
+        Index(
+            "uq_class_subjects_school_class_subject_active",
+            "school_id",
+            "class_id",
+            "subject_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    class_id: Mapped[int] = mapped_column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
+    subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TeacherAssignment(Base, TimestampMixin):
+    """Teacher (Staff) assigned to a subject, optionally for a class-section and session.
+
+    teacher_user_id matches the id returned by GET …/academics/teachers (legacy users.id).
+    staff_id is the Staff row for that user in this school.
+    """
+
+    __tablename__ = "teacher_assignments"
+    __table_args__ = (
+        Index(
+            "uq_teacher_assignments_active",
+            "school_id",
+            "staff_id",
+            "subject_id",
+            "class_section_id",
+            "session_year_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
+    teacher_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    class_section_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("class_sections.id"), nullable=True, index=True
+    )
+    session_year_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("session_years.id"), nullable=True, index=True
+    )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 

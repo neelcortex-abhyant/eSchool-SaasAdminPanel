@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from datetime import date, datetime, timezone
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.models.tables import (
     Announcement,
     Attendance,
     ClassSection,
+    ClassSubject,
     Exam,
     Expense,
     Fee,
@@ -25,6 +26,7 @@ from app.models.tables import (
     Staff,
     Student,
     Subject,
+    TeacherAssignment,
     User,
 )
 
@@ -74,11 +76,31 @@ def _same_school(db: Session, model, row_id: int, school_id: int, label: str):
     return row
 
 
+# Client must never set ownership or internal identity fields.
+_WRITE_BLOCKLIST = frozenset(
+    {
+        "school_id",
+        "id",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+        "staff_id",
+        "teacher_user_id",
+    }
+)
+
+
+def sanitize_write_body(body: dict) -> dict:
+    """Drop ownership / internal fields even if a client smuggles them past the schema."""
+    return {key: value for key, value in body.items() if key not in _WRITE_BLOCKLIST}
+
+
 # Foreign keys a generic PATCH may set, with the model that must belong to the school.
 _REFERENCES = {
     "class_id": (SchoolClass, "Class"),
     "section_id": (Section, "Section"),
     "session_year_id": (SessionYear, "Session year"),
+    "session_id": (SessionYear, "Session year"),
     "medium_id": (Medium, "Medium"),
     "class_section_id": (ClassSection, "Class section"),
     "student_id": (Student, "Student"),
@@ -92,19 +114,28 @@ def check_references(db: Session, school_id: int, row, data: dict) -> None:
     """Reject updates that point a row at another school's records (422)."""
     for key, (model, label) in _REFERENCES.items():
         value = data.get(key)
-        if value is not None and hasattr(row, key):
+        if value is None:
+            continue
+        # session_id is an API alias for session_year_id (row may only have the latter).
+        if key == "session_id":
+            _same_school(db, model, int(value), school_id, label)
+            continue
+        if hasattr(row, key):
             _same_school(db, model, int(value), school_id, label)
 
 
 def _commit(db: Session) -> None:
     try:
         db.commit()
-    except IntegrityError as exc:
+    except IntegrityError:
         db.rollback()
-        raise AcademicError(409, "A record with these details already exists") from exc
+        # Never surface SQL / constraint text to clients.
+        raise AcademicError(409, "A record with these details already exists")
 
 
 def summary(db: Session, school_id: int, session_year_id: int | None = None) -> dict:
+    if session_year_id is not None:
+        _owned(db, SessionYear, session_year_id, school_id)
     def active(model, session_field: str | None = None) -> int:
         query = db.query(func.count(model.id)).filter(model.school_id == school_id)
         if hasattr(model, "deleted_at"):
@@ -349,16 +380,235 @@ def _named(row, extra: dict | None = None) -> dict:
     return data
 
 
-def list_named(db: Session, model, school_id: int, q: str, page: int, page_size: int, extra) -> dict:
+def list_named(
+    db: Session,
+    model,
+    school_id: int,
+    q: str,
+    page: int,
+    page_size: int,
+    extra,
+    *,
+    filters: dict | None = None,
+) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(model).filter(model.school_id == school_id)
     if hasattr(model, "deleted_at"):
         query = query.filter(model.deleted_at.is_(None))
     if q.strip() and hasattr(model, "name"):
         query = query.filter(model.name.ilike(f"%{q.strip()}%"))
+    for key, value in (filters or {}).items():
+        if value is None or not hasattr(model, key):
+            continue
+        query = query.filter(getattr(model, key) == value)
     total = query.count()
     rows = query.order_by(model.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return _envelope([extra(row) for row in rows], total, page, page_size)
+
+
+def list_sessions(db: Session, school_id: int, q: str, page: int, page_size: int) -> dict:
+    return list_named(
+        db,
+        SessionYear,
+        school_id,
+        q,
+        page,
+        page_size,
+        lambda row: {
+            "id": row.id,
+            "name": row.name,
+            "default": row.default,
+            "start_date": row.start_date.isoformat(),
+            "end_date": row.end_date.isoformat(),
+        },
+    )
+
+
+def list_classes(
+    db: Session, school_id: int, q: str, page: int, page_size: int, *, medium_id: int | None = None
+) -> dict:
+    if medium_id is not None:
+        _owned(db, Medium, medium_id, school_id)
+    return list_named(
+        db,
+        SchoolClass,
+        school_id,
+        q,
+        page,
+        page_size,
+        _class_item,
+        filters={"medium_id": medium_id},
+    )
+
+
+def _section_item(row: Section) -> dict:
+    return {"id": row.id, "name": row.name}
+
+
+def list_sections(
+    db: Session,
+    school_id: int,
+    q: str,
+    page: int,
+    page_size: int,
+    *,
+    class_id: int | None = None,
+) -> dict:
+    """List school sections. With class_id, only sections linked via class_sections."""
+    if class_id is None:
+        return list_named(
+            db, Section, school_id, q, page, page_size, _section_item
+        )
+    klass = _owned(db, SchoolClass, class_id, school_id)
+    page, page_size = _page(page, page_size)
+    query = (
+        db.query(Section, ClassSection)
+        .join(
+            ClassSection,
+            ClassSection.section_id == Section.id,
+        )
+        .filter(
+            Section.school_id == school_id,
+            Section.deleted_at.is_(None),
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == class_id,
+            ClassSection.deleted_at.is_(None),
+        )
+    )
+    if q.strip():
+        query = query.filter(Section.name.ilike(f"%{q.strip()}%"))
+    total = query.count()
+    rows = (
+        query.order_by(Section.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    items = [
+        {
+            **_section_item(section),
+            "class_id": klass.id,
+            "class_name": klass.name,
+            "medium_id": link.medium_id,
+            "class_section_id": link.id,
+        }
+        for section, link in rows
+    ]
+    return _envelope(items, total, page, page_size)
+
+
+def _subject_item(row: Subject) -> dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "type": row.type,
+        "medium_id": row.medium_id,
+    }
+
+
+# Legacy eSchool subject.type values. Compulsory/Elective are not in the schema.
+SUBJECT_TYPES = frozenset({"Theory", "Practical"})
+
+
+def list_subjects(
+    db: Session,
+    school_id: int,
+    q: str,
+    page: int,
+    page_size: int,
+    *,
+    medium_id: int | None = None,
+    class_id: int | None = None,
+) -> dict:
+    """List school subjects. Optional class_id filters via class_subjects."""
+    if medium_id is not None:
+        _owned(db, Medium, medium_id, school_id)
+    if class_id is not None:
+        _owned(db, SchoolClass, class_id, school_id)
+        page, page_size = _page(page, page_size)
+        query = (
+            db.query(Subject)
+            .join(ClassSubject, ClassSubject.subject_id == Subject.id)
+            .filter(
+                Subject.school_id == school_id,
+                Subject.deleted_at.is_(None),
+                ClassSubject.school_id == school_id,
+                ClassSubject.class_id == class_id,
+                ClassSubject.deleted_at.is_(None),
+            )
+        )
+        if medium_id is not None:
+            query = query.filter(Subject.medium_id == medium_id)
+        if q.strip():
+            term = f"%{q.strip()}%"
+            query = query.filter(or_(Subject.name.ilike(term), Subject.code.ilike(term)))
+        total = query.count()
+        rows = (
+            query.order_by(Subject.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return _envelope([_subject_item(row) for row in rows], total, page, page_size)
+
+    page, page_size = _page(page, page_size)
+    query = db.query(Subject).filter(Subject.school_id == school_id, Subject.deleted_at.is_(None))
+    if medium_id is not None:
+        query = query.filter(Subject.medium_id == medium_id)
+    if q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(or_(Subject.name.ilike(term), Subject.code.ilike(term)))
+    total = query.count()
+    rows = query.order_by(Subject.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return _envelope([_subject_item(row) for row in rows], total, page, page_size)
+
+
+def list_class_sections(
+    db: Session,
+    school_id: int,
+    page: int,
+    page_size: int,
+    *,
+    class_id: int | None = None,
+    medium_id: int | None = None,
+) -> dict:
+    if class_id is not None:
+        _owned(db, SchoolClass, class_id, school_id)
+    if medium_id is not None:
+        _owned(db, Medium, medium_id, school_id)
+    page, page_size = _page(page, page_size)
+    query = db.query(ClassSection).filter(
+        ClassSection.school_id == school_id, ClassSection.deleted_at.is_(None)
+    )
+    if class_id is not None:
+        query = query.filter(ClassSection.class_id == class_id)
+    if medium_id is not None:
+        query = query.filter(ClassSection.medium_id == medium_id)
+    total = query.count()
+    rows = query.order_by(ClassSection.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    class_ids = {row.class_id for row in rows}
+    section_ids = {row.section_id for row in rows}
+    classes = {
+        row.id: row.name
+        for row in db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids or {-1})).all()
+    }
+    sections = {
+        row.id: row.name for row in db.query(Section).filter(Section.id.in_(section_ids or {-1})).all()
+    }
+    items = [
+        {
+            "id": row.id,
+            "name": f"{classes.get(row.class_id, row.class_id)} / {sections.get(row.section_id, row.section_id)}",
+            "class_id": row.class_id,
+            "section_id": row.section_id,
+            "medium_id": row.medium_id,
+            "class_name": classes.get(row.class_id),
+            "section_name": sections.get(row.section_id),
+        }
+        for row in rows
+    ]
+    return _envelope(items, total, page, page_size)
 
 
 def create_medium(db: Session, school_id: int, name: str) -> dict:
@@ -369,38 +619,477 @@ def create_medium(db: Session, school_id: int, name: str) -> dict:
     return _named(row)
 
 
+def _session_item(row: SessionYear) -> dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "default": row.default,
+        "start_date": row.start_date.isoformat(),
+        "end_date": row.end_date.isoformat(),
+    }
+
+
+def _normalize_session_name(name: str | None) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise AcademicError(422, "Session name is required")
+    if len(cleaned) > 512:
+        raise AcademicError(422, "Session name must be at most 512 characters")
+    return cleaned
+
+
+def _assert_unique_session_name(
+    db: Session, school_id: int, name: str, *, exclude_id: int | None = None
+) -> None:
+    query = db.query(SessionYear).filter(
+        SessionYear.school_id == school_id,
+        SessionYear.deleted_at.is_(None),
+        func.lower(SessionYear.name) == name.lower(),
+    )
+    if exclude_id is not None:
+        query = query.filter(SessionYear.id != exclude_id)
+    if query.first() is not None:
+        raise AcademicError(409, "A session with this name already exists")
+
+
+def _validate_session_dates(start_date: date, end_date: date) -> None:
+    if end_date < start_date:
+        raise AcademicError(422, "End date must be on or after the start date")
+
+
+def _lock_school_sessions(db: Session, school_id: int) -> list[SessionYear]:
+    """Serialize activate/create-default for one school (FOR UPDATE)."""
+    return list(
+        db.scalars(
+            select(SessionYear)
+            .where(SessionYear.school_id == school_id, SessionYear.deleted_at.is_(None))
+            .order_by(SessionYear.id.asc())
+            .with_for_update()
+        )
+    )
+
+
+def get_session(db: Session, school_id: int, session_id: int) -> dict:
+    return _session_item(_owned(db, SessionYear, session_id, school_id))
+
+
+def activate_session(db: Session, school_id: int, session_id: int) -> dict:
+    """Set one session as default and clear default on every other session for the school."""
+    rows = _lock_school_sessions(db, school_id)
+    row = next((item for item in rows if item.id == session_id), None)
+    if row is None:
+        raise AcademicError(404, "Record not found")
+    now = _now()
+    for item in rows:
+        item.default = 1 if item.id == session_id else 0
+        item.updated_at = now
+    _commit(db)
+    db.refresh(row)
+    return _session_item(row)
+
+
 def create_session(db: Session, school_id: int, body: dict) -> dict:
+    if "name" not in body or "start_date" not in body or "end_date" not in body:
+        raise AcademicError(422, "name, start_date, and end_date are required")
+    name = _normalize_session_name(body["name"])
+    start_date = body["start_date"]
+    end_date = body["end_date"]
+    _validate_session_dates(start_date, end_date)
+    make_default = int(body.get("default") or 0) == 1
+    if make_default:
+        _lock_school_sessions(db, school_id)
+    _assert_unique_session_name(db, school_id, name)
     row = SessionYear(
-        name=body["name"].strip(),
-        start_date=body["start_date"],
-        end_date=body["end_date"],
-        default=int(body.get("default") or 0),
+        name=name,
+        start_date=start_date,
+        end_date=end_date,
+        default=1 if make_default else 0,
         school_id=school_id,
         created_at=_now(),
         updated_at=_now(),
     )
-    if row.end_date < row.start_date:
-        raise AcademicError(422, "End date must be on or after the start date")
     db.add(row)
+    db.flush()
+    if make_default:
+        db.query(SessionYear).filter(
+            SessionYear.school_id == school_id,
+            SessionYear.deleted_at.is_(None),
+            SessionYear.id != row.id,
+            SessionYear.default != 0,
+        ).update({"default": 0, "updated_at": _now()}, synchronize_session=False)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "name": row.name, "start_date": row.start_date.isoformat(), "end_date": row.end_date.isoformat(), "default": row.default}
+    return _session_item(row)
+
+
+def update_session(db: Session, school_id: int, session_id: int, body: dict) -> dict:
+    raw = dict(body)
+    activate = raw.pop("default", None) == 1
+    clear_default = "default" in body and int(body.get("default") or 0) == 0
+    if activate or clear_default:
+        rows = _lock_school_sessions(db, school_id)
+        row = next((item for item in rows if item.id == session_id), None)
+        if row is None:
+            raise AcademicError(404, "Record not found")
+    else:
+        row = _owned(db, SessionYear, session_id, school_id)
+    if "name" in raw:
+        name = _normalize_session_name(raw["name"])
+        _assert_unique_session_name(db, school_id, name, exclude_id=row.id)
+        row.name = name
+    if "start_date" in raw:
+        row.start_date = raw["start_date"]
+    if "end_date" in raw:
+        row.end_date = raw["end_date"]
+    _validate_session_dates(row.start_date, row.end_date)
+    row.updated_at = _now()
+    if activate:
+        _commit(db)
+        return activate_session(db, school_id, session_id)
+    if clear_default:
+        row.default = 0
+    _commit(db)
+    db.refresh(row)
+    return _session_item(row)
+
+
+def soft_delete_session(db: Session, school_id: int, session_id: int) -> None:
+    row = _owned(db, SessionYear, session_id, school_id)
+    row.deleted_at = _now()
+    row.default = 0
+    row.updated_at = _now()
+    _commit(db)
+
+
+def _normalize_section_name(name: str | None) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise AcademicError(422, "Section name is required")
+    if len(cleaned) > 512:
+        raise AcademicError(422, "Section name must be at most 512 characters")
+    return cleaned
+
+
+def _find_section_by_name(db: Session, school_id: int, name: str) -> Section | None:
+    return (
+        db.query(Section)
+        .filter(
+            Section.school_id == school_id,
+            Section.deleted_at.is_(None),
+            func.lower(Section.name) == name.lower(),
+        )
+        .order_by(Section.id.asc())
+        .first()
+    )
+
+
+def _assert_unique_section_name_in_class(
+    db: Session,
+    school_id: int,
+    class_id: int,
+    name: str,
+    *,
+    exclude_section_id: int | None = None,
+) -> None:
+    """No other active section with this name may already be linked to the class."""
+    query = (
+        db.query(Section)
+        .join(ClassSection, ClassSection.section_id == Section.id)
+        .filter(
+            Section.school_id == school_id,
+            Section.deleted_at.is_(None),
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == class_id,
+            ClassSection.deleted_at.is_(None),
+            func.lower(Section.name) == name.lower(),
+        )
+    )
+    if exclude_section_id is not None:
+        query = query.filter(Section.id != exclude_section_id)
+    if query.first() is not None:
+        raise AcademicError(409, "A section with this name already exists for the class")
+
+
+def _section_class_links(db: Session, school_id: int, section_id: int) -> list[ClassSection]:
+    return (
+        db.query(ClassSection)
+        .filter(
+            ClassSection.school_id == school_id,
+            ClassSection.section_id == section_id,
+            ClassSection.deleted_at.is_(None),
+        )
+        .order_by(ClassSection.id.asc())
+        .all()
+    )
+
+
+def _section_detail(db: Session, school_id: int, row: Section) -> dict:
+    links = _section_class_links(db, school_id, row.id)
+    class_ids = {link.class_id for link in links}
+    classes_by_id = {
+        klass.id: klass
+        for klass in db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids or {-1})).all()
+    }
+    item = _section_item(row)
+    item["classes"] = [
+        {
+            "class_id": link.class_id,
+            "class_name": classes_by_id[link.class_id].name if link.class_id in classes_by_id else None,
+            "medium_id": link.medium_id,
+            "class_section_id": link.id,
+        }
+        for link in links
+    ]
+    return item
+
+
+def get_section(db: Session, school_id: int, section_id: int) -> dict:
+    row = _owned(db, Section, section_id, school_id)
+    return _section_detail(db, school_id, row)
 
 
 def create_section(db: Session, school_id: int, name: str) -> dict:
-    row = Section(name=name.strip(), school_id=school_id, created_at=_now(), updated_at=_now())
+    """School-level section only (academics compat). No class mapping."""
+    cleaned = _normalize_section_name(name)
+    row = Section(name=cleaned, school_id=school_id, created_at=_now(), updated_at=_now())
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return _named(row)
+    return _section_item(row)
+
+
+def create_section_for_class(db: Session, school_id: int, body: dict) -> dict:
+    """Create or reuse a school section and link it to a class via class_sections."""
+    if "name" not in body or "class_id" not in body:
+        raise AcademicError(422, "name and class_id are required")
+    name = _normalize_section_name(body["name"])
+    class_id = int(body["class_id"])
+    klass = _owned(db, SchoolClass, class_id, school_id)
+    _assert_unique_section_name_in_class(db, school_id, class_id, name)
+
+    section = _find_section_by_name(db, school_id, name)
+    if section is None:
+        section = Section(name=name, school_id=school_id, created_at=_now(), updated_at=_now())
+        db.add(section)
+        db.flush()
+    else:
+        # Already linked to this class (same section id) — treat as duplicate.
+        existing_link = (
+            db.query(ClassSection)
+            .filter(
+                ClassSection.school_id == school_id,
+                ClassSection.class_id == class_id,
+                ClassSection.section_id == section.id,
+                ClassSection.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if existing_link is not None:
+            raise AcademicError(409, "A section with this name already exists for the class")
+
+    link = ClassSection(
+        class_id=klass.id,
+        section_id=section.id,
+        medium_id=klass.medium_id,
+        school_id=school_id,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(link)
+    _commit(db)
+    db.refresh(section)
+    db.refresh(link)
+    return {
+        **_section_item(section),
+        "class_id": klass.id,
+        "class_name": klass.name,
+        "medium_id": link.medium_id,
+        "class_section_id": link.id,
+    }
+
+
+def update_section(db: Session, school_id: int, section_id: int, body: dict) -> dict:
+    """Partial update. class_id reassigns a single ClassSection mapping when present."""
+    row = _owned(db, Section, section_id, school_id)
+    links = _section_class_links(db, school_id, section_id)
+    name = row.name
+
+    if "name" in body:
+        name = _normalize_section_name(body["name"])
+        if name.lower() != row.name.lower():
+            for link in links:
+                _assert_unique_section_name_in_class(
+                    db, school_id, link.class_id, name, exclude_section_id=row.id
+                )
+            # Also check target class if reassignment is requested in the same PATCH.
+            if "class_id" in body:
+                target_class_id = int(body["class_id"])
+                if not any(link.class_id == target_class_id for link in links):
+                    _assert_unique_section_name_in_class(
+                        db, school_id, target_class_id, name, exclude_section_id=row.id
+                    )
+        row.name = name
+
+    if "class_id" in body:
+        target_class_id = int(body["class_id"])
+        klass = _owned(db, SchoolClass, target_class_id, school_id)
+        _assert_unique_section_name_in_class(
+            db, school_id, target_class_id, row.name, exclude_section_id=row.id
+        )
+        if not links:
+            db.add(
+                ClassSection(
+                    class_id=klass.id,
+                    section_id=row.id,
+                    medium_id=klass.medium_id,
+                    school_id=school_id,
+                    created_at=_now(),
+                    updated_at=_now(),
+                )
+            )
+        elif len(links) == 1:
+            link = links[0]
+            if link.class_id != klass.id:
+                link.class_id = klass.id
+                link.medium_id = klass.medium_id
+                link.updated_at = _now()
+        else:
+            already = next((item for item in links if item.class_id == klass.id), None)
+            if already is None:
+                raise AcademicError(
+                    422,
+                    "Section is linked to multiple classes; use class-sections to change mappings",
+                )
+        row.updated_at = _now()
+    elif "name" in body:
+        row.updated_at = _now()
+
+    _commit(db)
+    db.refresh(row)
+    return _section_detail(db, school_id, row)
+
+
+def _class_item(row: SchoolClass) -> dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "medium_id": row.medium_id,
+        "include_semesters": row.include_semesters,
+    }
+
+
+def _normalize_class_name(name: str | None) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise AcademicError(422, "Class name is required")
+    if len(cleaned) > 512:
+        raise AcademicError(422, "Class name must be at most 512 characters")
+    return cleaned
+
+
+def _normalize_include_semesters(value) -> int:
+    try:
+        flag = int(value)
+    except (TypeError, ValueError) as exc:
+        raise AcademicError(422, "include_semesters must be 0 or 1") from exc
+    if flag not in (0, 1):
+        raise AcademicError(422, "include_semesters must be 0 or 1")
+    return flag
+
+
+def _assert_unique_class_name(
+    db: Session,
+    school_id: int,
+    medium_id: int,
+    name: str,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    """Active class names are unique per school + medium (case-insensitive)."""
+    query = db.query(SchoolClass).filter(
+        SchoolClass.school_id == school_id,
+        SchoolClass.medium_id == medium_id,
+        SchoolClass.deleted_at.is_(None),
+        func.lower(SchoolClass.name) == name.lower(),
+    )
+    if exclude_id is not None:
+        query = query.filter(SchoolClass.id != exclude_id)
+    if query.first() is not None:
+        raise AcademicError(409, "A class with this name already exists for the medium")
+
+
+def get_class(db: Session, school_id: int, class_id: int) -> dict:
+    """Class detail with linked sections and subjects (batch-loaded, school-scoped)."""
+    row = _owned(db, SchoolClass, class_id, school_id)
+    item = _class_item(row)
+
+    section_rows = (
+        db.query(ClassSection)
+        .filter(
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == class_id,
+            ClassSection.deleted_at.is_(None),
+        )
+        .order_by(ClassSection.id.asc())
+        .all()
+    )
+    section_ids = {link.section_id for link in section_rows}
+    sections_by_id = {
+        section.id: section
+        for section in db.query(Section).filter(Section.id.in_(section_ids or {-1})).all()
+    }
+    item["sections"] = [
+        {
+            "id": link.id,
+            "section_id": link.section_id,
+            "section_name": sections_by_id[link.section_id].name
+            if link.section_id in sections_by_id
+            else None,
+            "medium_id": link.medium_id,
+        }
+        for link in section_rows
+    ]
+
+    subject_rows = (
+        db.query(ClassSubject)
+        .filter(
+            ClassSubject.school_id == school_id,
+            ClassSubject.class_id == class_id,
+            ClassSubject.deleted_at.is_(None),
+        )
+        .order_by(ClassSubject.id.asc())
+        .all()
+    )
+    subject_ids = {link.subject_id for link in subject_rows}
+    subjects_by_id = {
+        subject.id: subject
+        for subject in db.query(Subject).filter(Subject.id.in_(subject_ids or {-1})).all()
+    }
+    item["subjects"] = [
+        {
+            "id": link.id,
+            "subject_id": link.subject_id,
+            "subject_name": subjects_by_id[link.subject_id].name
+            if link.subject_id in subjects_by_id
+            else None,
+        }
+        for link in subject_rows
+    ]
+    return item
 
 
 def create_class(db: Session, school_id: int, body: dict) -> dict:
-    _same_school(db, Medium, int(body["medium_id"]), school_id, "Medium")
+    if "name" not in body or "medium_id" not in body:
+        raise AcademicError(422, "name and medium_id are required")
+    name = _normalize_class_name(body["name"])
+    medium_id = int(body["medium_id"])
+    include_semesters = _normalize_include_semesters(body.get("include_semesters") or 0)
+    _same_school(db, Medium, medium_id, school_id, "Medium")
+    _assert_unique_class_name(db, school_id, medium_id, name)
     row = SchoolClass(
-        name=body["name"].strip(),
-        medium_id=int(body["medium_id"]),
-        include_semesters=int(body.get("include_semesters") or 0),
+        name=name,
+        medium_id=medium_id,
+        include_semesters=include_semesters,
         school_id=school_id,
         created_at=_now(),
         updated_at=_now(),
@@ -408,13 +1097,65 @@ def create_class(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "name": row.name, "medium_id": row.medium_id, "include_semesters": row.include_semesters}
+    return _class_item(row)
+
+
+def update_class(db: Session, school_id: int, class_id: int, body: dict) -> dict:
+    """Partial update. Does not cascade to class_sections or class_subjects."""
+    row = _owned(db, SchoolClass, class_id, school_id)
+    name = row.name
+    medium_id = row.medium_id
+    include_semesters = row.include_semesters
+    if "name" in body:
+        name = _normalize_class_name(body["name"])
+    if "medium_id" in body:
+        medium_id = int(body["medium_id"])
+        _same_school(db, Medium, medium_id, school_id, "Medium")
+    if "include_semesters" in body:
+        include_semesters = _normalize_include_semesters(body["include_semesters"])
+    if name.lower() != row.name.lower() or medium_id != row.medium_id:
+        _assert_unique_class_name(db, school_id, medium_id, name, exclude_id=row.id)
+    row.name = name
+    row.medium_id = medium_id
+    row.include_semesters = include_semesters
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _class_item(row)
+
+
+def _class_section_item(db: Session, row: ClassSection) -> dict:
+    klass = db.get(SchoolClass, row.class_id)
+    section = db.get(Section, row.section_id)
+    class_name = klass.name if klass is not None else str(row.class_id)
+    section_name = section.name if section is not None else str(row.section_id)
+    return {
+        "id": row.id,
+        "class_id": row.class_id,
+        "section_id": row.section_id,
+        "medium_id": row.medium_id,
+        "class_name": class_name if klass is not None else None,
+        "section_name": section_name if section is not None else None,
+        "name": f"{class_name} / {section_name}",
+    }
 
 
 def create_class_section(db: Session, school_id: int, body: dict) -> dict:
     _same_school(db, SchoolClass, int(body["class_id"]), school_id, "Class")
     _same_school(db, Section, int(body["section_id"]), school_id, "Section")
     _same_school(db, Medium, int(body["medium_id"]), school_id, "Medium")
+    existing = (
+        db.query(ClassSection)
+        .filter(
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == int(body["class_id"]),
+            ClassSection.section_id == int(body["section_id"]),
+            ClassSection.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing is not None:
+        raise AcademicError(409, "This class and section are already linked")
     row = ClassSection(
         class_id=int(body["class_id"]),
         section_id=int(body["section_id"]),
@@ -426,16 +1167,235 @@ def create_class_section(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "class_id": row.class_id, "section_id": row.section_id, "medium_id": row.medium_id, "name": f"{row.class_id}-{row.section_id}"}
+    return _class_section_item(db, row)
+
+
+def update_class_section(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, ClassSection, row_id, school_id)
+    class_id = int(body["class_id"]) if "class_id" in body else row.class_id
+    section_id = int(body["section_id"]) if "section_id" in body else row.section_id
+    medium_id = int(body["medium_id"]) if "medium_id" in body else row.medium_id
+    _same_school(db, SchoolClass, class_id, school_id, "Class")
+    _same_school(db, Section, section_id, school_id, "Section")
+    _same_school(db, Medium, medium_id, school_id, "Medium")
+    clash = (
+        db.query(ClassSection)
+        .filter(
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == class_id,
+            ClassSection.section_id == section_id,
+            ClassSection.deleted_at.is_(None),
+            ClassSection.id != row.id,
+        )
+        .first()
+    )
+    if clash is not None:
+        raise AcademicError(409, "This class and section are already linked")
+    row.class_id = class_id
+    row.section_id = section_id
+    row.medium_id = medium_id
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _class_section_item(db, row)
+
+
+def _normalize_subject_name(name: str | None) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise AcademicError(422, "Subject name is required")
+    if len(cleaned) > 512:
+        raise AcademicError(422, "Subject name must be at most 512 characters")
+    return cleaned
+
+
+def _normalize_subject_code(code: str | None, *, required: bool = False) -> str | None:
+    if code is None:
+        if required:
+            raise AcademicError(422, "Subject code is required")
+        return None
+    cleaned = code.strip()
+    if not cleaned:
+        return None
+    if len(cleaned) > 64:
+        raise AcademicError(422, "Subject code must be at most 64 characters")
+    return cleaned
+
+
+def _normalize_subject_type(value: str | None) -> str:
+    cleaned = (value or "Theory").strip()
+    if cleaned not in SUBJECT_TYPES:
+        raise AcademicError(422, "Subject type must be Theory or Practical")
+    return cleaned
+
+
+def _assert_unique_subject_code(
+    db: Session,
+    school_id: int,
+    medium_id: int,
+    code: str | None,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    """Active non-blank codes are unique per school + medium (case-insensitive)."""
+    if code is None:
+        return
+    query = db.query(Subject).filter(
+        Subject.school_id == school_id,
+        Subject.medium_id == medium_id,
+        Subject.deleted_at.is_(None),
+        Subject.code.isnot(None),
+        func.lower(Subject.code) == code.lower(),
+    )
+    if exclude_id is not None:
+        query = query.filter(Subject.id != exclude_id)
+    if query.first() is not None:
+        raise AcademicError(409, "A subject with this code already exists for the medium")
+
+
+def get_subject(db: Session, school_id: int, subject_id: int) -> dict:
+    row = _owned(db, Subject, subject_id, school_id)
+    item = _subject_item(row)
+    links = (
+        db.query(ClassSubject)
+        .filter(
+            ClassSubject.school_id == school_id,
+            ClassSubject.subject_id == subject_id,
+            ClassSubject.deleted_at.is_(None),
+        )
+        .order_by(ClassSubject.id.asc())
+        .all()
+    )
+    class_ids = {link.class_id for link in links}
+    classes_by_id = {
+        klass.id: klass
+        for klass in db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids or {-1})).all()
+    }
+    item["classes"] = [
+        {
+            "class_id": link.class_id,
+            "class_name": classes_by_id[link.class_id].name if link.class_id in classes_by_id else None,
+            "medium_id": classes_by_id[link.class_id].medium_id if link.class_id in classes_by_id else None,
+            "class_subject_id": link.id,
+        }
+        for link in links
+    ]
+    return item
+
+
+def list_subject_classes(
+    db: Session,
+    school_id: int,
+    subject_id: int,
+    page: int,
+    page_size: int,
+) -> dict:
+    _owned(db, Subject, subject_id, school_id)
+    page, page_size = _page(page, page_size)
+    query = db.query(ClassSubject).filter(
+        ClassSubject.school_id == school_id,
+        ClassSubject.subject_id == subject_id,
+        ClassSubject.deleted_at.is_(None),
+    )
+    total = query.count()
+    rows = query.order_by(ClassSubject.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
+    class_ids = {link.class_id for link in rows}
+    classes_by_id = {
+        klass.id: klass
+        for klass in db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids or {-1})).all()
+    }
+    items = [
+        {
+            "class_id": link.class_id,
+            "class_name": classes_by_id[link.class_id].name if link.class_id in classes_by_id else None,
+            "medium_id": classes_by_id[link.class_id].medium_id if link.class_id in classes_by_id else None,
+            "class_subject_id": link.id,
+        }
+        for link in rows
+    ]
+    return _envelope(items, total, page, page_size)
+
+
+def replace_subject_classes(db: Session, school_id: int, subject_id: int, class_ids: list[int]) -> dict:
+    """Replace active class associations for a subject using soft-delete + revive.
+
+    Soft-deleted historical ClassSubject rows are never hard-deleted. Desired
+    classes that already have a soft-deleted mapping are revived. All target
+    classes must belong to the school and match the subject's medium.
+    """
+    subject = _owned(db, Subject, subject_id, school_id)
+    # Deduplicate while preserving order for stable responses.
+    seen: set[int] = set()
+    desired: list[int] = []
+    for raw in class_ids:
+        class_id = int(raw)
+        if class_id in seen:
+            continue
+        seen.add(class_id)
+        desired.append(class_id)
+
+    classes_by_id: dict[int, SchoolClass] = {}
+    for class_id in desired:
+        klass = _owned(db, SchoolClass, class_id, school_id)
+        if klass.medium_id != subject.medium_id:
+            raise AcademicError(422, "Class medium does not match the subject medium")
+        classes_by_id[class_id] = klass
+
+    desired_set = set(desired)
+    existing = (
+        db.query(ClassSubject)
+        .filter(ClassSubject.school_id == school_id, ClassSubject.subject_id == subject_id)
+        .all()
+    )
+    now = _now()
+    active_by_class = {
+        row.class_id: row for row in existing if row.deleted_at is None
+    }
+    deleted_by_class = {
+        row.class_id: row for row in existing if row.deleted_at is not None
+    }
+
+    for class_id, row in list(active_by_class.items()):
+        if class_id not in desired_set:
+            row.deleted_at = now
+            row.updated_at = now
+
+    for class_id in desired:
+        if class_id in active_by_class:
+            continue
+        if class_id in deleted_by_class:
+            row = deleted_by_class[class_id]
+            row.deleted_at = None
+            row.updated_at = now
+            continue
+        db.add(
+            ClassSubject(
+                school_id=school_id,
+                class_id=class_id,
+                subject_id=subject_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    _commit(db)
+    return list_subject_classes(db, school_id, subject_id, page=1, page_size=PAGE_SIZE_MAX)
 
 
 def create_subject(db: Session, school_id: int, body: dict) -> dict:
-    _same_school(db, Medium, int(body["medium_id"]), school_id, "Medium")
+    if "name" not in body or "medium_id" not in body:
+        raise AcademicError(422, "name and medium_id are required")
+    name = _normalize_subject_name(body["name"])
+    medium_id = int(body["medium_id"])
+    code = _normalize_subject_code(body.get("code"))
+    subject_type = _normalize_subject_type(body.get("type"))
+    _same_school(db, Medium, medium_id, school_id, "Medium")
+    _assert_unique_subject_code(db, school_id, medium_id, code)
     row = Subject(
-        name=body["name"].strip(),
-        code=(body.get("code") or "").strip() or None,
-        type=(body.get("type") or "Theory").strip(),
-        medium_id=int(body["medium_id"]),
+        name=name,
+        code=code,
+        type=subject_type,
+        medium_id=medium_id,
         school_id=school_id,
         created_at=_now(),
         updated_at=_now(),
@@ -443,7 +1403,37 @@ def create_subject(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "name": row.name, "code": row.code, "type": row.type, "medium_id": row.medium_id}
+    return _subject_item(row)
+
+
+def update_subject(db: Session, school_id: int, subject_id: int, body: dict) -> dict:
+    """Partial update. Does not change class_subjects mappings."""
+    row = _owned(db, Subject, subject_id, school_id)
+    name = row.name
+    code = row.code
+    subject_type = row.type
+    medium_id = row.medium_id
+    if "name" in body:
+        name = _normalize_subject_name(body["name"])
+    if "code" in body:
+        code = _normalize_subject_code(body["code"])
+    if "type" in body:
+        subject_type = _normalize_subject_type(body["type"])
+    if "medium_id" in body:
+        medium_id = int(body["medium_id"])
+        _same_school(db, Medium, medium_id, school_id, "Medium")
+    code_changed = (code or "").lower() != (row.code or "").lower()
+    medium_changed = medium_id != row.medium_id
+    if code_changed or medium_changed:
+        _assert_unique_subject_code(db, school_id, medium_id, code, exclude_id=row.id)
+    row.name = name
+    row.code = code
+    row.type = subject_type
+    row.medium_id = medium_id
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _subject_item(row)
 
 
 def create_attendance(db: Session, school_id: int, body: dict) -> dict:
@@ -595,3 +1585,429 @@ def soft_delete(db: Session, model, school_id: int, row_id: int) -> None:
     else:
         db.delete(row)
     _commit(db)
+
+
+def _class_subject_item(db: Session, row: ClassSubject) -> dict:
+    klass = db.get(SchoolClass, row.class_id)
+    subject = db.get(Subject, row.subject_id)
+    return {
+        "id": row.id,
+        "class_id": row.class_id,
+        "subject_id": row.subject_id,
+        "class_name": klass.name if klass is not None else None,
+        "subject_name": subject.name if subject is not None else None,
+        "name": f"{(klass.name if klass else row.class_id)} / {(subject.name if subject else row.subject_id)}",
+    }
+
+
+def list_class_subjects(
+    db: Session,
+    school_id: int,
+    page: int,
+    page_size: int,
+    *,
+    class_id: int | None = None,
+    subject_id: int | None = None,
+) -> dict:
+    page, page_size = _page(page, page_size)
+    query = db.query(ClassSubject).filter(
+        ClassSubject.school_id == school_id, ClassSubject.deleted_at.is_(None)
+    )
+    if class_id is not None:
+        query = query.filter(ClassSubject.class_id == class_id)
+    if subject_id is not None:
+        query = query.filter(ClassSubject.subject_id == subject_id)
+    total = query.count()
+    rows = query.order_by(ClassSubject.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return _envelope([_class_subject_item(db, row) for row in rows], total, page, page_size)
+
+
+def create_class_subject(db: Session, school_id: int, body: dict) -> dict:
+    _same_school(db, SchoolClass, int(body["class_id"]), school_id, "Class")
+    _same_school(db, Subject, int(body["subject_id"]), school_id, "Subject")
+    existing = (
+        db.query(ClassSubject)
+        .filter(
+            ClassSubject.school_id == school_id,
+            ClassSubject.class_id == int(body["class_id"]),
+            ClassSubject.subject_id == int(body["subject_id"]),
+            ClassSubject.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing is not None:
+        raise AcademicError(409, "This subject is already mapped to the class")
+    row = ClassSubject(
+        school_id=school_id,
+        class_id=int(body["class_id"]),
+        subject_id=int(body["subject_id"]),
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(row)
+    _commit(db)
+    db.refresh(row)
+    return _class_subject_item(db, row)
+
+
+def update_class_subject(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, ClassSubject, row_id, school_id)
+    class_id = int(body["class_id"]) if "class_id" in body else row.class_id
+    subject_id = int(body["subject_id"]) if "subject_id" in body else row.subject_id
+    _same_school(db, SchoolClass, class_id, school_id, "Class")
+    _same_school(db, Subject, subject_id, school_id, "Subject")
+    clash = (
+        db.query(ClassSubject)
+        .filter(
+            ClassSubject.school_id == school_id,
+            ClassSubject.class_id == class_id,
+            ClassSubject.subject_id == subject_id,
+            ClassSubject.deleted_at.is_(None),
+            ClassSubject.id != row.id,
+        )
+        .first()
+    )
+    if clash is not None:
+        raise AcademicError(409, "This subject is already mapped to the class")
+    row.class_id = class_id
+    row.subject_id = subject_id
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _class_subject_item(db, row)
+
+
+def _staff_for_teacher_user(db: Session, school_id: int, teacher_user_id: int) -> Staff:
+    user = db.get(User, teacher_user_id)
+    if user is None or user.school_id != school_id or user.deleted_at is not None:
+        raise AcademicError(422, "Teacher does not belong to this school")
+    if getattr(user, "status", 1) != 1:
+        raise AcademicError(422, "Teacher is not active")
+    staff = (
+        db.query(Staff)
+        .filter(Staff.user_id == teacher_user_id, Staff.school_id == school_id)
+        .first()
+    )
+    if staff is None:
+        raise AcademicError(422, "Teacher does not belong to this school")
+    return staff
+
+
+def _assert_subject_mapped_to_class(db: Session, school_id: int, class_id: int, subject_id: int) -> None:
+    mapped = (
+        db.query(ClassSubject)
+        .filter(
+            ClassSubject.school_id == school_id,
+            ClassSubject.class_id == class_id,
+            ClassSubject.subject_id == subject_id,
+            ClassSubject.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if mapped is None:
+        raise AcademicError(422, "Subject is not mapped to the selected class")
+
+
+def _resolve_class_section_id(
+    db: Session,
+    school_id: int,
+    body: dict,
+    *,
+    existing: int | None,
+) -> int | None:
+    """Resolve class_section_id from class_id+section_id and/or class_section_id."""
+    has_class = "class_id" in body
+    has_section = "section_id" in body
+    class_id = body.get("class_id")
+    section_id = body.get("section_id")
+    if has_class or has_section:
+        if class_id is None or section_id is None:
+            raise AcademicError(422, "class_id and section_id must be provided together")
+        class_id = int(class_id)
+        section_id = int(section_id)
+        _owned(db, SchoolClass, class_id, school_id)
+        _same_school(db, Section, section_id, school_id, "Section")
+        link = (
+            db.query(ClassSection)
+            .filter(
+                ClassSection.school_id == school_id,
+                ClassSection.class_id == class_id,
+                ClassSection.section_id == section_id,
+                ClassSection.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if link is None:
+            raise AcademicError(422, "Section is not linked to the selected class")
+        if body.get("class_section_id") is not None and int(body["class_section_id"]) != link.id:
+            raise AcademicError(422, "class_section_id does not match class_id and section_id")
+        return link.id
+    if "class_section_id" in body:
+        if body["class_section_id"] is None:
+            return None
+        cs_id = int(body["class_section_id"])
+        _same_school(db, ClassSection, cs_id, school_id, "Class section")
+        return cs_id
+    return existing
+
+
+def _resolve_session_year_id(body: dict, *, existing: int | None) -> int | None:
+    if "session_id" in body:
+        return int(body["session_id"]) if body["session_id"] is not None else None
+    if "session_year_id" in body:
+        return int(body["session_year_id"]) if body["session_year_id"] is not None else None
+    return existing
+
+
+def _assignment_item(
+    db: Session,
+    row: TeacherAssignment,
+    *,
+    users: dict[int, User] | None = None,
+    subjects: dict[int, Subject] | None = None,
+    class_sections: dict[int, ClassSection] | None = None,
+    classes: dict[int, SchoolClass] | None = None,
+    sections: dict[int, Section] | None = None,
+    sessions: dict[int, SessionYear] | None = None,
+) -> dict:
+    user = (users or {}).get(row.teacher_user_id) if users is not None else db.get(User, row.teacher_user_id)
+    subject = (subjects or {}).get(row.subject_id) if subjects is not None else db.get(Subject, row.subject_id)
+    link = None
+    if row.class_section_id is not None:
+        link = (
+            (class_sections or {}).get(row.class_section_id)
+            if class_sections is not None
+            else db.get(ClassSection, row.class_section_id)
+        )
+    klass = classes.get(link.class_id) if classes is not None and link is not None else (
+        db.get(SchoolClass, link.class_id) if link is not None else None
+    )
+    section = sections.get(link.section_id) if sections is not None and link is not None else (
+        db.get(Section, link.section_id) if link is not None else None
+    )
+    session = None
+    if row.session_year_id is not None:
+        session = (
+            (sessions or {}).get(row.session_year_id)
+            if sessions is not None
+            else db.get(SessionYear, row.session_year_id)
+        )
+    teacher_name = _user_name(user)
+    subject_name = subject.name if subject is not None else None
+    return {
+        "id": row.id,
+        "teacher_id": row.teacher_user_id,
+        "staff_id": row.staff_id,
+        "teacher_name": teacher_name,
+        "subject_id": row.subject_id,
+        "subject_name": subject_name,
+        "class_section_id": row.class_section_id,
+        "class_id": link.class_id if link is not None else None,
+        "class_name": klass.name if klass is not None else None,
+        "section_id": link.section_id if link is not None else None,
+        "section_name": section.name if section is not None else None,
+        "session_year_id": row.session_year_id,
+        "session_id": row.session_year_id,
+        "session_name": session.name if session is not None else None,
+        "name": f"{teacher_name} / {(subject_name if subject_name else row.subject_id)}",
+    }
+
+
+def _assignment_items(db: Session, rows: list[TeacherAssignment]) -> list[dict]:
+    if not rows:
+        return []
+    user_ids = {row.teacher_user_id for row in rows}
+    subject_ids = {row.subject_id for row in rows}
+    cs_ids = {row.class_section_id for row in rows if row.class_section_id is not None}
+    session_ids = {row.session_year_id for row in rows if row.session_year_id is not None}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids or {-1})).all()}
+    subjects = {s.id: s for s in db.query(Subject).filter(Subject.id.in_(subject_ids or {-1})).all()}
+    class_sections = {
+        cs.id: cs for cs in db.query(ClassSection).filter(ClassSection.id.in_(cs_ids or {-1})).all()
+    }
+    class_ids = {cs.class_id for cs in class_sections.values()}
+    section_ids = {cs.section_id for cs in class_sections.values()}
+    classes = {
+        c.id: c for c in db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids or {-1})).all()
+    }
+    sections = {
+        s.id: s for s in db.query(Section).filter(Section.id.in_(section_ids or {-1})).all()
+    }
+    sessions = {
+        sy.id: sy for sy in db.query(SessionYear).filter(SessionYear.id.in_(session_ids or {-1})).all()
+    }
+    return [
+        _assignment_item(
+            db,
+            row,
+            users=users,
+            subjects=subjects,
+            class_sections=class_sections,
+            classes=classes,
+            sections=sections,
+            sessions=sessions,
+        )
+        for row in rows
+    ]
+
+
+def _find_open_assignment(
+    db: Session,
+    school_id: int,
+    staff_id: int,
+    subject_id: int,
+    class_section_id: int | None,
+    session_year_id: int | None,
+    *,
+    exclude_id: int | None = None,
+) -> TeacherAssignment | None:
+    query = db.query(TeacherAssignment).filter(
+        TeacherAssignment.school_id == school_id,
+        TeacherAssignment.staff_id == staff_id,
+        TeacherAssignment.subject_id == subject_id,
+        TeacherAssignment.deleted_at.is_(None),
+    )
+    if class_section_id is None:
+        query = query.filter(TeacherAssignment.class_section_id.is_(None))
+    else:
+        query = query.filter(TeacherAssignment.class_section_id == class_section_id)
+    if session_year_id is None:
+        query = query.filter(TeacherAssignment.session_year_id.is_(None))
+    else:
+        query = query.filter(TeacherAssignment.session_year_id == session_year_id)
+    if exclude_id is not None:
+        query = query.filter(TeacherAssignment.id != exclude_id)
+    return query.first()
+
+
+def list_teacher_assignments(
+    db: Session,
+    school_id: int,
+    page: int,
+    page_size: int,
+    *,
+    teacher_id: int | None = None,
+    subject_id: int | None = None,
+    class_id: int | None = None,
+    section_id: int | None = None,
+    class_section_id: int | None = None,
+    session_id: int | None = None,
+    session_year_id: int | None = None,
+) -> dict:
+    page, page_size = _page(page, page_size)
+    session_filter = session_id if session_id is not None else session_year_id
+    query = db.query(TeacherAssignment).filter(
+        TeacherAssignment.school_id == school_id, TeacherAssignment.deleted_at.is_(None)
+    )
+    if teacher_id is not None:
+        query = query.filter(TeacherAssignment.teacher_user_id == teacher_id)
+    if subject_id is not None:
+        query = query.filter(TeacherAssignment.subject_id == subject_id)
+    if class_section_id is not None:
+        query = query.filter(TeacherAssignment.class_section_id == class_section_id)
+    if session_filter is not None:
+        query = query.filter(TeacherAssignment.session_year_id == session_filter)
+    if class_id is not None or section_id is not None:
+        if class_id is not None:
+            _owned(db, SchoolClass, class_id, school_id)
+        if section_id is not None:
+            _same_school(db, Section, section_id, school_id, "Section")
+        query = query.join(
+            ClassSection,
+            ClassSection.id == TeacherAssignment.class_section_id,
+        ).filter(
+            ClassSection.school_id == school_id,
+            ClassSection.deleted_at.is_(None),
+        )
+        if class_id is not None:
+            query = query.filter(ClassSection.class_id == class_id)
+        if section_id is not None:
+            query = query.filter(ClassSection.section_id == section_id)
+    total = query.count()
+    rows = (
+        query.order_by(TeacherAssignment.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return _envelope(_assignment_items(db, rows), total, page, page_size)
+
+
+def get_teacher_assignment(db: Session, school_id: int, row_id: int) -> dict:
+    row = _owned(db, TeacherAssignment, row_id, school_id)
+    return _assignment_items(db, [row])[0]
+
+
+def soft_delete_teacher_assignment(db: Session, school_id: int, row_id: int) -> dict:
+    """Soft-delete an assignment. No FK dependents on teacher_assignments today."""
+    soft_delete(db, TeacherAssignment, school_id, row_id)
+    return {"deleted": True}
+
+
+def create_teacher_assignment(db: Session, school_id: int, body: dict) -> dict:
+    if "teacher_id" not in body or "subject_id" not in body:
+        raise AcademicError(422, "teacher_id and subject_id are required")
+    staff = _staff_for_teacher_user(db, school_id, int(body["teacher_id"]))
+    subject_id = int(body["subject_id"])
+    _same_school(db, Subject, subject_id, school_id, "Subject")
+    class_section_id = _resolve_class_section_id(db, school_id, body, existing=None)
+    session_year_id = _resolve_session_year_id(body, existing=None)
+    if session_year_id is not None:
+        _same_school(db, SessionYear, session_year_id, school_id, "Session year")
+    if class_section_id is not None:
+        link = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
+        _assert_subject_mapped_to_class(db, school_id, link.class_id, subject_id)
+    if _find_open_assignment(
+        db, school_id, staff.id, subject_id, class_section_id, session_year_id
+    ):
+        raise AcademicError(409, "This teacher assignment already exists")
+    row = TeacherAssignment(
+        school_id=school_id,
+        staff_id=staff.id,
+        teacher_user_id=staff.user_id,
+        subject_id=subject_id,
+        class_section_id=class_section_id,
+        session_year_id=session_year_id,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(row)
+    _commit(db)
+    db.refresh(row)
+    return _assignment_items(db, [row])[0]
+
+
+def update_teacher_assignment(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, TeacherAssignment, row_id, school_id)
+    teacher_user_id = int(body["teacher_id"]) if "teacher_id" in body else row.teacher_user_id
+    subject_id = int(body["subject_id"]) if "subject_id" in body else row.subject_id
+    class_section_id = _resolve_class_section_id(
+        db, school_id, body, existing=row.class_section_id
+    )
+    session_year_id = _resolve_session_year_id(body, existing=row.session_year_id)
+    staff = _staff_for_teacher_user(db, school_id, teacher_user_id)
+    _same_school(db, Subject, subject_id, school_id, "Subject")
+    if session_year_id is not None:
+        _same_school(db, SessionYear, session_year_id, school_id, "Session year")
+    if class_section_id is not None:
+        link = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
+        _assert_subject_mapped_to_class(db, school_id, link.class_id, subject_id)
+    if _find_open_assignment(
+        db,
+        school_id,
+        staff.id,
+        subject_id,
+        class_section_id,
+        session_year_id,
+        exclude_id=row.id,
+    ):
+        raise AcademicError(409, "This teacher assignment already exists")
+    row.staff_id = staff.id
+    row.teacher_user_id = staff.user_id
+    row.subject_id = subject_id
+    row.class_section_id = class_section_id
+    row.session_year_id = session_year_id
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _assignment_items(db, [row])[0]

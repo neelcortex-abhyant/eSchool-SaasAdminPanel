@@ -11,6 +11,7 @@ from app.models.tables import (
     Announcement,
     Attendance,
     AuditLog,
+    ClassSubject,
     Exam,
     Expense,
     Fee,
@@ -29,6 +30,7 @@ from app.models.tables import (
     SubscriptionInvoiceCounter,
     SubscriptionRenewal,
     SystemSetting,
+    TeacherAssignment,
     User,
 )
 
@@ -39,6 +41,7 @@ __all__ = [
     "Announcement",
     "Attendance",
     "AuditLog",
+    "ClassSubject",
     "Exam",
     "Expense",
     "Fee",
@@ -62,5 +65,6 @@ __all__ = [
     "SubscriptionInvoiceCounter",
     "SubscriptionRenewal",
     "SystemSetting",
+    "TeacherAssignment",
     "User",
 ]

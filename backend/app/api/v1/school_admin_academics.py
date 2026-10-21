@@ -1,6 +1,7 @@
 """School-admin academic CRUD. The school id is taken from the authenticated user."""
 
 from __future__ import annotations
+
 from datetime import date as Date
 from typing import Annotated
 
@@ -14,6 +15,7 @@ from app.models.tables import (
     Announcement,
     Attendance,
     ClassSection,
+    ClassSubject,
     Exam,
     Expense,
     Fee,
@@ -23,11 +25,14 @@ from app.models.tables import (
     Section,
     SessionYear,
     Subject,
+    TeacherAssignment,
 )
 from app.services.v1 import rbac
 from app.services.v1 import school_academics as academics
 
-router = APIRouter(prefix="/school-admin/academics", tags=["v1-school-admin-academics"])
+# Mounted under school_admin.router (/school-admin) so URLs stay
+# /api/v1/school-admin/academics/... . Tag is applied by the parent include.
+router = APIRouter(prefix="/academics")
 
 
 class WriteBody(BaseModel):
@@ -47,7 +52,10 @@ class WriteBody(BaseModel):
     class_section_id: int | None = None
     class_id: int | None = None
     section_id: int | None = None
+    subject_id: int | None = None
+    teacher_id: int | None = None
     session_year_id: int | None = None
+    session_id: int | None = None  # alias for session_year_id on teacher-assignments
     guardian_id: int | None = None
     medium_id: int | None = None
     student_id: int | None = None
@@ -86,10 +94,22 @@ RESOURCE_PERMISSIONS = {
     "fees": rbac.PERM_FEES,
     "expenses": rbac.PERM_FEES,
     "notices": rbac.PERM_SCHOOL,
+    # Least privilege: teachers.manage (exists). Role catalog was not changed.
+    "teacher-assignments": rbac.PERM_TEACHERS,
 }
 # Academic structure: every role may read it (forms need classes and sessions);
 # only school.manage may change it.
-STRUCTURE_RESOURCES = frozenset({"classes", "sections", "subjects", "mediums", "sessions", "class-sections"})
+STRUCTURE_RESOURCES = frozenset(
+    {
+        "classes",
+        "sections",
+        "subjects",
+        "mediums",
+        "sessions",
+        "class-sections",
+        "class-subjects",
+    }
+)
 
 
 def _allow(auth: AuthContext, db: Session, resource: str, *, write: bool) -> None:
@@ -98,7 +118,9 @@ def _allow(auth: AuthContext, db: Session, resource: str, *, write: bool) -> Non
     else:
         permission = RESOURCE_PERMISSIONS.get(resource)
     if permission is None:
-        return  # unknown resource: the handler answers 404
+        # Still require a school-admin with dashboard.view before a generic 404.
+        assert_school_permission(auth, db, rbac.PERM_DASHBOARD)
+        return
     assert_school_permission(auth, db, permission)
 
 
@@ -106,7 +128,8 @@ def _run(action):
     try:
         return action()
     except academics.AcademicError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        # Detail is a fixed service string — never pass IntegrityError text through.
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
 
 
 @router.get("/summary")
@@ -119,6 +142,37 @@ def summary(
     return academics.summary(db, _school_id(auth), session_year_id)
 
 
+@router.post("/sessions/{session_id}/activate")
+def activate_session(
+    session_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    """Atomically set this session as the school's default and clear other defaults."""
+    assert_school_permission(auth, db, rbac.PERM_SCHOOL)
+    return _run(lambda: academics.activate_session(db, _school_id(auth), session_id))
+
+
+@router.get("/sessions/{row_id}")
+def get_session(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    assert_school_permission(auth, db, rbac.PERM_DASHBOARD)
+    return _run(lambda: academics.get_session(db, _school_id(auth), row_id))
+
+
+@router.get("/teacher-assignments/{row_id}")
+def get_teacher_assignment(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    assert_school_permission(auth, db, rbac.PERM_TEACHERS)
+    return _run(lambda: academics.get_teacher_assignment(db, _school_id(auth), row_id))
+
+
 @router.get("/{resource}")
 def index(
     resource: str,
@@ -127,6 +181,14 @@ def index(
     q: str = "",
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
+    medium_id: int | None = Query(default=None, ge=1),
+    class_id: int | None = Query(default=None, ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    teacher_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    session_year_id: int | None = Query(default=None, ge=1),
+    section_id: int | None = Query(default=None, ge=1),
+    session_id: int | None = Query(default=None, ge=1),
 ):
     _allow(auth, db, resource, write=False)
     school_id = _school_id(auth)
@@ -137,39 +199,153 @@ def index(
         if resource in {"teachers", "parents"}:
             return academics.list_people(db, school_id, resource, q, page, page_size)
         if resource == "classes":
-            return academics.list_named(db, SchoolClass, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name, "medium_id": row.medium_id})
+            return academics.list_classes(db, school_id, q, page, page_size, medium_id=medium_id)
         if resource == "sections":
-            return academics.list_named(db, Section, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name})
+            return academics.list_sections(
+                db, school_id, q, page, page_size, class_id=class_id
+            )
         if resource == "subjects":
-            return academics.list_named(db, Subject, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name, "code": row.code, "type": row.type, "medium_id": row.medium_id})
+            return academics.list_subjects(
+                db, school_id, q, page, page_size, medium_id=medium_id, class_id=class_id
+            )
         if resource == "mediums":
-            return academics.list_named(db, Medium, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name})
+            return academics.list_named(
+                db, Medium, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name}
+            )
         if resource == "sessions":
-            return academics.list_named(db, SessionYear, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name, "start_date": row.start_date.isoformat(), "end_date": row.end_date.isoformat()})
+            return academics.list_sessions(db, school_id, q, page, page_size)
         if resource == "class-sections":
-            return academics.list_named(db, ClassSection, school_id, "", page, page_size, lambda row: {"id": row.id, "name": f"Class {row.class_id} / Section {row.section_id}", "class_id": row.class_id, "section_id": row.section_id, "medium_id": row.medium_id})
+            return academics.list_class_sections(
+                db, school_id, page, page_size, class_id=class_id, medium_id=medium_id
+            )
+        if resource == "class-subjects":
+            return academics.list_class_subjects(
+                db, school_id, page, page_size, class_id=class_id, subject_id=subject_id
+            )
+        if resource == "teacher-assignments":
+            return academics.list_teacher_assignments(
+                db,
+                school_id,
+                page,
+                page_size,
+                teacher_id=teacher_id,
+                subject_id=subject_id,
+                class_id=class_id,
+                section_id=section_id,
+                class_section_id=class_section_id,
+                session_id=session_id,
+                session_year_id=session_year_id,
+            )
         if resource == "attendances":
-            return academics.list_named(db, Attendance, school_id, "", page, page_size, lambda row: {"id": row.id, "name": row.date.isoformat(), "student_id": row.student_id, "type": row.type, "date": row.date.isoformat(), "remark": row.remark})
+            return academics.list_named(
+                db,
+                Attendance,
+                school_id,
+                "",
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.date.isoformat(),
+                    "student_id": row.student_id,
+                    "type": row.type,
+                    "date": row.date.isoformat(),
+                    "remark": row.remark,
+                },
+            )
         if resource == "exams":
-            return academics.list_named(db, Exam, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name, "class_id": row.class_id, "publish": row.publish})
+            return academics.list_named(
+                db,
+                Exam,
+                school_id,
+                q,
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.name,
+                    "class_id": row.class_id,
+                    "publish": row.publish,
+                },
+            )
         if resource == "fees":
-            return academics.list_named(db, Fee, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.name, "due_date": row.due_date.isoformat(), "due_charges": row.due_charges})
+            return academics.list_named(
+                db,
+                Fee,
+                school_id,
+                q,
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.name,
+                    "due_date": row.due_date.isoformat(),
+                    "due_charges": row.due_charges,
+                },
+            )
         if resource == "expenses":
-            return academics.list_named(db, Expense, school_id, "", page, page_size, lambda row: {"id": row.id, "name": row.title, "title": row.title, "amount": row.amount, "date": row.date.isoformat()})
+            return academics.list_named(
+                db,
+                Expense,
+                school_id,
+                "",
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.title,
+                    "title": row.title,
+                    "amount": row.amount,
+                    "date": row.date.isoformat(),
+                },
+            )
         if resource == "notices":
-            return academics.list_named(db, Announcement, school_id, q, page, page_size, lambda row: {"id": row.id, "name": row.title, "title": row.title, "description": row.description})
+            return academics.list_named(
+                db,
+                Announcement,
+                school_id,
+                q,
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.title,
+                    "title": row.title,
+                    "description": row.description,
+                },
+            )
         if resource == "leaves":
-            return academics.list_named(db, Leave, school_id, "", page, page_size, lambda row: {"id": row.id, "name": row.reason, "user_id": row.user_id, "from_date": row.from_date.isoformat(), "to_date": row.to_date.isoformat(), "status": row.status})
+            return academics.list_named(
+                db,
+                Leave,
+                school_id,
+                "",
+                page,
+                page_size,
+                lambda row: {
+                    "id": row.id,
+                    "name": row.reason,
+                    "user_id": row.user_id,
+                    "from_date": row.from_date.isoformat(),
+                    "to_date": row.to_date.isoformat(),
+                    "status": row.status,
+                },
+            )
         raise academics.AcademicError(404, "Unknown school record")
 
     return _run(load)
 
 
 @router.post("/{resource}", status_code=201)
-def create(resource: str, body: WriteBody, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+def create(
+    resource: str,
+    body: WriteBody,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
     _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
-    data = body.model_dump(exclude_unset=True)
+    data = academics.sanitize_write_body(body.model_dump(exclude_unset=True))
 
     def save():
         if resource == "students":
@@ -186,6 +362,10 @@ def create(resource: str, body: WriteBody, auth: Annotated[AuthContext, Depends(
             return academics.create_class(db, school_id, data)
         if resource == "class-sections":
             return academics.create_class_section(db, school_id, data)
+        if resource == "class-subjects":
+            return academics.create_class_subject(db, school_id, data)
+        if resource == "teacher-assignments":
+            return academics.create_teacher_assignment(db, school_id, data)
         if resource == "subjects":
             return academics.create_subject(db, school_id, data)
         if resource == "attendances":
@@ -206,20 +386,39 @@ def create(resource: str, body: WriteBody, auth: Annotated[AuthContext, Depends(
 
 
 @router.patch("/{resource}/{row_id}")
-def update(resource: str, row_id: int, body: WriteBody, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+def update(
+    resource: str,
+    row_id: int,
+    body: WriteBody,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
     _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
-    data = body.model_dump(exclude_unset=True)
+    data = academics.sanitize_write_body(body.model_dump(exclude_unset=True))
 
     def change():
         if resource == "students":
             return academics.update_student(db, school_id, row_id, data)
+        if resource == "classes":
+            return academics.update_class(db, school_id, row_id, data)
+        if resource == "sections":
+            # Academics PATCH accepts name only; class_id changes use direct section routes.
+            return academics.update_section(
+                db, school_id, row_id, {k: v for k, v in data.items() if k == "name"}
+            )
+        if resource == "subjects":
+            return academics.update_subject(db, school_id, row_id, data)
+        if resource == "class-sections":
+            return academics.update_class_section(db, school_id, row_id, data)
+        if resource == "class-subjects":
+            return academics.update_class_subject(db, school_id, row_id, data)
+        if resource == "teacher-assignments":
+            return academics.update_teacher_assignment(db, school_id, row_id, data)
+        if resource == "sessions":
+            return academics.update_session(db, school_id, row_id, data)
         models = {
-            "classes": SchoolClass,
-            "sections": Section,
-            "subjects": Subject,
             "mediums": Medium,
-            "sessions": SessionYear,
             "exams": Exam,
             "fees": Fee,
             "expenses": Expense,
@@ -241,13 +440,21 @@ def update(resource: str, row_id: int, body: WriteBody, auth: Annotated[AuthCont
         if hasattr(row, "updated_at"):
             row.updated_at = academics._now()
         academics._commit(db)
-        return {"id": row.id, "name": getattr(row, "name", None) or getattr(row, "title", None) or getattr(row, "reason", "")}
+        return {
+            "id": row.id,
+            "name": getattr(row, "name", None) or getattr(row, "title", None) or getattr(row, "reason", ""),
+        }
 
     return _run(change)
 
 
 @router.delete("/{resource}/{row_id}")
-def remove(resource: str, row_id: int, auth: Annotated[AuthContext, Depends(require_school_admin)], db: Annotated[Session, Depends(central_db)]):
+def remove(
+    resource: str,
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
     _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
     models = {
@@ -256,6 +463,9 @@ def remove(resource: str, row_id: int, auth: Annotated[AuthContext, Depends(requ
         "subjects": Subject,
         "mediums": Medium,
         "sessions": SessionYear,
+        "class-sections": ClassSection,
+        "class-subjects": ClassSubject,
+        "teacher-assignments": TeacherAssignment,
         "exams": Exam,
         "fees": Fee,
         "expenses": Expense,
@@ -267,6 +477,11 @@ def remove(resource: str, row_id: int, auth: Annotated[AuthContext, Depends(requ
         if resource == "students":
             academics.delete_student(db, school_id, row_id)
             return {"deleted": True}
+        if resource == "sessions":
+            academics.soft_delete_session(db, school_id, row_id)
+            return {"deleted": True}
+        if resource == "teacher-assignments":
+            return academics.soft_delete_teacher_assignment(db, school_id, row_id)
         model = models.get(resource)
         if model is None:
             raise academics.AcademicError(404, "This record cannot be deleted here")

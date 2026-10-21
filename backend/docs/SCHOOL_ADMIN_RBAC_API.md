@@ -87,10 +87,10 @@ An admin with several roles gets the union of their permissions.
 
 | Key | Label | What it unlocks in the backend |
 |---|---|---|
-| `dashboard.view` | Dashboard | Academics summary, own profile, own school, session years. Read-only academic structure (classes, sections, subjects, mediums, sessions, class-sections). |
-| `school.manage` | School Management | Create/edit/delete academic structure; notices |
+| `dashboard.view` | Dashboard | Academics summary, own profile, own school, session years. Read-only academic structure (classes, sections, subjects, mediums, sessions, class-sections, class-subjects). |
+| `school.manage` | School Management | Create/edit/delete academic structure; session activate; notices |
 | `students.manage` | Student Management | Students, parents |
-| `teachers.manage` | Teacher Management | Teachers, leaves |
+| `teachers.manage` | Teacher Management | Teachers, leaves, teacher-assignments |
 | `fees.manage` | Fees | Fees, expenses |
 | `exams.manage` | Exams | Exams |
 | `attendance.manage` | Attendance | Attendance |
@@ -417,9 +417,11 @@ These apply to School Admin tokens on `/api/v1/school-admin/...`, `/api/v1/schoo
 | Subscription expired | `403` | `Subscription access is not available` |
 | Role lacks the module's permission | `403` | `Permission denied` |
 | Record belongs to another school | `404` | `Record not found` |
+| Filter id (`medium_id`, `class_id`, …) belongs to another school | `404` | `Record not found` |
 | Edit points at another school's class/session/user etc. | `422` | e.g. `Medium does not belong to this school` |
+| Body includes `school_id` / other forbidden ownership fields | `422` | Validation / extra fields forbidden |
 
-The school is always taken from the signed-in admin's account, never from the request. A School Admin cannot reach another school's data by changing an id.
+The school is always taken from the signed-in admin's account, never from the request body, query, path, or headers. A School Admin cannot reach another school's data by changing an id. Direct `/school-admin/...` academic routes and legacy `/school-admin/academics/...` routes use the same auth dependencies and school-scoped services.
 
 To decide which School Admin menus to show, the Super Admin side has `roles` and `permissions` on each admin. The School Admin panel can treat a `403` `Permission denied` as "hide this module".
 
