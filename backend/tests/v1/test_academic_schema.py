@@ -28,9 +28,11 @@ def _script() -> ScriptDirectory:
 def test_alembic_academic_revision_chain_is_linear():
     script = _script()
     heads = script.get_heads()
-    assert heads == ["20261021_0022"], heads
+    # 20261022_0023 (School Admin people) builds on the academics chain.
+    assert heads == ["20261022_0023"], heads
 
     expected = [
+        ("20261022_0023", "20261021_0022"),
         ("20261021_0022", "20261021_0021"),
         ("20261021_0021", "20261021_0020"),
         ("20261021_0020", "20261021_0019"),

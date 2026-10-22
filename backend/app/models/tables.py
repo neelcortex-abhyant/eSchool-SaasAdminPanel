@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -341,6 +342,24 @@ class TeacherAssignment(Base, TimestampMixin):
 
 class Student(Base, TimestampMixin):
     __tablename__ = "students"
+    __table_args__ = (
+        Index(
+            "uq_students_school_admission_no",
+            "school_id",
+            "admission_no",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_students_roll_number",
+            "school_id",
+            "session_year_id",
+            "class_section_id",
+            "roll_number",
+            unique=True,
+            postgresql_where=text("roll_number IS NOT NULL AND deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -349,11 +368,35 @@ class Student(Base, TimestampMixin):
     roll_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     admission_date: Mapped[DateType] = mapped_column(Date)
     school_id: Mapped[int] = mapped_column(Integer)
+    # Mirrors the primary student_guardians row during the transition.
     guardian_id: Mapped[int] = mapped_column(Integer)
     session_year_id: Mapped[int] = mapped_column(Integer)
+    status: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="student")
+
+
+class StudentGuardian(Base, TimestampMixin):
+    """A parent (users.id) linked to a student. At most 4 per student, exactly one primary."""
+
+    __tablename__ = "student_guardians"
+    __table_args__ = (
+        UniqueConstraint("student_id", "parent_id", name="uq_student_guardians_student_parent"),
+        Index(
+            "uq_student_guardians_primary",
+            "student_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    relationship: Mapped[str] = mapped_column(String(16), default="Guardian")
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    school_id: Mapped[int] = mapped_column(Integer, index=True)
 
 
 class Attendance(Base, TimestampMixin):
@@ -402,6 +445,48 @@ class Staff(Base, TimestampMixin):
     school_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
     qualification: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     salary: Mapped[float] = mapped_column(Float, default=0)
+    # teacher | staff. Rows created before this column are teachers.
+    employee_type: Mapped[str] = mapped_column(String(16), default="teacher", server_default=text("'teacher'"))
+    employee_code: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    designation: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    joining_date: Mapped[Optional[DateType]] = mapped_column(Date, nullable=True)
+    # Permanent | Probation | Contract | Part-time
+    employment_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+
+
+Index(
+    "uq_staffs_school_employee_code",
+    Staff.school_id,
+    func.upper(Staff.employee_code),
+    unique=True,
+    postgresql_where=text("employee_code IS NOT NULL"),
+)
+
+
+class Document(Base):
+    """A stored photo or document for a student, teacher or staff member.
+
+    storage_key is a random key in private storage (services/v1/file_storage.py).
+    Files are only handed out through short-lived signed URLs.
+    """
+
+    __tablename__ = "documents"
+    __table_args__ = (Index("ix_documents_owner", "school_id", "owner_type", "owner_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False)
+    # student | teacher | staff. owner_id is students.id or users.id (teachers, staff).
+    owner_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    owner_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # document | photo. An owner has at most one photo.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="document", server_default=text("'document'"))
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class Leave(Base, TimestampMixin):

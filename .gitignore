@@ -19,6 +19,7 @@ datasets/sqlite_mirror/
 
 # Python
 backend/.venv/
+backend/var/
 **/__pycache__/
 **/.pytest_cache/
 **/*.pyc

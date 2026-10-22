@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     password_reset_ttl_minutes: int = 60
     invite_ttl_minutes: int = 4320
 
+    # Student, teacher and staff photos and documents. "local" keeps files on
+    # disk under file_storage_dir (default backend/var/uploads), outside any
+    # served directory. Files are handed out only through signed links that
+    # expire after file_url_ttl_seconds.
+    file_storage_backend: str = "local"
+    file_storage_dir: str = ""
+    file_url_ttl_seconds: int = 600
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())
