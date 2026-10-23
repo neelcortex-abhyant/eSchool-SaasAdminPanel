@@ -1,0 +1,79 @@
+{
+  "sessions": [
+    { "id": 1, "name": "2025-26", "start_date": "2025-04-01", "end_date": "2026-03-31", "default": 0 },
+    { "id": 2, "name": "2026-27", "start_date": "2026-04-01", "end_date": "2027-03-31", "default": 1 }
+  ],
+  "mediums": [
+    { "id": 1, "name": "English" },
+    { "id": 2, "name": "Hindi" }
+  ],
+  "classes": [
+    { "id": 1, "name": "Class 1", "medium_id": 1, "session_year_id": null, "status": 1 },
+    { "id": 2, "name": "Class 2", "medium_id": 1, "session_year_id": null, "status": 1 },
+    { "id": 3, "name": "Class 5", "medium_id": 1, "session_year_id": 2, "status": 1 },
+    { "id": 4, "name": "Class 8", "medium_id": 1, "session_year_id": 2, "status": 1 },
+    { "id": 5, "name": "Class 10", "medium_id": 1, "session_year_id": 2, "status": 1 },
+    { "id": 6, "name": "Class 5", "medium_id": 2, "session_year_id": 2, "status": 1 },
+    { "id": 7, "name": "Class 12", "medium_id": 1, "session_year_id": 1, "status": 0 }
+  ],
+  "sections": [
+    { "id": 1, "name": "A" },
+    { "id": 2, "name": "B" },
+    { "id": 3, "name": "C" }
+  ],
+  "class_sections": [
+    { "id": 1, "class_id": 1, "section_id": 1, "status": 1 },
+    { "id": 2, "class_id": 1, "section_id": 2, "status": 1 },
+    { "id": 3, "class_id": 2, "section_id": 1, "status": 1 },
+    { "id": 4, "class_id": 3, "section_id": 1, "status": 1 },
+    { "id": 5, "class_id": 3, "section_id": 2, "status": 1 },
+    { "id": 6, "class_id": 3, "section_id": 3, "status": 0 },
+    { "id": 7, "class_id": 4, "section_id": 1, "status": 1 },
+    { "id": 8, "class_id": 5, "section_id": 1, "status": 1 },
+    { "id": 9, "class_id": 5, "section_id": 2, "status": 1 },
+    { "id": 10, "class_id": 6, "section_id": 1, "status": 1 }
+  ],
+  "subjects": [
+    { "id": 1, "name": "English", "code": "ENG", "type": "Theory", "medium_id": 1, "status": 1 },
+    { "id": 2, "name": "Mathematics", "code": "MATH", "type": "Theory", "medium_id": 1, "status": 1 },
+    { "id": 3, "name": "Science", "code": "SCI", "type": "Theory", "medium_id": 1, "status": 1 },
+    { "id": 4, "name": "Science Lab", "code": "SCI-LAB", "type": "Practical", "medium_id": 1, "status": 1 },
+    { "id": 5, "name": "Computer Science", "code": "CS", "type": "Theory", "medium_id": 1, "status": 1 },
+    { "id": 6, "name": "Sanskrit", "code": "SKT", "type": "Theory", "medium_id": 1, "status": 1 },
+    { "id": 7, "name": "Hindi", "code": "HIN", "type": "Theory", "medium_id": 2, "status": 1 },
+    { "id": 8, "name": "Drawing", "code": null, "type": "Practical", "medium_id": 1, "status": 0 }
+  ],
+  "class_subjects": [
+    { "class_id": 1, "subject_id": 1, "type": "Compulsory" },
+    { "class_id": 1, "subject_id": 2, "type": "Compulsory" },
+    { "class_id": 2, "subject_id": 1, "type": "Compulsory" },
+    { "class_id": 2, "subject_id": 2, "type": "Compulsory" },
+    { "class_id": 3, "subject_id": 1, "type": "Compulsory" },
+    { "class_id": 3, "subject_id": 2, "type": "Compulsory" },
+    { "class_id": 3, "subject_id": 3, "type": "Compulsory" },
+    { "class_id": 4, "subject_id": 1, "type": "Compulsory" },
+    { "class_id": 4, "subject_id": 2, "type": "Compulsory" },
+    { "class_id": 4, "subject_id": 3, "type": "Compulsory" },
+    { "class_id": 4, "subject_id": 6, "type": "Elective" },
+    { "class_id": 5, "subject_id": 1, "type": "Compulsory" },
+    { "class_id": 5, "subject_id": 2, "type": "Compulsory" },
+    { "class_id": 5, "subject_id": 3, "type": "Compulsory" },
+    { "class_id": 5, "subject_id": 4, "type": "Compulsory" },
+    { "class_id": 5, "subject_id": 5, "type": "Elective" },
+    { "class_id": 5, "subject_id": 6, "type": "Elective" },
+    { "class_id": 6, "subject_id": 7, "type": "Compulsory" }
+  ],
+  "teachers": [
+    { "id": 101, "name": "Anita Rao", "email": "anita.rao@school.example" },
+    { "id": 102, "name": "Rahul Mehta", "email": "rahul.mehta@school.example" },
+    { "id": 103, "name": "Sunita Iyer", "email": "sunita.iyer@school.example" },
+    { "id": 104, "name": "Vikram Singh", "email": "vikram.singh@school.example" },
+    { "id": 105, "name": "Farah Khan", "email": "farah.khan@school.example" }
+  ],
+  "teacher_assignments": [
+    { "id": 1, "session_year_id": 2, "class_section_id": 4, "subject_id": 2, "teacher_id": 102 },
+    { "id": 2, "session_year_id": 2, "class_section_id": 4, "subject_id": 1, "teacher_id": 101 },
+    { "id": 3, "session_year_id": 2, "class_section_id": 8, "subject_id": 3, "teacher_id": 103 },
+    { "id": 4, "session_year_id": 2, "class_section_id": 9, "subject_id": 5, "teacher_id": 104 }
+  ]
+}
