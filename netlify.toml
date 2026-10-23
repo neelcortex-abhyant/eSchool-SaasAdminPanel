@@ -8,6 +8,10 @@
   NEXT_PUBLIC_ADMIN_API_URL = "https://eschool-backend-8322.onrender.com/api/v1"
   NEXT_PUBLIC_BACKEND_URL = "https://eschool-backend-8322.onrender.com"
   BACKEND_URL = "https://eschool-backend-8322.onrender.com"
+  # School Admin pages use the backend API instead of sample data (see admin-web/README.md).
+  # Staff has no backend route yet, so it stays on sample data.
+  NEXT_PUBLIC_ACADEMICS_API_MODE = "live"
+  NEXT_PUBLIC_PEOPLE_API_MODE = "students:live,parents:live,teachers:live,staff:mock"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
