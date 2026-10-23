@@ -94,8 +94,9 @@ def test_other_roles_and_missing_tokens_are_still_refused(monkeypatch):
 
 
 def test_legacy_cookie_session_is_refused_for_a_suspended_school(monkeypatch):
-    legacy = SimpleNamespace(id=3, school_id=7, deleted_at=None)
+    legacy = SimpleNamespace(id=3, school_id=7, deleted_at=None, status=1)
     monkeypatch.setattr(deps, "read_session", lambda _token: {"uid": 3})
+    monkeypatch.setattr(deps, "user_roles", lambda _db, _user_id: {ROLE_SCHOOL_ADMIN})
     with pytest.raises(HTTPException) as caught:
         deps.admin_context(_request(cookie="c"), FakeDb(SUSPENDED, legacy_user=legacy))
     assert caught.value.status_code == 403
@@ -104,7 +105,7 @@ def test_legacy_cookie_session_is_refused_for_a_suspended_school(monkeypatch):
 
 
 def test_legacy_cookie_without_a_school_is_unchanged(monkeypatch):
-    legacy = SimpleNamespace(id=1, school_id=None, deleted_at=None)
+    legacy = SimpleNamespace(id=1, school_id=None, deleted_at=None, status=1)
     monkeypatch.setattr(deps, "read_session", lambda _token: {"uid": 1})
     db = FakeDb(None, legacy_user=legacy)
     assert deps.admin_context(_request(cookie="c"), db) == (db, legacy, None)

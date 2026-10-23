@@ -43,9 +43,15 @@ class WriteBody(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     mobile: str | None = Field(default=None, max_length=32)
     qualification: str | None = None
     salary: float | None = None
+    employee_id: str | None = Field(default=None, max_length=64)
+    joining_date: Date | None = None
+    employment_status: str | None = Field(default=None, max_length=32)
+    department: str | None = Field(default=None, max_length=128)
+    designation: str | None = Field(default=None, max_length=128)
     admission_no: str | None = None
     roll_number: int | None = None
     admission_date: Date | None = None

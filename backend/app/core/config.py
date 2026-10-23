@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     password_reset_ttl_minutes: int = 60
     invite_ttl_minutes: int = 4320
 
+    # Teacher/staff private document storage. Default ``none`` → uploads return 503
+    # until backend=local and DOCUMENT_STORAGE_PATH point at a private directory.
+    document_storage_backend: str = "none"
+    document_storage_path: str = ""
+    document_max_image_bytes: int = 5_242_880
+    document_max_file_bytes: int = 10_485_760
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())
@@ -77,6 +84,12 @@ class Settings(BaseSettings):
     @property
     def neon_configured(self) -> bool:
         return bool((self.neon_database_url or "").strip())
+
+    @property
+    def document_storage_configured(self) -> bool:
+        backend = (self.document_storage_backend or "").strip().lower()
+        path = (self.document_storage_path or "").strip()
+        return backend == "local" and bool(path)
 
 
 @lru_cache

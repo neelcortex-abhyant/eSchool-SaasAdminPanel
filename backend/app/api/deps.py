@@ -11,8 +11,11 @@ from sqlalchemy import select
 
 from app.core.responses import INACTIVATED_USER, VALIDATION_ERROR, fail
 from app.core.security import read_session
-from app.models.tables import School, Student, User
+from app.models.tables import School, Staff, Student, User
 from app.services.mobile_auth import find_school, find_token_user, is_staff, user_roles
+
+# Teachers with these employment_status values may not use teacher teaching APIs.
+_TEACHER_INACTIVE_EMPLOYMENT = frozenset({"resigned", "terminated"})
 
 
 class ApiError(Exception):
@@ -225,5 +228,27 @@ def require_staff_user(
     """Staff app routes: teacher, school admin, driver or other staff role."""
     db, user, _school = tenant
     if not is_staff(user_roles(db, user.id)):
+        raise ApiError(fail("Unauthorized Access"))
+    return tenant
+
+
+def require_teacher_user(
+    tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
+) -> Tuple[Session, User, School]:
+    """Teacher teaching APIs: Spatie Teacher role + Staff row; not resigned/terminated.
+
+    Identity comes from the personal-access-token principal (``/api/teacher/login``).
+    Does not grant school-admin panel permissions.
+    """
+    db, user, school = tenant
+    if "Teacher" not in user_roles(db, user.id):
+        raise ApiError(fail("Unauthorized Access"))
+    staff = db.scalar(
+        select(Staff).where(Staff.user_id == user.id, Staff.school_id == school.id)
+    )
+    if staff is None:
+        raise ApiError(fail("Unauthorized Access"))
+    status = (staff.employment_status or "active").strip().lower()
+    if status in _TEACHER_INACTIVE_EMPLOYMENT:
         raise ApiError(fail("Unauthorized Access"))
     return tenant

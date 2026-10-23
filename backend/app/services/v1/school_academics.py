@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.tables import (
+    USER_MODEL,
     Announcement,
     Attendance,
     ClassSection,
@@ -20,6 +21,8 @@ from app.models.tables import (
     Fee,
     Leave,
     Medium,
+    ModelHasRole,
+    Role,
     SchoolClass,
     Section,
     SessionYear,
@@ -131,6 +134,56 @@ def _commit(db: Session) -> None:
         db.rollback()
         # Never surface SQL / constraint text to clients.
         raise AcademicError(409, "A record with these details already exists")
+
+
+def _ensure_school_role(db: Session, school_id: int, role_name: str) -> Role:
+    """Get or create a school-scoped Spatie role (web guard)."""
+    role = db.scalar(
+        select(Role).where(
+            Role.name == role_name,
+            Role.guard_name == "web",
+            Role.school_id == school_id,
+        )
+    )
+    if role is not None:
+        return role
+    role = Role(
+        name=role_name,
+        guard_name="web",
+        school_id=school_id,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(role)
+    db.flush()
+    return role
+
+
+def _assign_user_role(db: Session, user_id: int, role: Role) -> None:
+    existing = db.scalar(
+        select(ModelHasRole).where(
+            ModelHasRole.role_id == role.id,
+            ModelHasRole.model_id == user_id,
+            ModelHasRole.model_type == USER_MODEL,
+        )
+    )
+    if existing is not None:
+        return
+    db.add(ModelHasRole(role_id=role.id, model_id=user_id, model_type=USER_MODEL))
+
+
+def _assert_unique_school_email(db: Session, school_id: int, email: str) -> None:
+    existing = (
+        db.query(User)
+        .filter(
+            User.school_id == school_id,
+            func.lower(User.email) == email.lower(),
+            User.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing is not None:
+        raise AcademicError(409, "A user with this email already exists in this school")
 
 
 def summary(db: Session, school_id: int, session_year_id: int | None = None) -> dict:
@@ -1535,33 +1588,71 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
 
 
 def list_people(db: Session, school_id: int, kind: str, q: str, page: int, page_size: int) -> dict:
+    if kind == "teachers":
+        from app.services.v1 import school_teachers as teachers_svc
+
+        return teachers_svc.list_teachers(db, school_id, q, page, page_size)
+
     page, page_size = _page(page, page_size)
     query = db.query(User).filter(User.school_id == school_id, User.deleted_at.is_(None))
-    student_ids = {row[0] for row in db.query(Student.user_id).filter(Student.school_id == school_id, Student.deleted_at.is_(None)).all()}
+    student_ids = {
+        row[0]
+        for row in db.query(Student.user_id)
+        .filter(Student.school_id == school_id, Student.deleted_at.is_(None))
+        .all()
+    }
     staff_ids = {row[0] for row in db.query(Staff.user_id).filter(Staff.school_id == school_id).all()}
-    if kind == "teachers":
-        query = query.filter(User.id.in_(staff_ids or {-1}))
-    elif kind == "parents":
+    if kind == "parents":
         if student_ids:
             query = query.filter(User.id.notin_(student_ids))
         if staff_ids:
             query = query.filter(User.id.notin_(staff_ids))
     if q.strip():
         like = f"%{q.strip()}%"
-        query = query.filter(or_(User.first_name.ilike(like), User.last_name.ilike(like), User.email.ilike(like)))
+        query = query.filter(
+            or_(User.first_name.ilike(like), User.last_name.ilike(like), User.email.ilike(like))
+        )
     total = query.count()
     rows = query.order_by(User.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    items = [{"id": row.id, "name": _user_name(row), "first_name": row.first_name, "last_name": row.last_name, "email": row.email, "mobile": row.mobile, "status": row.status} for row in rows]
+    items = [
+        {
+            "id": row.id,
+            "name": _user_name(row),
+            "first_name": row.first_name,
+            "last_name": row.last_name,
+            "email": row.email,
+            "mobile": row.mobile,
+            "status": row.status,
+        }
+        for row in rows
+    ]
     return _envelope(items, total, page, page_size)
 
 
 def create_person(db: Session, school_id: int, kind: str, body: dict) -> dict:
+    if kind == "teachers":
+        from app.services.v1 import school_teachers as teachers_svc
+
+        return teachers_svc.create_teacher(db, school_id, body)
+
+    for field in ("first_name", "last_name", "email"):
+        if field not in body or not str(body.get(field) or "").strip():
+            raise AcademicError(422, f"{field} is required")
+    email = str(body["email"]).strip().lower()
+    _assert_unique_school_email(db, school_id, email)
+    password_raw = body.get("password")
+    if password_raw is None or not str(password_raw):
+        raise AcademicError(422, "password is required")
+    password = str(password_raw)
+    if len(password) < 8:
+        raise AcademicError(422, "password must be at least 8 characters")
+
     user = User(
-        first_name=body["first_name"].strip(),
-        last_name=body["last_name"].strip(),
-        email=body["email"].strip().lower(),
+        first_name=str(body["first_name"]).strip(),
+        last_name=str(body["last_name"]).strip(),
+        email=email,
         mobile=(body.get("mobile") or "").strip() or None,
-        password=hash_password(secrets.token_urlsafe(18)),
+        password=hash_password(password),
         status=1,
         school_id=school_id,
         created_at=_now(),
@@ -1569,11 +1660,17 @@ def create_person(db: Session, school_id: int, kind: str, body: dict) -> dict:
     )
     db.add(user)
     db.flush()
-    if kind == "teachers":
-        db.add(Staff(user_id=user.id, school_id=school_id, qualification=(body.get("qualification") or "").strip() or None, salary=float(body.get("salary") or 0), created_at=_now(), updated_at=_now()))
     _commit(db)
     db.refresh(user)
-    return {"id": user.id, "name": _user_name(user), "first_name": user.first_name, "last_name": user.last_name, "email": user.email, "mobile": user.mobile, "status": user.status}
+    return {
+        "id": user.id,
+        "name": _user_name(user),
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "mobile": user.mobile,
+        "status": user.status,
+    }
 
 
 def soft_delete(db: Session, model, school_id: int, row_id: int) -> None:
@@ -1678,11 +1775,15 @@ def update_class_subject(db: Session, school_id: int, row_id: int, body: dict) -
 
 
 def _staff_for_teacher_user(db: Session, school_id: int, teacher_user_id: int) -> Staff:
+    from app.services.v1.school_teachers import _user_has_teacher_role
+
     user = db.get(User, teacher_user_id)
     if user is None or user.school_id != school_id or user.deleted_at is not None:
         raise AcademicError(422, "Teacher does not belong to this school")
     if getattr(user, "status", 1) != 1:
         raise AcademicError(422, "Teacher is not active")
+    if not _user_has_teacher_role(db, teacher_user_id, school_id):
+        raise AcademicError(422, "User is not a Teacher in this school")
     staff = (
         db.query(Staff)
         .filter(Staff.user_id == teacher_user_id, Staff.school_id == school_id)

@@ -28,7 +28,11 @@ def _script() -> ScriptDirectory:
 def test_alembic_academic_revision_chain_is_linear():
     script = _script()
     heads = script.get_heads()
-    assert heads == ["20261021_0022"], heads
+    assert heads == ["20261023_0036"], heads
+
+    latest = script.get_revision("20261023_0036")
+    assert latest is not None
+    assert latest.down_revision == "20261023_0035"
 
     expected = [
         ("20261021_0022", "20261021_0021"),
@@ -42,7 +46,6 @@ def test_alembic_academic_revision_chain_is_linear():
         rev = script.get_revision(revision)
         assert rev is not None, revision
         assert rev.down_revision == parent, (revision, rev.down_revision)
-
 
 def test_orm_unique_indexes_match_documented_migration_names():
     def names(model) -> set[str]:

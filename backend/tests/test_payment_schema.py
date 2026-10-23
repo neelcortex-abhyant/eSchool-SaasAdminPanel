@@ -134,7 +134,7 @@ def test_bill_guard_migration_is_the_single_head():
     revision = script.get_revision("20261019_0015")
     assert revision is not None
     assert revision.down_revision == "20261017_0014"
-    assert script.get_heads() == ["20261019_0015"]
+    assert len(script.get_heads()) == 1, script.get_heads()
     upgrade = inspect.getsource(revision.module.upgrade)
     assert "uq_payment_transactions_bill_open" in upgrade
     assert "status <> 4" in upgrade

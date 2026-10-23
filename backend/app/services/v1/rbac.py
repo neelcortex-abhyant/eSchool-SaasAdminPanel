@@ -21,6 +21,7 @@ PERM_DASHBOARD = "dashboard.view"
 PERM_SCHOOL = "school.manage"
 PERM_STUDENTS = "students.manage"
 PERM_TEACHERS = "teachers.manage"
+PERM_STAFF = "staff.manage"
 PERM_FEES = "fees.manage"
 PERM_EXAMS = "exams.manage"
 PERM_ATTENDANCE = "attendance.manage"
@@ -33,6 +34,7 @@ PERMISSIONS: dict[str, str] = {
     PERM_SCHOOL: "School Management",
     PERM_STUDENTS: "Student Management",
     PERM_TEACHERS: "Teacher Management",
+    PERM_STAFF: "Staff Management",
     PERM_FEES: "Fees",
     PERM_EXAMS: "Exams",
     PERM_ATTENDANCE: "Attendance",
@@ -57,6 +59,7 @@ ADMIN_ROLES: dict[str, dict] = {
             PERM_DASHBOARD,
             PERM_STUDENTS,
             PERM_TEACHERS,
+            PERM_STAFF,
             PERM_EXAMS,
             PERM_ATTENDANCE,
             PERM_REPORTS,

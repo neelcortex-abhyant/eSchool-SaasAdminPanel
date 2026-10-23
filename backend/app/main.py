@@ -14,7 +14,12 @@ from app.api.admin_writes import router as admin_writes_router
 from app.api.deps import ApiError
 from app.api.mobile import router as mobile_router
 from app.api.staff_and_writes import router as staff_and_writes_router
+from app.api.student_homework import router as student_homework_router
+from app.api.student_study_materials import router as student_study_materials_router
+from app.api.student_online_assessments import router as student_online_assessments_router
+from app.api.student_offline_exams import router as student_offline_exams_router
 from app.api.student_reads import router as student_reads_router
+from app.api.teacher_portal import router as teacher_portal_router
 from app.api.stubs import router as stub_router
 from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
@@ -144,6 +149,11 @@ def ready():
 
 app.include_router(mobile_router, prefix="/api")
 app.include_router(student_reads_router, prefix="/api")
+app.include_router(student_homework_router, prefix="/api")
+app.include_router(student_study_materials_router, prefix="/api")
+app.include_router(student_online_assessments_router, prefix="/api")
+app.include_router(student_offline_exams_router, prefix="/api")
+app.include_router(teacher_portal_router, prefix="/api")
 app.include_router(staff_and_writes_router, prefix="/api")
 app.include_router(stub_router, prefix="/api")
 app.include_router(admin_router, prefix="/api/admin")

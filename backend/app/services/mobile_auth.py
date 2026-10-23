@@ -74,6 +74,27 @@ def issue_token(db: Session, user: User) -> str:
     return f"{row.id}|{plain}"
 
 
+def revoke_legacy_user_tokens(db: Session, user_id: int) -> int:
+    """Delete personal_access_tokens for a legacy user (defense-in-depth on deactivate).
+
+    ``require_tenant_user`` already rejects ``User.status != 1``; this clears
+    issued Bearer tokens so deactivated teachers/staff cannot keep using them.
+    Does not commit — caller owns the transaction.
+    """
+    rows = (
+        db.query(PersonalAccessToken)
+        .filter(
+            PersonalAccessToken.tokenable_type == USER_MODEL,
+            PersonalAccessToken.tokenable_id == user_id,
+        )
+        .all()
+    )
+    count = len(rows)
+    for row in rows:
+        db.delete(row)
+    return count
+
+
 def find_token_user(db: Session, bearer: str | None) -> User | None:
     if not bearer or "|" not in bearer:
         return None

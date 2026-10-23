@@ -90,7 +90,12 @@ def _seed(client, headers):
     teacher = client.post(
         f"{ACADEMICS}/teachers",
         headers=headers,
-        json={"first_name": "T", "last_name": "One", "email": f"t-{class_id}@eschool.com"},
+        json={
+            "first_name": "T",
+            "last_name": "One",
+            "email": f"t-{class_id}@eschool.com",
+            "password": "teacherpass1",
+        },
     )
     assert teacher.status_code == 201, teacher.text
     return {
@@ -169,7 +174,12 @@ def test_assignment_crud_filters_duplicate_and_soft_delete(v1_client, v1_db):
     teacher2 = v1_client.post(
         f"{ACADEMICS}/teachers",
         headers=admin,
-        json={"first_name": "T", "last_name": "Two", "email": "t2-ta@eschool.com"},
+        json={
+            "first_name": "T",
+            "last_name": "Two",
+            "email": "t2-ta@eschool.com",
+            "password": "teacherpass1",
+        },
     )
     assert teacher2.status_code == 201
     team = v1_client.post(

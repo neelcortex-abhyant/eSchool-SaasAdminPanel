@@ -214,7 +214,12 @@ def test_teacher_assignments_rbac_and_isolation(v1_client, v1_db):
     teacher = v1_client.post(
         f"{ACADEMICS}/teachers",
         headers=admin_a,
-        json={"first_name": "T", "last_name": "One", "email": "teacher-acad@eschool.com"},
+        json={
+            "first_name": "T",
+            "last_name": "One",
+            "email": "teacher-acad@eschool.com",
+            "password": "teacherpass1",
+        },
     )
     assert teacher.status_code == 201, teacher.text
     teacher_id = teacher.json()["id"]

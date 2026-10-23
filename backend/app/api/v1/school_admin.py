@@ -2,21 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import date, datetime
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
 from app.api.v1.deps import AuthContext, assert_school_scope, require_school_permission
+from app.core.config import get_settings
 from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
+from app.services.v1 import person_documents as docs_svc
 from app.services.v1 import rbac, school_service
 from app.services.v1 import school_academics as academics
+from app.services.v1 import school_staff as staff_svc
+from app.services.v1 import school_teachers as teachers_svc
+from app.services.v1 import school_homework as homework_svc
+from app.services.v1 import school_offline_exams as offline_svc
+from app.services.v1 import school_online_assessments as oa_svc
+from app.services.v1 import school_study_materials as materials_svc
+from app.services.v1 import school_timetable as timetable_svc
 
 router = APIRouter(prefix="/school-admin", tags=["v1-school-admin"])
 
@@ -25,6 +36,20 @@ require_school_context = require_school_permission(rbac.PERM_DASHBOARD)
 require_structure_write = require_school_permission(rbac.PERM_SCHOOL)
 # Teacher assignments use teachers.manage (same as academics/teacher-assignments).
 require_teachers = require_school_permission(rbac.PERM_TEACHERS)
+require_staff = require_school_permission(rbac.PERM_STAFF)
+require_exams = require_school_permission(rbac.PERM_EXAMS)
+
+
+def require_teachers_or_staff(
+    auth: Annotated[AuthContext, Depends(require_school_context)],
+    db: Annotated[Session, Depends(central_db)],
+) -> AuthContext:
+    """Unified people listing: teachers.manage or staff.manage."""
+    granted = set(rbac.permissions_for(db, auth.user))
+    if rbac.PERM_TEACHERS not in granted and rbac.PERM_STAFF not in granted:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    return auth
+
 
 # Academic structure lives in school_admin_academics.py; inherits this router's tag.
 # Mounted first so /academics/... stays distinct from direct /classes and /sessions.
@@ -84,6 +109,216 @@ class TeacherAssignmentWriteBody(BaseModel):
     session_year_id: int | None = Field(default=None, ge=1)
 
 
+class TeacherCreateBody(BaseModel):
+    """Create a Teacher account + Staff row. school_id / roles forbidden."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    email: EmailStr = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    mobile: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=16)
+    dob: date | None = None
+    current_address: str | None = Field(default=None, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    country_code: str | None = Field(default=None, max_length=32)
+    image: str | None = Field(default=None, max_length=512)
+    qualification: str | None = Field(default=None, max_length=512)
+    salary: float | None = Field(default=None, ge=0)
+    employee_id: str | None = Field(default=None, max_length=64)
+    joining_date: date | None = None
+    employment_status: str | None = Field(default=None, max_length=32)
+    department: str | None = Field(default=None, max_length=128)
+    designation: str | None = Field(default=None, max_length=128)
+
+
+class TeacherUpdateBody(BaseModel):
+    """Partial teacher profile / employment update. Account status uses …/status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=128)
+    last_name: str | None = Field(default=None, min_length=1, max_length=128)
+    email: EmailStr | None = None
+    mobile: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=16)
+    dob: date | None = None
+    current_address: str | None = Field(default=None, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    country_code: str | None = Field(default=None, max_length=32)
+    image: str | None = Field(default=None, max_length=512)
+    qualification: str | None = Field(default=None, max_length=512)
+    salary: float | None = Field(default=None, ge=0)
+    employee_id: str | None = Field(default=None, max_length=64)
+    joining_date: date | None = None
+    employment_status: str | None = Field(default=None, max_length=32)
+    department: str | None = Field(default=None, max_length=128)
+    designation: str | None = Field(default=None, max_length=128)
+
+
+class TeacherStatusBody(BaseModel):
+    """Account activation. Maps to User.status (0=inactive, 1=active)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: int = Field(ge=0, le=1)
+
+
+class StaffCreateBody(BaseModel):
+    """Create non-teaching Staff account + Staff row. Never assigns Teacher."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    email: EmailStr = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    mobile: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=16)
+    dob: date | None = None
+    current_address: str | None = Field(default=None, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    country_code: str | None = Field(default=None, max_length=32)
+    image: str | None = Field(default=None, max_length=512)
+    qualification: str | None = Field(default=None, max_length=512)
+    salary: float | None = Field(default=None, ge=0)
+    employee_id: str | None = Field(default=None, max_length=64)
+    joining_date: date | None = None
+    employment_status: str | None = Field(default=None, max_length=32)
+    department: str | None = Field(default=None, max_length=128)
+    designation: str | None = Field(default=None, max_length=128)
+
+
+class StaffUpdateBody(BaseModel):
+    """Partial non-teaching staff update. Account status uses …/status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=128)
+    last_name: str | None = Field(default=None, min_length=1, max_length=128)
+    email: EmailStr | None = None
+    mobile: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=16)
+    dob: date | None = None
+    current_address: str | None = Field(default=None, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    country_code: str | None = Field(default=None, max_length=32)
+    image: str | None = Field(default=None, max_length=512)
+    qualification: str | None = Field(default=None, max_length=512)
+    salary: float | None = Field(default=None, ge=0)
+    employee_id: str | None = Field(default=None, max_length=64)
+    joining_date: date | None = None
+    employment_status: str | None = Field(default=None, max_length=32)
+    department: str | None = Field(default=None, max_length=128)
+    designation: str | None = Field(default=None, max_length=128)
+
+
+class StaffStatusBody(BaseModel):
+    """Account activation. Maps to User.status (0=inactive, 1=active)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: int = Field(ge=0, le=1)
+
+
+class TimetableEntryCreateBody(BaseModel):
+    """Create a class timetable period. school_id is never accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    subject_id: int = Field(ge=1)
+    teacher_user_id: int = Field(ge=1)
+    day: str = Field(min_length=1, max_length=16)
+    start_time: str = Field(min_length=4, max_length=8)
+    end_time: str = Field(min_length=4, max_length=8)
+    note: str | None = Field(default=None, max_length=512)
+
+
+class TimetableEntryUpdateBody(BaseModel):
+    """Partial timetable update. school_id is never accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    subject_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    day: str | None = Field(default=None, min_length=1, max_length=16)
+    start_time: str | None = Field(default=None, min_length=4, max_length=8)
+    end_time: str | None = Field(default=None, min_length=4, max_length=8)
+    note: str | None = Field(default=None, max_length=512)
+
+
+class HomeworkAttachmentMeta(BaseModel):
+    """Client-declared attachment metadata only (no storage_key/path)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    original_filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=3, max_length=128)
+    size_bytes: int = Field(ge=0, le=26214400)
+
+
+class HomeworkCreateBody(BaseModel):
+    """Create homework. school_id / evaluation fields never accepted.
+
+    Late policy is per-homework via ``allow_late`` (no school-wide settings model).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    subject_id: int = Field(ge=1)
+    teacher_user_id: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=255)
+    instructions: str | None = Field(default=None, max_length=20000)
+    assigned_date: date
+    deadline_at: datetime
+    max_marks: float | None = Field(default=None, ge=0)
+    # Per-homework only — there is no school_settings late-rules ORM.
+    allow_late: bool = True
+    attachments: list[HomeworkAttachmentMeta] = Field(default_factory=list)
+
+
+class HomeworkUpdateBody(BaseModel):
+    """Partial homework update. school_id never accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    subject_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    instructions: str | None = Field(default=None, max_length=20000)
+    assigned_date: date | None = None
+    deadline_at: datetime | None = None
+    max_marks: float | None = Field(default=None, ge=0)
+    allow_late: bool | None = None
+    attachments: list[HomeworkAttachmentMeta] | None = None
+
+
+class HomeworkEvaluationBody(BaseModel):
+    """Teacher evaluation. Status/timestamps set server-side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    marks: float | None = Field(default=None, ge=0)
+    grade: str | None = Field(default=None, max_length=64)
+    feedback: str | None = Field(default=None, max_length=20000)
+
+
+def _homework_write_body(body) -> dict[str, Any]:
+    """Keep teacher_user_id; strip ownership / evaluation smuggling."""
+    data = body.model_dump(exclude_unset=True)
+    return homework_svc.sanitize_homework_body(data)
+
+
 def _school_id(auth: AuthContext) -> int:
     return int(auth.user.school_id)  # type: ignore[arg-type]
 
@@ -98,6 +333,30 @@ def _run(action):
 
 def _write_body(body) -> dict:
     return academics.sanitize_write_body(body.model_dump(exclude_unset=True))
+
+
+def _timetable_write_body(body) -> dict:
+    """Like sanitize_write_body but keeps teacher_user_id (blocked for other resources)."""
+    data = body.model_dump(exclude_unset=True)
+    for key in ("school_id", "id", "deleted_at", "created_at", "updated_at", "staff_id"):
+        data.pop(key, None)
+    return data
+
+
+async def _read_upload(file: UploadFile) -> tuple[bytes, str | None]:
+    settings = get_settings()
+    limit = max(settings.document_max_image_bytes, settings.document_max_file_bytes)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=422, detail="File exceeds maximum allowed size")
+        chunks.append(chunk)
+    return b"".join(chunks), file.filename
 
 
 @router.get("/me", response_model=UserResponse)
@@ -353,6 +612,624 @@ def replace_subject_classes(
     )
 
 
+# --- Module 3: Teacher & Staff Management ---
+
+
+@router.get("/teachers")
+def list_teachers(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    q: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: int | None = Query(
+        default=None,
+        alias="status",
+        ge=0,
+        le=1,
+        description="Account status: 1=active, 0=inactive (User.status).",
+    ),
+    employment_status: str | None = Query(
+        default=None, description="active|on_leave|resigned|terminated (Staff.employment_status)."
+    ),
+    department: str | None = Query(default=None, max_length=128),
+    designation: str | None = Query(default=None, max_length=128),
+) -> dict:
+    return _run(
+        lambda: teachers_svc.list_teachers(
+            db,
+            _school_id(auth),
+            q,
+            page,
+            page_size,
+            status=status_filter,
+            employment_status=employment_status,
+            department=department,
+            designation=designation,
+        )
+    )
+
+
+@router.post("/teachers", status_code=status.HTTP_201_CREATED)
+def create_teacher(
+    body: TeacherCreateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: teachers_svc.create_teacher(db, _school_id(auth), _write_body(body))
+    )
+
+
+@router.get("/teachers/{teacher_id}")
+def get_teacher(
+    teacher_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: teachers_svc.get_teacher(db, _school_id(auth), teacher_id))
+
+
+@router.patch("/teachers/{teacher_id}")
+def update_teacher(
+    teacher_id: int,
+    body: TeacherUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: teachers_svc.update_teacher(
+            db, _school_id(auth), teacher_id, _write_body(body)
+        )
+    )
+
+
+@router.patch("/teachers/{teacher_id}/status")
+def update_teacher_status(
+    teacher_id: int,
+    body: TeacherStatusBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: teachers_svc.update_teacher_status(
+            db, _school_id(auth), teacher_id, body.status
+        )
+    )
+
+
+@router.post("/teachers/{teacher_id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_teacher_document(
+    teacher_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+    category: str = Form(default="other"),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: docs_svc.upload_document(
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            category=category,
+            data=data,
+            filename=filename,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_id}/documents")
+def list_teacher_documents(
+    teacher_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    category: str | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: docs_svc.list_documents(
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            page=page,
+            page_size=page_size,
+            category=category,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_id}/documents/{document_id}")
+def get_teacher_document(
+    teacher_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.get_document(
+            db, _school_id(auth), "teacher", teacher_id, document_id
+        )
+    )
+
+
+@router.get("/teachers/{teacher_id}/documents/{document_id}/download")
+def download_teacher_document(
+    teacher_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> Response:
+    data, content_type, filename = _run(
+        lambda: docs_svc.download_document(
+            db, _school_id(auth), "teacher", teacher_id, document_id
+        )
+    )
+    headers = {}
+    if filename:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return Response(content=data, media_type=content_type, headers=headers)
+
+
+@router.delete("/teachers/{teacher_id}/documents/{document_id}")
+def delete_teacher_document(
+    teacher_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.delete_document(
+            db, _school_id(auth), "teacher", teacher_id, document_id
+        )
+    )
+
+
+@router.post("/teachers/{teacher_id}/photo", status_code=status.HTTP_201_CREATED)
+async def upload_teacher_photo(
+    teacher_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: docs_svc.upload_document(
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            category="profile_photo",
+            data=data,
+            filename=filename,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_id}/photo")
+def get_teacher_photo(
+    teacher_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> Response:
+    data, content_type = _run(
+        lambda: docs_svc.get_profile_photo_bytes(
+            db, _school_id(auth), "teacher", teacher_id
+        )
+    )
+    return Response(content=data, media_type=content_type)
+
+
+# --- Module 2: Teacher timetable views (read-only; writes stay on /timetable-entries) ---
+# Static suffixes registered before bare /timetable for clarity.
+
+
+@router.get("/teachers/{teacher_user_id}/timetable/daily")
+def get_teacher_daily_timetable(
+    teacher_user_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Query(ge=1),
+    day: str = Query(min_length=1, max_length=16),
+) -> dict:
+    return _run(
+        lambda: timetable_svc.teacher_daily_timetable(
+            db,
+            _school_id(auth),
+            teacher_user_id,
+            session_year_id=session_year_id,
+            day=day,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_user_id}/timetable/weekly")
+def get_teacher_weekly_timetable(
+    teacher_user_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Query(ge=1),
+) -> dict:
+    return _run(
+        lambda: timetable_svc.teacher_weekly_timetable(
+            db,
+            _school_id(auth),
+            teacher_user_id,
+            session_year_id=session_year_id,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_user_id}/timetable")
+def get_teacher_timetable(
+    teacher_user_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Query(ge=1),
+    day: str | None = Query(default=None, max_length=16),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+) -> dict:
+    return _run(
+        lambda: timetable_svc.list_teacher_timetable(
+            db,
+            _school_id(auth),
+            teacher_user_id,
+            session_year_id=session_year_id,
+            day=day,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.get("/teachers/{teacher_user_id}/availability")
+def get_teacher_availability(
+    teacher_user_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Query(ge=1),
+    day: str = Query(min_length=1, max_length=16),
+    start_time: str = Query(min_length=4, max_length=8),
+    end_time: str = Query(min_length=4, max_length=8),
+    exclude_entry_id: int | None = Query(default=None, ge=1),
+) -> dict:
+    return _run(
+        lambda: timetable_svc.check_teacher_availability(
+            db,
+            _school_id(auth),
+            teacher_user_id,
+            session_year_id=session_year_id,
+            day=day,
+            start_time=start_time,
+            end_time=end_time,
+            exclude_entry_id=exclude_entry_id,
+        )
+    )
+
+
+@router.get("/staff")
+def list_staff(
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+    q: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=1),
+    employment_status: str | None = Query(default=None),
+    department: str | None = Query(default=None, max_length=128),
+    designation: str | None = Query(default=None, max_length=128),
+    role: str | None = Query(
+        default=None, description="Optional; only Staff is valid for this endpoint."
+    ),
+) -> dict:
+    return _run(
+        lambda: staff_svc.list_staff(
+            db,
+            _school_id(auth),
+            q,
+            page,
+            page_size,
+            status=status_filter,
+            employment_status=employment_status,
+            department=department,
+            designation=designation,
+            role=role,
+        )
+    )
+
+
+@router.post("/staff", status_code=status.HTTP_201_CREATED)
+def create_staff(
+    body: StaffCreateBody,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: staff_svc.create_staff(db, _school_id(auth), _write_body(body)))
+
+
+@router.get("/staff/{staff_id}")
+def get_staff(
+    staff_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: staff_svc.get_staff(db, _school_id(auth), staff_id))
+
+
+@router.patch("/staff/{staff_id}")
+def update_staff(
+    staff_id: int,
+    body: StaffUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: staff_svc.update_staff(db, _school_id(auth), staff_id, _write_body(body))
+    )
+
+
+@router.patch("/staff/{staff_id}/status")
+def update_staff_status(
+    staff_id: int,
+    body: StaffStatusBody,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: staff_svc.update_staff_status(db, _school_id(auth), staff_id, body.status)
+    )
+
+
+@router.post("/staff/{staff_id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_staff_document(
+    staff_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+    category: str = Form(default="other"),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: docs_svc.upload_document(
+            db,
+            _school_id(auth),
+            "staff",
+            staff_id,
+            category=category,
+            data=data,
+            filename=filename,
+        )
+    )
+
+
+@router.get("/staff/{staff_id}/documents")
+def list_staff_documents(
+    staff_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    category: str | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: docs_svc.list_documents(
+            db,
+            _school_id(auth),
+            "staff",
+            staff_id,
+            page=page,
+            page_size=page_size,
+            category=category,
+        )
+    )
+
+
+@router.get("/staff/{staff_id}/documents/{document_id}")
+def get_staff_document(
+    staff_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.get_document(
+            db, _school_id(auth), "staff", staff_id, document_id
+        )
+    )
+
+
+@router.get("/staff/{staff_id}/documents/{document_id}/download")
+def download_staff_document(
+    staff_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> Response:
+    data, content_type, filename = _run(
+        lambda: docs_svc.download_document(
+            db, _school_id(auth), "staff", staff_id, document_id
+        )
+    )
+    headers = {}
+    if filename:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return Response(content=data, media_type=content_type, headers=headers)
+
+
+@router.delete("/staff/{staff_id}/documents/{document_id}")
+def delete_staff_document(
+    staff_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.delete_document(
+            db, _school_id(auth), "staff", staff_id, document_id
+        )
+    )
+
+
+@router.post("/staff/{staff_id}/photo", status_code=status.HTTP_201_CREATED)
+async def upload_staff_photo(
+    staff_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: docs_svc.upload_document(
+            db,
+            _school_id(auth),
+            "staff",
+            staff_id,
+            category="profile_photo",
+            data=data,
+            filename=filename,
+        )
+    )
+
+
+@router.get("/staff/{staff_id}/photo")
+def get_staff_photo(
+    staff_id: int,
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> Response:
+    data, content_type = _run(
+        lambda: docs_svc.get_profile_photo_bytes(db, _school_id(auth), "staff", staff_id)
+    )
+    return Response(content=data, media_type=content_type)
+
+
+@router.get("/people")
+def list_people(
+    auth: Annotated[AuthContext, Depends(require_teachers_or_staff)],
+    db: Annotated[Session, Depends(central_db)],
+    q: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    role: str = Query(default="all", description="teacher|staff|all"),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=1),
+    employment_status: str | None = Query(default=None),
+    department: str | None = Query(default=None, max_length=128),
+    designation: str | None = Query(default=None, max_length=128),
+) -> dict:
+    return _run(
+        lambda: staff_svc.list_people(
+            db,
+            _school_id(auth),
+            q,
+            page,
+            page_size,
+            role=role,
+            status=status_filter,
+            employment_status=employment_status,
+            department=department,
+            designation=designation,
+        )
+    )
+
+
+# --- Module 1: Class Timetable (direct /school-admin/timetable*) ---
+# Permission: teachers.manage. Classroom scheduling deferred (no classroom entity).
+
+
+@router.get("/timetable/weekly")
+def get_weekly_timetable(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Query(ge=1),
+    class_section_id: int = Query(ge=1),
+) -> dict:
+    """Monday–Saturday weekly view for one class-section and session."""
+    return _run(
+        lambda: timetable_svc.weekly_timetable(
+            db,
+            _school_id(auth),
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+        )
+    )
+
+
+@router.get("/timetable-entries")
+def list_timetable_entries(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_id: int | None = Query(default=None, ge=1),
+    section_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    day: str | None = Query(default=None, max_length=16),
+) -> dict:
+    return _run(
+        lambda: timetable_svc.list_entries(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            session_year_id=session_year_id,
+            class_id=class_id,
+            section_id=section_id,
+            class_section_id=class_section_id,
+            day=day,
+        )
+    )
+
+
+@router.post("/timetable-entries", status_code=status.HTTP_201_CREATED)
+def create_timetable_entry(
+    body: TimetableEntryCreateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: timetable_svc.create_entry(
+            db, _school_id(auth), _timetable_write_body(body)
+        )
+    )
+
+
+@router.get("/timetable-entries/{entry_id}")
+def get_timetable_entry(
+    entry_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: timetable_svc.get_entry(db, _school_id(auth), entry_id))
+
+
+@router.patch("/timetable-entries/{entry_id}")
+def update_timetable_entry(
+    entry_id: int,
+    body: TimetableEntryUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: timetable_svc.update_entry(
+            db, _school_id(auth), entry_id, _timetable_write_body(body)
+        )
+    )
+
+
+@router.delete("/timetable-entries/{entry_id}")
+def delete_timetable_entry(
+    entry_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: timetable_svc.soft_delete_entry(db, _school_id(auth), entry_id))
+
+
 # --- Phase 7: Teacher–Subject Assignments (direct /school-admin/teacher-assignments) ---
 # Reuses TeacherAssignment + ClassSection. Academics paths remain for compatibility.
 
@@ -448,3 +1325,871 @@ def school_admin_school_by_id(
     except school_service.SchoolServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return SchoolResponse.model_validate(school)
+
+
+# --- Module 3: Homework & Assignment Management ---
+# Permission: teachers.manage (same as timetable / teacher-assignments).
+# Student submit/list APIs live under /api/student/homework* (legacy student auth).
+
+
+@router.post("/homework", status_code=status.HTTP_201_CREATED)
+def create_homework(
+    body: HomeworkCreateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: homework_svc.create_homework(db, _school_id(auth), _homework_write_body(body))
+    )
+
+
+@router.get("/homework")
+def list_homework(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    teacher_user_id: int | None = Query(default=None, ge=1),
+    q: str = Query(default=""),
+) -> dict:
+    return _run(
+        lambda: homework_svc.list_homework(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+            subject_id=subject_id,
+            teacher_user_id=teacher_user_id,
+            q=q,
+        )
+    )
+
+
+@router.get("/homework/{homework_id}/submissions")
+def list_homework_submissions(
+    homework_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: str | None = Query(default=None, alias="status"),
+    is_late: bool | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: homework_svc.list_submissions(
+            db,
+            _school_id(auth),
+            homework_id,
+            page=page,
+            page_size=page_size,
+            status_filter=status_filter,
+            is_late=is_late,
+        )
+    )
+
+
+@router.get("/homework/{homework_id}/summary")
+def get_homework_summary(
+    homework_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: homework_svc.homework_summary(db, _school_id(auth), homework_id))
+
+
+@router.get("/homework/{homework_id}")
+def get_homework(
+    homework_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: homework_svc.get_homework(db, _school_id(auth), homework_id))
+
+
+@router.patch("/homework/{homework_id}")
+def update_homework(
+    homework_id: int,
+    body: HomeworkUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: homework_svc.update_homework(
+            db, _school_id(auth), homework_id, _homework_write_body(body)
+        )
+    )
+
+
+@router.delete("/homework/{homework_id}")
+def delete_homework(
+    homework_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: homework_svc.soft_delete_homework(db, _school_id(auth), homework_id))
+
+
+@router.post("/homework/{homework_id}/attachments", status_code=status.HTTP_201_CREATED)
+async def upload_homework_attachment(
+    homework_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    """Binary attachment upload when DOCUMENT_STORAGE_* is configured; else 503."""
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: homework_svc.append_stored_attachment_to_homework(
+            db,
+            _school_id(auth),
+            homework_id,
+            file_bytes=data,
+            claimed_filename=filename or file.filename,
+        )
+    )
+
+
+@router.get("/homework-submissions/{submission_id}")
+def get_homework_submission(
+    submission_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: homework_svc.get_submission(db, _school_id(auth), submission_id))
+
+
+@router.patch("/homework-submissions/{submission_id}/evaluation")
+def evaluate_homework_submission(
+    submission_id: int,
+    body: HomeworkEvaluationBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: homework_svc.evaluate_submission(
+            db,
+            _school_id(auth),
+            submission_id,
+            body.model_dump(exclude_unset=True),
+            evaluator_user_id=str(auth.user.id),
+        )
+    )
+
+
+# --- Module 4: Study Material Management ---
+# Permission: teachers.manage. Binary files require document_storage.
+# Chapter/topic are optional free-text (no LessonTopic Neon ORM).
+
+
+class StudyMaterialCreateBody(BaseModel):
+    """JSON create for video_link / document_reference. Files use …/upload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    subject_id: int = Field(ge=1)
+    teacher_user_id: int = Field(ge=1)
+    resource_type: str = Field(min_length=1, max_length=32)
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=20000)
+    chapter: str | None = Field(default=None, max_length=255)
+    topic: str | None = Field(default=None, max_length=255)
+    external_url: str | None = Field(default=None, max_length=2048)
+
+
+class StudyMaterialUpdateBody(BaseModel):
+    """Metadata update. school_id / storage_key never accepted. File replace via …/file."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    subject_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=20000)
+    chapter: str | None = Field(default=None, max_length=255)
+    topic: str | None = Field(default=None, max_length=255)
+    external_url: str | None = Field(default=None, max_length=2048)
+
+
+def _material_write_body(body) -> dict[str, Any]:
+    return materials_svc.sanitize_material_body(body.model_dump(exclude_unset=True))
+
+
+def _download_response(data: bytes, content_type: str, filename: str | None) -> Response:
+    from urllib.parse import quote
+
+    safe_name = (filename or "download").replace('"', "")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"; filename*=UTF-8\'\'{quote(safe_name)}',
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
+    }
+    return Response(content=data, media_type=content_type, headers=headers)
+
+
+@router.post("/study-materials", status_code=status.HTTP_201_CREATED)
+def create_study_material(
+    body: StudyMaterialCreateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    """Create video_link or document_reference. For files use POST …/study-materials/upload."""
+    payload = _material_write_body(body)
+    if str(payload.get("resource_type") or "").lower() == "file":
+        raise HTTPException(
+            status_code=422,
+            detail="resource_type=file requires multipart upload at POST /study-materials/upload",
+        )
+    return _run(
+        lambda: materials_svc.create_material(
+            db,
+            _school_id(auth),
+            payload,
+            actor_v1_user_id=str(auth.user.id),
+        )
+    )
+
+
+@router.post("/study-materials/upload", status_code=status.HTTP_201_CREATED)
+async def upload_study_material(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    session_year_id: int = Form(...),
+    class_section_id: int = Form(...),
+    subject_id: int = Form(...),
+    teacher_user_id: int = Form(...),
+    title: str = Form(...),
+    file: UploadFile = File(...),
+    description: str | None = Form(default=None),
+    chapter: str | None = Form(default=None),
+    topic: str | None = Form(default=None),
+) -> dict:
+    """Binary study-material upload (PDF/image/DOC/DOCX). Requires document_storage."""
+    data, filename = await _read_upload(file)
+    body = {
+        "session_year_id": session_year_id,
+        "class_section_id": class_section_id,
+        "subject_id": subject_id,
+        "teacher_user_id": teacher_user_id,
+        "resource_type": "file",
+        "title": title,
+        "description": description,
+        "chapter": chapter,
+        "topic": topic,
+    }
+    return _run(
+        lambda: materials_svc.create_material(
+            db,
+            _school_id(auth),
+            materials_svc.sanitize_material_body(body),
+            actor_v1_user_id=str(auth.user.id),
+            file_bytes=data,
+            claimed_filename=filename or file.filename,
+        )
+    )
+
+
+@router.get("/study-materials")
+def list_study_materials(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    teacher_user_id: int | None = Query(default=None, ge=1),
+    resource_type: str | None = Query(default=None),
+    chapter: str | None = Query(default=None),
+    topic: str | None = Query(default=None),
+    q: str = Query(default=""),
+) -> dict:
+    return _run(
+        lambda: materials_svc.list_materials(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+            subject_id=subject_id,
+            teacher_user_id=teacher_user_id,
+            resource_type=resource_type,
+            chapter=chapter,
+            topic=topic,
+            q=q,
+        )
+    )
+
+
+@router.get("/study-materials/{material_id}")
+def get_study_material(
+    material_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: materials_svc.get_material(db, _school_id(auth), material_id))
+
+
+@router.get("/study-materials/{material_id}/download")
+def download_study_material(
+    material_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> Response:
+    data, content_type, filename = _run(
+        lambda: materials_svc.get_file_bytes(db, _school_id(auth), material_id)
+    )
+    return _download_response(data, content_type, filename)
+
+
+@router.patch("/study-materials/{material_id}")
+def update_study_material(
+    material_id: int,
+    body: StudyMaterialUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: materials_svc.update_material(
+            db,
+            _school_id(auth),
+            material_id,
+            _material_write_body(body),
+            actor_v1_user_id=str(auth.user.id),
+        )
+    )
+
+
+@router.post("/study-materials/{material_id}/file")
+async def replace_study_material_file(
+    material_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: materials_svc.update_material(
+            db,
+            _school_id(auth),
+            material_id,
+            {},
+            actor_v1_user_id=str(auth.user.id),
+            file_bytes=data,
+            claimed_filename=filename or file.filename,
+        )
+    )
+
+
+@router.delete("/study-materials/{material_id}")
+def delete_study_material(
+    material_id: int,
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: materials_svc.soft_delete_material(db, _school_id(auth), material_id))
+
+
+# --- Module 5: Online Examination (MCQ assessments) ---
+# Permission: exams.manage. Distinct from legacy offline /academics/exams.
+
+
+class OnlineAssessmentCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    subject_id: int = Field(ge=1)
+    teacher_user_id: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=255)
+    instructions: str | None = Field(default=None, max_length=20000)
+    duration_minutes: int = Field(ge=1, le=600)
+    total_marks: float = Field(gt=0)
+    passing_marks: float = Field(ge=0)
+    available_from: datetime
+    available_until: datetime
+
+
+class OnlineAssessmentUpdateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_year_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    subject_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    instructions: str | None = Field(default=None, max_length=20000)
+    duration_minutes: int | None = Field(default=None, ge=1, le=600)
+    total_marks: float | None = Field(default=None, gt=0)
+    passing_marks: float | None = Field(default=None, ge=0)
+    available_from: datetime | None = None
+    available_until: datetime | None = None
+    status: str | None = Field(default=None, max_length=32)
+    results_published: bool | None = None
+
+
+class OnlineAssessmentChoiceBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    choice_text: str = Field(min_length=1, max_length=2000)
+    is_correct: bool = False
+
+
+class OnlineAssessmentQuestionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_text: str = Field(min_length=1, max_length=10000)
+    marks: float = Field(gt=0)
+    topic: str | None = Field(default=None, max_length=255)
+    sort_order: int = 0
+    choices: list[OnlineAssessmentChoiceBody] = Field(min_length=2, max_length=8)
+
+
+class OnlineAssessmentBulkImportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OnlineAssessmentQuestionBody] = Field(min_length=1, max_length=100)
+
+
+@router.post("/online-assessments", status_code=status.HTTP_201_CREATED)
+def create_online_assessment(
+    body: OnlineAssessmentCreateBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: oa_svc.create_assessment(
+            db, _school_id(auth), oa_svc.sanitize_assessment_body(body.model_dump())
+        )
+    )
+
+
+@router.get("/online-assessments")
+def list_online_assessments(
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str = Query(default=""),
+) -> dict:
+    return _run(
+        lambda: oa_svc.list_assessments(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+            subject_id=subject_id,
+            status=status_filter,
+            q=q,
+        )
+    )
+
+
+@router.get("/online-assessments/{assessment_id}")
+def get_online_assessment(
+    assessment_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: oa_svc.get_assessment(db, _school_id(auth), assessment_id))
+
+
+@router.patch("/online-assessments/{assessment_id}")
+def update_online_assessment(
+    assessment_id: int,
+    body: OnlineAssessmentUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: oa_svc.update_assessment(
+            db,
+            _school_id(auth),
+            assessment_id,
+            oa_svc.sanitize_assessment_body(body.model_dump(exclude_unset=True)),
+        )
+    )
+
+
+@router.delete("/online-assessments/{assessment_id}")
+def delete_online_assessment(
+    assessment_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: oa_svc.soft_delete_assessment(db, _school_id(auth), assessment_id))
+
+
+@router.post("/online-assessments/{assessment_id}/questions", status_code=status.HTTP_201_CREATED)
+def add_online_assessment_question(
+    assessment_id: int,
+    body: OnlineAssessmentQuestionBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: oa_svc.add_question(
+            db, _school_id(auth), assessment_id, body.model_dump()
+        )
+    )
+
+
+@router.post("/online-assessments/{assessment_id}/questions/import", status_code=status.HTTP_201_CREATED)
+def import_online_assessment_questions(
+    assessment_id: int,
+    body: OnlineAssessmentBulkImportBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: oa_svc.bulk_import_questions(
+            db,
+            _school_id(auth),
+            assessment_id,
+            [item.model_dump() for item in body.items],
+        )
+    )
+
+
+@router.patch("/online-assessment-questions/{question_id}")
+def update_online_assessment_question(
+    question_id: int,
+    body: OnlineAssessmentQuestionBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: oa_svc.update_question(db, _school_id(auth), question_id, body.model_dump())
+    )
+
+
+@router.delete("/online-assessment-questions/{question_id}")
+def delete_online_assessment_question(
+    question_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: oa_svc.soft_delete_question(db, _school_id(auth), question_id))
+
+
+@router.get("/online-assessments/{assessment_id}/attempts")
+def list_online_assessment_attempts(
+    assessment_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+) -> dict:
+    return _run(
+        lambda: oa_svc.list_assessment_attempts(
+            db, _school_id(auth), assessment_id, page=page, page_size=page_size
+        )
+    )
+
+
+@router.get("/online-assessment-attempts/{attempt_id}")
+def get_online_assessment_attempt(
+    attempt_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: oa_svc.get_attempt_admin(db, _school_id(auth), attempt_id))
+
+
+# --- Module 6: Offline Examination, Marks & Results ---
+# Permission: exams.manage. Reuses Exam ORM; schedules/marks in offline_exam_* tables.
+
+
+class OfflineExamCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=1024)
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    exam_type: str | None = Field(default=None, max_length=64)
+    exam_date: date | None = None
+
+
+class OfflineExamUpdateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=1024)
+    session_year_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    exam_type: str | None = Field(default=None, max_length=64)
+    exam_date: date | None = None
+    publish: bool | None = None
+
+
+class OfflineScheduleCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject_id: int = Field(ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    exam_date: date
+    start_time: str | None = Field(default=None, max_length=8)
+    end_time: str | None = Field(default=None, max_length=8)
+    max_marks: float = Field(gt=0)
+    passing_marks: float = Field(ge=0)
+
+
+class OfflineMarkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: int = Field(ge=1)
+    marks_obtained: float | None = Field(default=None, ge=0)
+    status: str = Field(default="present", max_length=32)
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class OfflineMarkBulkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OfflineMarkBody] = Field(min_length=1, max_length=200)
+
+
+@router.post("/offline-exams", status_code=status.HTTP_201_CREATED)
+def create_offline_exam(
+    body: OfflineExamCreateBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: offline_svc.create_exam(
+            db, _school_id(auth), offline_svc.sanitize_body(body.model_dump())
+        )
+    )
+
+
+@router.get("/offline-exams")
+def list_offline_exams(
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    q: str = Query(default=""),
+) -> dict:
+    return _run(
+        lambda: offline_svc.list_exams(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+            q=q,
+        )
+    )
+
+
+@router.get("/offline-exams/{exam_id}")
+def get_offline_exam(
+    exam_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.get_exam(db, _school_id(auth), exam_id))
+
+
+@router.patch("/offline-exams/{exam_id}")
+def update_offline_exam(
+    exam_id: int,
+    body: OfflineExamUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: offline_svc.update_exam(
+            db,
+            _school_id(auth),
+            exam_id,
+            offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+        )
+    )
+
+
+@router.delete("/offline-exams/{exam_id}")
+def delete_offline_exam(
+    exam_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.soft_delete_exam(db, _school_id(auth), exam_id))
+
+
+@router.post("/offline-exams/{exam_id}/schedules", status_code=status.HTTP_201_CREATED)
+def create_offline_exam_schedule(
+    exam_id: int,
+    body: OfflineScheduleCreateBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: offline_svc.create_schedule(
+            db,
+            _school_id(auth),
+            exam_id,
+            offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+        )
+    )
+
+
+@router.get("/offline-exam-schedules")
+def list_offline_exam_schedules(
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    exam_id: int | None = Query(default=None, ge=1),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    subject_id: int | None = Query(default=None, ge=1),
+    exam_date: date | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: offline_svc.list_schedules(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            exam_id=exam_id,
+            session_year_id=session_year_id,
+            class_section_id=class_section_id,
+            subject_id=subject_id,
+            exam_date=exam_date,
+        )
+    )
+
+
+@router.get("/offline-exam-schedules/{schedule_id}")
+def get_offline_exam_schedule(
+    schedule_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.get_schedule(db, _school_id(auth), schedule_id))
+
+
+@router.post("/offline-exam-schedules/{schedule_id}/marks", status_code=status.HTTP_201_CREATED)
+def upsert_offline_exam_mark(
+    schedule_id: int,
+    body: OfflineMarkBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    payload = body.model_dump(exclude_unset=True)
+    reason = payload.pop("reason", None)
+    return _run(
+        lambda: offline_svc.upsert_mark(
+            db,
+            _school_id(auth),
+            schedule_id,
+            offline_svc.sanitize_body(payload),
+            actor_v1_user_id=str(auth.user.id),
+            reason=reason,
+        )
+    )
+
+
+@router.post("/offline-exam-schedules/{schedule_id}/marks/bulk")
+def bulk_offline_exam_marks(
+    schedule_id: int,
+    body: OfflineMarkBulkBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    items = [offline_svc.sanitize_body(i.model_dump(exclude={"reason"})) for i in body.items]
+    return _run(
+        lambda: offline_svc.bulk_upsert_marks(
+            db,
+            _school_id(auth),
+            schedule_id,
+            items,
+            actor_v1_user_id=str(auth.user.id),
+        )
+    )
+
+
+@router.get("/offline-exam-marks")
+def list_offline_exam_marks(
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    exam_id: int | None = Query(default=None, ge=1),
+    schedule_id: int | None = Query(default=None, ge=1),
+    student_id: int | None = Query(default=None, ge=1),
+) -> dict:
+    return _run(
+        lambda: offline_svc.list_marks(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            exam_id=exam_id,
+            schedule_id=schedule_id,
+            student_id=student_id,
+        )
+    )
+
+
+@router.get("/offline-exam-marks/{mark_id}/audits")
+def list_offline_exam_mark_audits(
+    mark_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> list:
+    return _run(lambda: offline_svc.list_mark_audits(db, _school_id(auth), mark_id))
+
+
+@router.post("/offline-exams/{exam_id}/process-results")
+def process_offline_exam_results(
+    exam_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.process_results(db, _school_id(auth), exam_id))
+
+
+@router.get("/offline-exams/{exam_id}/results")
+def list_offline_exam_results(
+    exam_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+) -> dict:
+    return _run(
+        lambda: offline_svc.list_results(
+            db, _school_id(auth), exam_id, page=page, page_size=page_size
+        )
+    )
+
+
+@router.get("/offline-exams/{exam_id}/results/summary")
+def offline_exam_results_summary(
+    exam_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.class_result_summary(db, _school_id(auth), exam_id))
