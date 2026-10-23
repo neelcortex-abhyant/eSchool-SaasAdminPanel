@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import MetaData, engine_from_config, pool
@@ -21,6 +22,32 @@ target_metadata = MetaData()
 for md in (V1Base.metadata, Base.metadata):
     for table in md.tables.values():
         table.to_metadata(target_metadata)
+
+
+def _load_dotenv_into_environ() -> None:
+    """Load backend/.env into os.environ (same source as Settings env_file='.env').
+
+    Process / shell exports win — never override keys already present.
+    Anchored to the backend root so Alembic works regardless of cwd.
+    Does not print file contents or credentials.
+    """
+    # alembic/env.py -> backend/
+    path = Path(__file__).resolve().parent.parent / ".env"
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+# Populate NEON_DATABASE_URL (and peers) before get_url() reads os.environ.
+_load_dotenv_into_environ()
 
 
 def get_url() -> str:
