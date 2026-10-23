@@ -10,9 +10,10 @@
   BACKEND_URL = "https://eschool-backend-8322.onrender.com"
   # Academic structure and module pages use the backend API (see admin-web/README.md).
   NEXT_PUBLIC_ACADEMICS_API_MODE = "live"
-  # Students, parents, teachers and staff use sample data until their routes in
-  # backend/docs/PEOPLE_API_CONTRACT.md are deployed; switch per module, e.g. "students:live".
-  NEXT_PUBLIC_PEOPLE_API_MODE = "mock"
+  # Students, parents and teachers use the backend's /school-admin/academics routes; the pages
+  # hide what those routes can't store yet. Staff has no route, so it stays on sample data.
+  # See backend/docs/PEOPLE_API_CONTRACT.md.
+  NEXT_PUBLIC_PEOPLE_API_MODE = "students:live,parents:live,teachers:live,staff:mock"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
