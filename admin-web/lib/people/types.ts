@@ -172,8 +172,20 @@ export type ParentQuery = {
 /** Teachers and non-teaching staff share one record shape. */
 export type EmployeeKind = "teachers" | "staff";
 
-export type EmploymentType = "Permanent" | "Probation" | "Contract" | "Part-time";
+/**
+ * Employment type (sample data: Permanent, Probation, Contract, Part-time) or the live
+ * backend's employment status (active, on_leave, resigned, terminated). The choices offered
+ * come from peopleSupport().employmentOptions.
+ */
+export type EmploymentType = string;
 export const EMPLOYMENT_TYPES: EmploymentType[] = ["Permanent", "Probation", "Contract", "Part-time"];
+/** The live backend's Staff.employment_status values. */
+export const EMPLOYMENT_STATUSES: { value: string; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "on_leave", label: "On leave" },
+  { value: "resigned", label: "Resigned" },
+  { value: "terminated", label: "Terminated" },
+];
 
 export type EmployeeRow = {
   id: number;
@@ -214,6 +226,8 @@ export type EmployeeInput = {
   joining_date: string;
   employment_type: EmploymentType;
   current_address?: string | null;
+  /** Initial sign-in password, required by the live backend when adding a teacher or staff member. */
+  password?: string;
   status: RecordStatus;
 };
 

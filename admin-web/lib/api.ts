@@ -103,6 +103,19 @@ export async function api<T = Record<string, unknown>>(
   return primary;
 }
 
+/**
+ * Fetches a file the API serves only to signed-in users (photos, document downloads) and
+ * returns a blob: URL the browser can show or open. Revoke it when it's no longer needed.
+ */
+export async function apiBlobUrl(path: string): Promise<string> {
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(apiUrl(path), { headers, credentials: "same-origin" });
+  if (!response.ok) throw new Error(`File request failed (${response.status})`);
+  return URL.createObjectURL(await response.blob());
+}
+
 let meRequest: { token: string | null; promise: Promise<ApiResult<unknown>> } | null = null;
 
 /**

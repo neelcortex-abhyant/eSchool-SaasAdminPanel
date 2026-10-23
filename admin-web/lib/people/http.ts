@@ -1,24 +1,27 @@
 /**
- * Live people client for the backend's generic School Admin routes:
+ * Live people client for the backend's School Admin routes:
  *   /school-admin/academics/students   list (page, q), create, PATCH (incl. status)
  *   /school-admin/academics/parents    list (page, q), create
- *   /school-admin/academics/teachers   list (page, q), create
+ *   /school-admin/teachers, /school-admin/staff
+ *       list (page, q, status, department, employment_status), create, GET/PATCH /{id},
+ *       PATCH /{id}/status, photo and documents (/{id}/photo, /{id}/documents[/{doc}[/download]])
  * The server derives the school from the Bearer session, so no request sends a school_id.
  *
- * These routes have no detail, filter or sort parameters, so this client reads the full list
- * (at most 1,000 rows) and filters, sorts and finds records here. Session, class and section
- * names come from the academics routes. Anything the routes can't store throws a clear error;
- * the pages hide those controls (peopleSupport in lib/people/index.ts).
+ * The student and parent routes have no detail, filter or sort parameters, so this client reads
+ * the full list (at most 1,000 rows) and filters, sorts and finds records here. Session, class
+ * and section names come from the academics routes. Anything the routes can't store throws a
+ * clear error; the pages hide those controls (peopleSupport in lib/people/index.ts).
  */
-import { api } from "@/lib/api";
+import { api, apiBlobUrl } from "@/lib/api";
 import { AcademicApiError, errorFromResponse } from "@/lib/academics/errors";
 import type {
   ChildLink,
   Employee,
+  EmployeeInput,
   EmployeeKind,
   EmployeeQuery,
   EmployeeRow,
-  EmploymentType,
+  FileOwner,
   Gender,
   GuardianLink,
   Page,
@@ -31,6 +34,7 @@ import type {
   StudentCreateInput,
   StudentInput,
   StudentQuery,
+  StoredFile,
   StudentRow,
 } from "@/lib/people/types";
 
@@ -268,35 +272,144 @@ async function parentsWithChildren(): Promise<{ parents: Raw[]; students: Raw[];
   return { parents, students, look };
 }
 
-// ---------- teachers ----------
+// ---------- teachers and staff ----------
 
-function employeeRow(row: Raw): EmployeeRow {
+const EMPLOYEE_ROUTE: Record<EmployeeKind, string> = { teachers: "/school-admin/teachers", staff: "/school-admin/staff" };
+const CODE_PREFIX: Record<EmployeeKind, string> = { teachers: "TCH", staff: "STF" };
+const EMPLOYEE_NOUN: Record<EmployeeKind, string> = { teachers: "teacher", staff: "staff member" };
+
+/** Calls a route outside /school-admin/academics, e.g. /school-admin/teachers. */
+async function requestAt<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
+  let result;
+  try {
+    result = await api<T>(path, init);
+  } catch {
+    throw errorFromResponse(0, null, fallback);
+  }
+  if (!result.ok) throw errorFromResponse(result.status, result.data, fallback);
+  return result.data;
+}
+
+async function allAt(path: string, params: Record<string, string>, fallback: string): Promise<Raw[]> {
+  const rows: Raw[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const search = new URLSearchParams({ ...params, page: String(page), page_size: String(PAGE_SIZE) });
+    const data = await requestAt<Raw>(`${path}?${search}`, { method: "GET" }, fallback);
+    const items = Array.isArray(data.items) ? (data.items as Raw[]) : [];
+    rows.push(...items);
+    if (items.length === 0 || rows.length >= Number(data.total ?? rows.length)) break;
+  }
+  return rows;
+}
+
+// Photos need the sign-in token, so they're fetched once and shown from blob: URLs.
+const photoCache = new Map<string, Promise<string | null>>();
+
+function photoFor(kind: EmployeeKind, row: Raw): Promise<string | null> {
+  if (!row.image) return Promise.resolve(null);
+  const key = `${kind}:${num(row.id)}:${str(row.image)}`;
+  if (!photoCache.has(key)) {
+    photoCache.set(key, apiBlobUrl(`${EMPLOYEE_ROUTE[kind]}/${num(row.id)}/photo`).catch(() => null));
+  }
+  return photoCache.get(key) as Promise<string | null>;
+}
+
+function forgetPhoto(kind: EmployeeKind, id: number) {
+  for (const key of photoCache.keys()) if (key.startsWith(`${kind}:${id}:`)) photoCache.delete(key);
+}
+
+function employeeRow(row: Raw, photoUrl: string | null): EmployeeRow {
   return {
     id: num(row.id),
-    employee_code: "",
+    employee_code: str(row.employee_id),
     first_name: str(row.first_name),
     last_name: str(row.last_name),
     name: fullName(row),
     email: str(row.email),
     mobile: str(row.mobile),
-    department: "",
-    designation: "",
-    joining_date: "",
-    employment_type: "" as EmploymentType,
-    photo_url: null,
+    department: str(row.department),
+    designation: str(row.designation),
+    joining_date: str(row.joining_date),
+    employment_type: str(row.employment_status),
+    photo_url: photoUrl,
     status: status(row.status),
   };
 }
 
-function employeeDetail(row: Raw): Employee {
-  return { ...employeeRow(row), gender: null, dob: null, qualification: str(row.qualification) || null, current_address: null, documents: [] };
+const CATEGORY_LABEL: Record<string, string> = { resume: "Resume", id_proof: "ID proof", certificate: "Certificate", other: "Other" };
+
+/** The backend files documents by category; the title the admin typed picks the closest one. */
+function categoryFor(title: string): string {
+  const text = title.toLowerCase();
+  if (/resume|\bcv\b|curriculum/.test(text)) return "resume";
+  if (/\bid\b|id proof|aadhaar|aadhar|\bpan\b|passport|identity|licen[cs]e|voter/.test(text)) return "id_proof";
+  if (/certificate|degree|diploma|mark ?sheet|qualification|b\.?ed|experience/.test(text)) return "certificate";
+  return "other";
 }
 
-function teachersOnly(kind: EmployeeKind) {
-  if (kind === "staff") unsupported("Staff isn't available on the school's server yet.");
+function storedFile(kind: EmployeeKind, ownerId: number, row: Raw): StoredFile {
+  const category = str(row.category);
+  return {
+    id: num(row.id),
+    title: CATEGORY_LABEL[category] ?? category,
+    file_name: str(row.original_filename) || `${category}-${num(row.id)}`,
+    content_type: str(row.content_type),
+    size: num(row.size_bytes),
+    // Downloads need the sign-in token; StoredDocuments fetches auth: links before opening them.
+    url: `auth:${EMPLOYEE_ROUTE[kind]}/${ownerId}/documents/${num(row.id)}/download`,
+    uploaded_at: str(row.created_at),
+  };
 }
 
-const NO_FILES = "Photos and documents can't be uploaded to the school's server yet.";
+async function employeeDetail(kind: EmployeeKind, row: Raw): Promise<Employee> {
+  const id = num(row.id);
+  const [photo, documents] = await Promise.all([
+    photoFor(kind, row),
+    allAt(`${EMPLOYEE_ROUTE[kind]}/${id}/documents`, {}, "Unable to load documents."),
+  ]);
+  return {
+    ...employeeRow(row, photo),
+    gender: (str(row.gender) || null) as Gender | null,
+    dob: str(row.dob) || null,
+    qualification: str(row.qualification) || null,
+    current_address: str(row.current_address) || null,
+    documents: documents.filter((doc) => str(doc.category) !== "profile_photo").map((doc) => storedFile(kind, id, doc)),
+  };
+}
+
+async function nextEmployeeCode(kind: EmployeeKind): Promise<string> {
+  const prefix = CODE_PREFIX[kind];
+  const used = (await allAt(EMPLOYEE_ROUTE[kind], {}, "Unable to load employee IDs."))
+    .map((row) => str(row.employee_id).toUpperCase())
+    .filter((code) => code.startsWith(prefix))
+    .map((code) => Number(code.slice(prefix.length)) || 0);
+  return `${prefix}${String(Math.max(0, ...used) + 1).padStart(4, "0")}`;
+}
+
+function employeeBody(input: EmployeeInput, code: string) {
+  return {
+    first_name: input.first_name,
+    last_name: input.last_name,
+    email: input.email,
+    mobile: input.mobile || null,
+    gender: input.gender || null,
+    dob: input.dob || null,
+    current_address: input.current_address || null,
+    qualification: input.qualification || null,
+    employee_id: code || null,
+    joining_date: input.joining_date || null,
+    employment_status: input.employment_type || null,
+    department: input.department || null,
+    designation: input.designation || null,
+  };
+}
+
+function employeeOwner(owner: FileOwner): EmployeeKind {
+  if (owner === "students") unsupported(NO_STUDENT_FILES);
+  return owner;
+}
+
+const NO_STUDENT_FILES = "Student photos and documents can't be uploaded to the school's server yet.";
 
 export const httpPeopleService: PeopleService = {
   async listStudents(query: StudentQuery = {}) {
@@ -411,52 +524,84 @@ export const httpPeopleService: PeopleService = {
   },
 
   async listEmployees(kind: EmployeeKind, query: EmployeeQuery = {}) {
-    teachersOnly(kind);
-    const rows = (await all("teachers", "Unable to load teachers."))
-      .map(employeeRow)
-      .filter((row) => statusMatches(row.status, query.status))
-      .filter((row) => matches(query.q, row.name, row.email, row.mobile))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    return slice(rows, query.page, query.pageSize);
+    const params = new URLSearchParams({
+      page: String(query.page ?? 1),
+      page_size: String(Math.min(query.pageSize ?? 20, PAGE_SIZE)),
+    });
+    if (query.q?.trim()) params.set("q", query.q.trim());
+    if (query.status === "0" || query.status === "1") params.set("status", query.status);
+    if (query.department?.trim()) params.set("department", query.department.trim());
+    if (query.employmentType) params.set("employment_status", query.employmentType);
+    const data = await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}?${params}`, { method: "GET" }, `Unable to load ${kind}.`);
+    const rows = Array.isArray(data.items) ? (data.items as Raw[]) : [];
+    const items = await Promise.all(rows.map(async (row) => employeeRow(row, await photoFor(kind, row))));
+    return { items, total: num(data.total ?? items.length), page: num(data.page ?? 1), page_size: num(data.page_size ?? items.length) };
   },
 
-  async listDepartments() {
-    return [];
+  async listDepartments(kind) {
+    // There's no department list route, so the names come from the employees themselves.
+    const rows = await allAt(EMPLOYEE_ROUTE[kind], {}, "Unable to load departments.");
+    return [...new Set(rows.map((row) => str(row.department).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   },
 
   async getEmployee(kind, id) {
-    teachersOnly(kind);
-    const row = (await all("teachers", "Unable to load this teacher.")).find((item) => num(item.id) === id);
-    if (!row) throw new AcademicApiError(404, "Teacher not found");
-    return employeeDetail(row);
+    const row = await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${id}`, { method: "GET" }, `Unable to load this ${EMPLOYEE_NOUN[kind]}.`);
+    return employeeDetail(kind, row);
   },
 
   async createEmployee(kind, input) {
-    teachersOnly(kind);
-    const saved = await send<Raw>(
-      "POST",
-      "/teachers",
-      { first_name: input.first_name, last_name: input.last_name, email: input.email, mobile: input.mobile, qualification: input.qualification ?? null },
-      "Unable to add the teacher.",
+    if (!input.password || input.password.length < 8) {
+      throw new AcademicApiError(422, "Check the highlighted fields.", { password: "Enter a password of at least 8 characters." });
+    }
+    const code = input.employee_code?.trim() || (await nextEmployeeCode(kind));
+    const created = await requestAt<Raw>(
+      EMPLOYEE_ROUTE[kind],
+      { method: "POST", body: JSON.stringify({ ...employeeBody(input, code), password: input.password }) },
+      `Unable to add the ${EMPLOYEE_NOUN[kind]}.`,
     );
-    return employeeDetail({ ...saved, qualification: input.qualification });
+    // New accounts start active on the server.
+    const saved =
+      input.status === 0
+        ? await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${num(created.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: 0 }) }, "Unable to save the status.")
+        : created;
+    return employeeDetail(kind, saved);
   },
 
-  async updateEmployee() {
-    return unsupported("Editing teachers isn't available on the school's server yet.");
+  async updateEmployee(kind, id, input) {
+    const route = `${EMPLOYEE_ROUTE[kind]}/${id}`;
+    let saved = await requestAt<Raw>(route, { method: "PATCH", body: JSON.stringify(employeeBody(input, input.employee_code?.trim() ?? "")) }, `Unable to save the ${EMPLOYEE_NOUN[kind]}.`);
+    // Account status has its own route.
+    if (status(saved.status) !== input.status) {
+      saved = await requestAt<Raw>(`${route}/status`, { method: "PATCH", body: JSON.stringify({ status: input.status }) }, "Unable to save the status.");
+    }
+    return employeeDetail(kind, saved);
   },
 
-  async setEmployeeStatus() {
-    return unsupported("Activating or deactivating teachers isn't available on the school's server yet.");
+  async setEmployeeStatus(kind, id, value) {
+    const saved = await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${id}/status`, { method: "PATCH", body: JSON.stringify({ status: value }) }, "Unable to change the status.");
+    return employeeDetail(kind, saved);
   },
 
-  async uploadPhoto() {
-    return unsupported(NO_FILES);
+  async uploadPhoto(owner, id, file) {
+    const kind = employeeOwner(owner);
+    const form = new FormData();
+    form.set("file", file);
+    await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${id}/photo`, { method: "POST", body: form }, "Unable to upload the photo.");
+    forgetPhoto(kind, id);
+    return { photo_url: await apiBlobUrl(`${EMPLOYEE_ROUTE[kind]}/${id}/photo`).catch(() => null) };
   },
-  async uploadDocument() {
-    return unsupported(NO_FILES);
+
+  async uploadDocument(owner, id, file, title) {
+    const kind = employeeOwner(owner);
+    const form = new FormData();
+    form.set("file", file);
+    form.set("category", categoryFor(title));
+    const row = await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${id}/documents`, { method: "POST", body: form }, `Unable to upload ${file.name}.`);
+    return storedFile(kind, id, row);
   },
-  async deleteDocument() {
-    return unsupported(NO_FILES);
+
+  async deleteDocument(owner, id, documentId) {
+    const kind = employeeOwner(owner);
+    await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/${id}/documents/${documentId}`, { method: "DELETE" }, "Unable to remove the document.");
   },
 };

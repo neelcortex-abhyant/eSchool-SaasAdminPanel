@@ -11,7 +11,7 @@
  */
 import { httpPeopleService } from "@/lib/people/http";
 import { mockPeopleService } from "@/lib/people/mock";
-import type { PeopleService } from "@/lib/people/types";
+import { EMPLOYMENT_STATUSES, EMPLOYMENT_TYPES, type PeopleService } from "@/lib/people/types";
 
 export type PeopleModule = "students" | "parents" | "teachers" | "staff";
 export type ApiSource = "live" | "mock";
@@ -56,20 +56,46 @@ export type PeopleSupport = {
   status: boolean;
   /** Department and employment type for teachers and staff. */
   employeeFilters: boolean;
+  /** Choices for the employment field: employment type (sample data) or employment status (live). */
+  employmentOptions: { value: string; label: string }[];
+  /** "Employment type" (sample data) or "Employment status" (live). */
+  employmentLabel: string;
+  /** The live backend needs an initial password when a teacher or staff member is added. */
+  password: boolean;
+  /** Document titles the backend keeps (as categories); null allows any title. */
+  documentTitles: string[] | null;
 };
 
-const FULL_SUPPORT: PeopleSupport = { details: true, guardianLinks: true, files: true, edit: true, status: true, employeeFilters: true };
+const FULL_SUPPORT: PeopleSupport = {
+  details: true,
+  guardianLinks: true,
+  files: true,
+  edit: true,
+  status: true,
+  employeeFilters: true,
+  employmentOptions: EMPLOYMENT_TYPES.map((type) => ({ value: type, label: type })),
+  employmentLabel: "Employment type",
+  password: false,
+  documentTitles: null,
+};
+
+/** Live document categories (person_documents.category) offered as titles. */
+export const LIVE_DOCUMENT_TITLES = ["Resume", "ID proof", "Certificate", "Other"];
+
+const LIMITED: PeopleSupport = { ...FULL_SUPPORT, details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false };
+const EMPLOYEES_LIVE: PeopleSupport = { ...FULL_SUPPORT, guardianLinks: false, employmentOptions: EMPLOYMENT_STATUSES, employmentLabel: "Employment status", password: true, documentTitles: LIVE_DOCUMENT_TITLES };
 
 /**
- * The live backend serves people through the generic /school-admin/academics/{students,parents,
- * teachers} routes: students can be listed, admitted, edited and (de)activated; parents and
- * teachers only listed and created. Staff has no route yet.
+ * Live: students and parents use the generic /school-admin/academics routes (students can be
+ * listed, admitted, edited and (de)activated; parents listed and created). Teachers and staff
+ * use /school-admin/teachers and /school-admin/staff, which cover profiles, edits, status,
+ * photos and documents.
  */
 const LIVE_SUPPORT: Record<PeopleModule, PeopleSupport> = {
-  students: { details: false, guardianLinks: false, files: false, edit: true, status: true, employeeFilters: false },
-  parents: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
-  teachers: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
-  staff: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
+  students: { ...LIMITED, edit: true, status: true },
+  parents: LIMITED,
+  teachers: EMPLOYEES_LIVE,
+  staff: EMPLOYEES_LIVE,
 };
 
 export function peopleSupport(module: PeopleModule): PeopleSupport {
@@ -83,8 +109,9 @@ export const LIVE_LIMITS_NOTE: Record<PeopleModule, string> = {
   parents:
     "Connected to the school's server. Parents can be listed and added with name, email and phone. Editing, deactivating, address and occupation aren't available yet.",
   teachers:
-    "Connected to the school's server. Teachers can be listed and added with name, email, phone and qualification. Editing, deactivating, employee ID, department, photos and documents aren't available yet.",
-  staff: "Staff isn't available on the school's server yet.",
+    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated), and documents are filed as resume, ID proof, certificate or other.",
+  staff:
+    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated), and documents are filed as resume, ID proof, certificate or other.",
 };
 
 export * from "@/lib/people/types";

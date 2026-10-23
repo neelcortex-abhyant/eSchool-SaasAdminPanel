@@ -44,7 +44,7 @@ export function TextField({
 }: Base & {
   value: string;
   onChange: (value: string) => void;
-  type?: "text" | "date" | "email" | "tel" | "number";
+  type?: "text" | "date" | "email" | "tel" | "number" | "password";
   placeholder?: string;
   maxLength?: number;
   disabled?: boolean;

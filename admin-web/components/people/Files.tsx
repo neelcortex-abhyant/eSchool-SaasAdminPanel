@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { Avatar } from "@/components/people/Profile";
 import { errorMessage } from "@/lib/academics";
+import { apiBlobUrl } from "@/lib/api";
 import {
   DOCUMENT_ACCEPT,
   DOCUMENT_MAX_BYTES,
@@ -203,7 +204,14 @@ export function StoredDocuments({
               </span>
             </span>
             {document.url && safeFileUrl(document.url) ? (
-              <button className="link-btn" type="button" onClick={() => void openFile(document.url as string)}>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setError("");
+                  openFile(document.url as string).catch(() => setError(`${document.title} couldn't be opened. Try again.`));
+                }}
+              >
                 View
               </button>
             ) : (
@@ -244,20 +252,28 @@ export function StoredDocuments({
   );
 }
 
-/** Only links the browser can safely open: the API's https links, or local previews in mock mode. */
+/**
+ * Only links the browser can safely open: the API's https links, API downloads that need the
+ * sign-in token (auth:/path), or local previews in mock mode.
+ */
 export function safeFileUrl(url: string): boolean {
-  return /^(https?:|blob:|data:(image\/(png|jpeg|webp)|application\/pdf);)/i.test(url) || url.startsWith("/");
+  return /^(https?:|blob:|auth:\/|data:(image\/(png|jpeg|webp)|application\/pdf);)/i.test(url) || url.startsWith("/");
 }
 
-/** Opens a stored file in a new tab. Browsers block data: URLs as tabs, so those become blob: URLs first. */
+/**
+ * Opens a stored file in a new tab. auth: links are fetched with the sign-in token, and data:
+ * URLs (blocked as tabs) are converted; both open as blob: URLs.
+ */
 async function openFile(url: string) {
-  if (!url.startsWith("data:")) {
+  if (!url.startsWith("data:") && !url.startsWith("auth:")) {
     window.open(url, "_blank", "noopener,noreferrer");
     return;
   }
-  const blob = await (await fetch(url)).blob();
-  const objectUrl = URL.createObjectURL(blob);
-  window.open(objectUrl, "_blank", "noopener,noreferrer");
+  // Open the tab now, while the click still counts as a user action, then point it at the file.
+  const tab = window.open("", "_blank");
+  const objectUrl = url.startsWith("auth:") ? await apiBlobUrl(url.slice("auth:".length)) : URL.createObjectURL(await (await fetch(url)).blob());
+  if (tab) tab.location.href = objectUrl;
+  else window.open(objectUrl, "_blank", "noopener,noreferrer");
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 

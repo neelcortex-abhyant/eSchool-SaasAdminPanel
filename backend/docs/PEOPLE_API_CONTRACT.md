@@ -12,16 +12,14 @@
 > **What exists today** (deployed, used by the pages' current live adapter in `admin-web/lib/people/http.ts`):
 > - `GET/POST /api/v1/school-admin/academics/students` and `PATCH .../students/{id}`: list with `page` and `q`, create with an existing `guardian_id`, edit some fields and `status`.
 > - `GET/POST /api/v1/school-admin/academics/parents`: list and create (name, email, mobile).
-> - `GET/POST /api/v1/school-admin/academics/teachers`: list and create (name, email, mobile, qualification).
+> - `/api/v1/school-admin/teachers` and `/api/v1/school-admin/staff` (added in 446a69d): list with filters, create (with a password), profile, PATCH, `/status`, `/photo` and `/documents` (categories: resume, id_proof, certificate, other). The Teachers and Staff pages use these. Employment uses `employment_status` (active, on_leave, resigned, terminated) in place of the employment type below, and there's no departments route, so the pages build that list from the records.
 >
 > **What's missing:**
 > - Student profile (`GET /students/{id}`) and the student fields dob, gender, mobile, addresses.
 > - Server-side filters and sorting on the student list.
 > - Guardian link and unlink with several guardians per student.
 > - Parent profile, edit and status.
-> - Teacher profile, edit, status and departments.
-> - Every `/staff` route.
-> - Photo and document uploads with signed download links.
+> - Student photo and document uploads.
 >
 > **Switching a module to live.** Set `NEXT_PUBLIC_PEOPLE_API_MODE` per module, for example `students:live,parents:live,teachers:mock,staff:mock`, in `netlify.toml` (deployed) and `admin-web/.env.local` (local). The client that calls the routes below exactly as written is in commit `b25aff1` (`admin-web/lib/people/http.ts`). Restore it, or adapt the current file, when the routes ship.
 

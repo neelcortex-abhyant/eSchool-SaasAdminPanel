@@ -20,7 +20,6 @@ import { Avatar, FormSection, InfoCard, ProfileHeader, ProfileSkeleton, useRecor
 import { StatusAction } from "@/components/people/StatusAction";
 import { academicsService, listAll } from "@/lib/academics";
 import {
-  EMPLOYMENT_TYPES,
   GENDERS,
   formatDate,
   peopleService,
@@ -30,6 +29,7 @@ import {
   type EmployeeKind,
   type EmployeeRow,
   type EmploymentType,
+  type PeopleSupport,
   type Gender,
 } from "@/lib/people";
 import { email, focusFirstError, phone, required, todayIso, type Errors } from "@/lib/people/validate";
@@ -136,12 +136,12 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
       ...(support.details
         ? [
             { key: "joined", label: "Joined", render: (row: EmployeeRow) => formatDate(row.joining_date) },
-            { key: "type", label: "Employment", render: (row: EmployeeRow) => row.employment_type },
+            { key: "type", label: "Employment", render: (row: EmployeeRow) => employmentText(support, row.employment_type) },
           ]
         : []),
       { key: "status", label: "Status", render: (row) => <StatusBadge active={row.status === 1} /> },
     ],
-    [copy.base, support.details],
+    [copy.base, support],
   );
 
   return (
@@ -167,11 +167,11 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
                 </option>
               ))}
             </select>
-            <select aria-label="Filter by employment type" value={employmentType} onChange={(event) => { setEmploymentType(event.target.value as EmploymentType | ""); setPage(1); }}>
-              <option value="">All employment types</option>
-              {EMPLOYMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+            <select aria-label={`Filter by ${support.employmentLabel.toLowerCase()}`} value={employmentType} onChange={(event) => { setEmploymentType(event.target.value as EmploymentType | ""); setPage(1); }}>
+              <option value="">{`All ${support.employmentLabel.toLowerCase()}es`.replace("typees", "types")}</option>
+              {support.employmentOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -224,6 +224,11 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
   );
 }
 
+/** The label for an employment value: "On leave" for on_leave, or the value itself. */
+function employmentText(support: PeopleSupport, value: string): string {
+  return support.employmentOptions.find((option) => option.value === value)?.label ?? value;
+}
+
 // ---------- Form ----------
 
 type FormValues = {
@@ -239,6 +244,7 @@ type FormValues = {
   designation: string;
   joining_date: string;
   employment_type: EmploymentType | "";
+  password: string;
   current_address: string;
   active: boolean;
 };
@@ -257,6 +263,7 @@ function initialValues(employee: Employee | null): FormValues {
     designation: employee?.designation ?? "",
     joining_date: employee?.joining_date ?? todayIso(),
     employment_type: employee?.employment_type ?? "",
+    password: "",
     current_address: employee?.current_address ?? "",
     active: employee ? employee.status === 1 : true,
   };
@@ -295,7 +302,9 @@ export function EmployeeForm({
 
   function check(): Errors {
     const invalid: Errors = {};
-    if (employee && support.details) required(invalid, "employee_code", values.employee_code, "Enter the employee ID.");
+    // The live backend allows employees without an ID, so only the sample data requires one on edit.
+    if (employee && support.details && !support.password) required(invalid, "employee_code", values.employee_code, "Enter the employee ID.");
+    if (!employee && support.password && values.password.length < 8) invalid.password = "Enter a password of at least 8 characters.";
     required(invalid, "first_name", values.first_name, "Enter the first name.");
     required(invalid, "last_name", values.last_name, "Enter the last name.");
     email(invalid, "email", values.email, true);
@@ -305,7 +314,7 @@ export function EmployeeForm({
     required(invalid, "department", values.department, "Enter or choose a department.");
     required(invalid, "designation", values.designation, "Enter the designation.");
     if (!values.joining_date) invalid.joining_date = "Enter the joining date.";
-    if (!values.employment_type) invalid.employment_type = "Choose the employment type.";
+    if (!values.employment_type) invalid.employment_type = `Choose the ${support.employmentLabel.toLowerCase()}.`;
     if (values.dob && values.dob > todayIso()) invalid.dob = "Date of birth can't be in the future.";
     else if (values.dob && values.joining_date && values.joining_date <= values.dob) invalid.joining_date = "Joining date must be after the date of birth.";
     return invalid;
@@ -342,6 +351,7 @@ export function EmployeeForm({
       designation: values.designation.trim(),
       joining_date: values.joining_date,
       employment_type: values.employment_type as EmploymentType,
+      password: !employee && support.password ? values.password : undefined,
       current_address: values.current_address.trim() || null,
       status: values.active ? 1 : 0,
     };
@@ -378,6 +388,19 @@ export function EmployeeForm({
       <FormSection title="Contact">
         <TextField id="emp-email" label="Email" type="email" required autoComplete="off" value={values.email} onChange={(v) => set("email", v)} error={fe.email} hint="Used to sign in. Must be unique in your school." />
         <TextField id="emp-mobile" label="Phone" type="tel" required value={values.mobile} onChange={(v) => set("mobile", v)} error={fe.mobile} />
+        {!employee && support.password ? (
+          <TextField
+            id="emp-password"
+            label="Password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={values.password}
+            onChange={(v) => set("password", v)}
+            error={fe.password}
+            hint={`At least 8 characters. Share it with the ${copy.singular} so they can sign in with their email.`}
+          />
+        ) : null}
         {support.details ? (
           <TextAreaField id="emp-address" label="Address" span maxLength={512} value={values.current_address} onChange={(v) => set("current_address", v)} error={fe.current_address} />
         ) : null}
@@ -389,7 +412,7 @@ export function EmployeeForm({
             <TextField
               id="emp-code"
               label="Employee ID"
-              required={Boolean(employee)}
+              required={Boolean(employee) && !support.password}
               maxLength={32}
               placeholder={employee ? undefined : "Generated automatically"}
               value={values.employee_code}
@@ -437,12 +460,12 @@ export function EmployeeForm({
         {support.details ? (
           <SelectField
             id="emp-type"
-            label="Employment type"
+            label={support.employmentLabel}
             required
             placeholder="Choose"
             value={values.employment_type}
             onChange={(v) => set("employment_type", v as EmploymentType)}
-            options={EMPLOYMENT_TYPES.map((type) => ({ value: type, label: type }))}
+            options={support.employmentOptions}
             error={fe.employment_type}
           />
         ) : null}
@@ -461,7 +484,7 @@ export function EmployeeForm({
               <StoredDocuments documents={employee.documents} onRemove={onRemoveDocument} />
             </div>
           ) : null}
-          <DocumentPicker id="emp-documents" pending={documents} onChange={setDocuments} existingCount={employee?.documents.length ?? 0} suggestions={copy.documents} />
+          <DocumentPicker id="emp-documents" pending={documents} onChange={setDocuments} existingCount={employee?.documents.length ?? 0} suggestions={support.documentTitles ?? copy.documents} />
         </FormSection>
       ) : null}
 
@@ -648,7 +671,7 @@ function EmployeeProfile({ kind, id }: { kind: EmployeeKind; id: number }) {
             { label: "Designation", value: employee.designation },
             { label: "Qualification", value: employee.qualification },
             { label: "Joining date", value: formatDate(employee.joining_date) },
-            { label: "Employment type", value: employee.employment_type },
+            { label: support.employmentLabel, value: employmentText(support, employee.employment_type) },
             { label: "Account status", value: employee.status === 1 ? "Active" : "Inactive" },
           ]}
         />
