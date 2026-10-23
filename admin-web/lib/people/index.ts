@@ -42,6 +42,51 @@ export function peopleService(module: PeopleModule): PeopleService {
   return SOURCES[module] === "live" ? httpPeopleService : mockPeopleService;
 }
 
+/** What a module can do. The mock does everything in backend/docs/PEOPLE_API_CONTRACT.md. */
+export type PeopleSupport = {
+  /** Date of birth, gender, phone, addresses, occupation, and employee details beyond name and contact. */
+  details: boolean;
+  /** Several guardians per student with relationships, linked and unlinked from profiles. */
+  guardianLinks: boolean;
+  /** Photos and documents. */
+  files: boolean;
+  /** Editing a record after it's created. */
+  edit: boolean;
+  /** Activating and deactivating. */
+  status: boolean;
+  /** Department and employment type for teachers and staff. */
+  employeeFilters: boolean;
+};
+
+const FULL_SUPPORT: PeopleSupport = { details: true, guardianLinks: true, files: true, edit: true, status: true, employeeFilters: true };
+
+/**
+ * The live backend serves people through the generic /school-admin/academics/{students,parents,
+ * teachers} routes: students can be listed, admitted, edited and (de)activated; parents and
+ * teachers only listed and created. Staff has no route yet.
+ */
+const LIVE_SUPPORT: Record<PeopleModule, PeopleSupport> = {
+  students: { details: false, guardianLinks: false, files: false, edit: true, status: true, employeeFilters: false },
+  parents: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
+  teachers: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
+  staff: { details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false },
+};
+
+export function peopleSupport(module: PeopleModule): PeopleSupport {
+  return SOURCES[module] === "live" ? LIVE_SUPPORT[module] : FULL_SUPPORT;
+}
+
+/** Shown on live pages: what the server can't do yet for this module. */
+export const LIVE_LIMITS_NOTE: Record<PeopleModule, string> = {
+  students:
+    "Connected to the school's server. It keeps the name, email, admission details, class and one guardian per student. Date of birth, gender, phone, address, more guardians, photos and documents aren't stored yet.",
+  parents:
+    "Connected to the school's server. Parents can be listed and added with name, email and phone. Editing, deactivating, address and occupation aren't available yet.",
+  teachers:
+    "Connected to the school's server. Teachers can be listed and added with name, email, phone and qualification. Editing, deactivating, employee ID, department, photos and documents aren't available yet.",
+  staff: "Staff isn't available on the school's server yet.",
+};
+
 export * from "@/lib/people/types";
 export { resetMockPeople } from "@/lib/people/mock";
 export { errorMessage, formatDate, toId, AcademicApiError } from "@/lib/academics";

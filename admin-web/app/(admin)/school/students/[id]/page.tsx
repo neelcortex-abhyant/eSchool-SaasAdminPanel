@@ -9,10 +9,11 @@ import { GuardianManager } from "@/components/people/Links";
 import { PeoplePage, routeId } from "@/components/people/PeoplePage";
 import { InfoCard, ProfileHeader, ProfileSkeleton, useRecord } from "@/components/people/Profile";
 import { StatusAction } from "@/components/people/StatusAction";
-import { formatDate, GENDERS, peopleService } from "@/lib/people";
+import { formatDate, GENDERS, peopleService, peopleSupport } from "@/lib/people";
 import { IconUsers } from "@/lib/icons";
 
 const service = peopleService("students");
+const support = peopleSupport("students");
 
 export default function StudentProfilePage() {
   const id = routeId(useParams<{ id: string }>().id);
@@ -82,10 +83,12 @@ function StudentProfile({ id }: { id: number }) {
           ]}
         />
       </div>
-      <GuardianManager student={student} onChange={setRecord} editable={false} manageHref={`/school/students/${student.id}/edit`} />
-      <InfoCard title="Documents" action={<Link className="link-btn" href={`/school/students/${student.id}/edit`}>Upload</Link>}>
-        <StoredDocuments documents={student.documents} />
-      </InfoCard>
+      <GuardianManager student={student} onChange={setRecord} editable={false} manageHref={support.guardianLinks ? `/school/students/${student.id}/edit` : undefined} />
+      {support.files ? (
+        <InfoCard title="Documents" action={<Link className="link-btn" href={`/school/students/${student.id}/edit`}>Upload</Link>}>
+          <StoredDocuments documents={student.documents} />
+        </InfoCard>
+      ) : null}
     </div>
   );
 }

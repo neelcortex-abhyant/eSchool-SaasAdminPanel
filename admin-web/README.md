@@ -20,8 +20,8 @@ Optional env:
 | --- | --- | --- |
 | `BACKEND_URL` | `http://127.0.0.1:8001` | Server-side rewrite target |
 | `NEXT_PUBLIC_ADMIN_API_URL` | `/api/v1` | Browser client base (same-origin preferred) |
-| `NEXT_PUBLIC_ACADEMICS_API_MODE` | `mock` | School Admin academic pages: `mock`, `live`, or per page such as `sessions:live,classes:live` (pages: `sessions`, `classes`, `sections`, `subjects`, `assignments`) |
-| `NEXT_PUBLIC_PEOPLE_API_MODE` | `mock` | School Admin students, parents, teachers and staff pages: `mock`, `live`, or per module such as `students:live,parents:live` (modules: `students`, `parents`, `teachers`, `staff`). Contract: `backend/docs/PEOPLE_API_CONTRACT.md` |
+| `NEXT_PUBLIC_ACADEMICS_API_MODE` | `mock` | School Admin academic pages and module pages: `mock`, `live`, or per page such as `sessions:live,classes:live` (pages: `sessions`, `mediums`, `classes`, `sections`, `subjects`, `assignments`, `attendance`, `exams`, `fees`, `expenses`, `notices`, `leaves`). Live uses the backend's `/api/v1/school-admin` routes |
+| `NEXT_PUBLIC_PEOPLE_API_MODE` | `mock` | School Admin students, parents, teachers and staff pages: `mock`, `live`, or per module such as `students:live,parents:live,teachers:live,staff:mock` (modules: `students`, `parents`, `teachers`, `staff`). Live uses the backend's `/api/v1/school-admin/academics/{students,parents,teachers}` routes; staff has no route yet. Pages hide what those routes can't store (see `peopleSupport` in `lib/people/index.ts`) |
 
 ## Netlify deploy
 

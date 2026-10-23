@@ -9,8 +9,11 @@ import { classLabel, sectionLabel, sessionLabel, useClassesFor, useSectionsFor, 
 import { DocumentPicker, PhotoPicker, StoredDocuments, type PendingDocument } from "@/components/people/Files";
 import { ParentSearch, useDuplicateParent } from "@/components/people/Pickers";
 import { FormSection } from "@/components/people/Profile";
-import { GENDERS, RELATIONSHIPS, type Gender, type GuardianChoice, type Parent, type Relationship, type StoredFile, type Student, type StudentInput } from "@/lib/people";
+import { GENDERS, peopleSupport, RELATIONSHIPS, type Gender, type GuardianChoice, type Parent, type Relationship, type StoredFile, type Student, type StudentInput } from "@/lib/people";
 import { email, focusFirstError, phone, required, todayIso, type Errors } from "@/lib/people/validate";
+
+// The live server stores fewer student fields; the form hides what it can't save.
+const support = peopleSupport("students");
 
 export const STUDENT_DOCUMENTS = ["Birth certificate", "Transfer certificate", "Previous report card", "Aadhaar card", "Address proof", "Medical certificate"];
 
@@ -125,9 +128,11 @@ export function StudentForm({
     const invalid: Errors = {};
     required(invalid, "first_name", values.first_name, "Enter the student's first name.");
     required(invalid, "last_name", values.last_name, "Enter the student's last name.");
-    if (!values.dob) invalid.dob = "Enter the date of birth.";
-    else if (values.dob > todayIso()) invalid.dob = "Date of birth can't be in the future.";
-    if (!values.gender) invalid.gender = "Choose a gender.";
+    if (support.details) {
+      if (!values.dob) invalid.dob = "Enter the date of birth.";
+      else if (values.dob > todayIso()) invalid.dob = "Date of birth can't be in the future.";
+      if (!values.gender) invalid.gender = "Choose a gender.";
+    }
     if (!values.admission_date) invalid.admission_date = "Enter the admission date.";
     else if (values.dob && values.admission_date <= values.dob) invalid.admission_date = "Admission date must be after the date of birth.";
     if (student && !values.admission_no.trim()) invalid.admission_no = "Enter the admission number.";
@@ -135,12 +140,15 @@ export function StudentForm({
     if (!values.class_id) invalid.class_id = "Choose a class.";
     if (!values.class_section_id) invalid.class_section_id = values.class_id ? "Choose a section." : "Choose a class first.";
     if (values.roll_number && (!/^\d+$/.test(values.roll_number) || Number(values.roll_number) < 1)) invalid.roll_number = "Roll number must be a whole number.";
-    email(invalid, "email", values.email, false);
-    phone(invalid, "mobile", values.mobile, false);
-    required(invalid, "current_address", values.current_address, "Enter the address.");
-    if (!values.same_address) required(invalid, "permanent_address", values.permanent_address, "Enter the permanent address or tick Same as current address.");
+    // The live server needs an email for every new student.
+    email(invalid, "email", values.email, !support.details && !student);
+    if (support.details) {
+      phone(invalid, "mobile", values.mobile, false);
+      required(invalid, "current_address", values.current_address, "Enter the address.");
+      if (!values.same_address) required(invalid, "permanent_address", values.permanent_address, "Enter the permanent address or tick Same as current address.");
+    }
     if (!student) {
-      if (!guardian.relationship) invalid["guardian.relationship"] = "Choose how this person is related to the student.";
+      if (support.guardianLinks && !guardian.relationship) invalid["guardian.relationship"] = "Choose how this person is related to the student.";
       if (guardian.mode === "existing") {
         if (!guardian.parent) invalid["guardian.parent_id"] = "Find and choose a parent, or switch to Add a new parent.";
       } else {
@@ -188,7 +196,7 @@ export function StudentForm({
       status: values.active ? 1 : 0,
     };
     if (!student) {
-      const relationship = guardian.relationship as Relationship;
+      const relationship = (guardian.relationship || "Guardian") as Relationship;
       input.guardian =
         guardian.mode === "existing" && guardian.parent
           ? { parent_id: guardian.parent.id, relationship }
@@ -216,9 +224,13 @@ export function StudentForm({
       <FormSection title="Student details">
         <TextField id="student-first-name" label="First name" required maxLength={128} autoComplete="off" value={values.first_name} onChange={(v) => set("first_name", v)} error={fe.first_name} />
         <TextField id="student-last-name" label="Last name" required maxLength={128} autoComplete="off" value={values.last_name} onChange={(v) => set("last_name", v)} error={fe.last_name} />
-        <TextField id="student-dob" label="Date of birth" type="date" required max={todayIso()} value={values.dob} onChange={(v) => set("dob", v)} error={fe.dob} />
-        <SelectField id="student-gender" label="Gender" required placeholder="Choose" value={values.gender} onChange={(v) => set("gender", v as Gender)} options={GENDERS.map((g) => ({ value: g.value, label: g.label }))} error={fe.gender} />
-        <PhotoPicker id="student-photo" name={fullName} currentUrl={student?.photo_url ?? null} file={photo} onChange={setPhoto} error={fe.file} />
+        {support.details ? (
+          <>
+            <TextField id="student-dob" label="Date of birth" type="date" required max={todayIso()} value={values.dob} onChange={(v) => set("dob", v)} error={fe.dob} />
+            <SelectField id="student-gender" label="Gender" required placeholder="Choose" value={values.gender} onChange={(v) => set("gender", v as Gender)} options={GENDERS.map((g) => ({ value: g.value, label: g.label }))} error={fe.gender} />
+          </>
+        ) : null}
+        {support.files ? <PhotoPicker id="student-photo" name={fullName} currentUrl={student?.photo_url ?? null} file={photo} onChange={setPhoto} error={fe.file} /> : null}
       </FormSection>
 
       <FormSection title="Admission" description="Session, class and section must be active. Classes depend on the session and sections depend on the class.">
@@ -281,7 +293,14 @@ export function StudentForm({
       </FormSection>
 
       {!student ? (
-        <FormSection title="Parent or guardian" description="Every student needs at least one parent or guardian. You can link more from the student's profile later.">
+        <FormSection
+          title="Parent or guardian"
+          description={
+            support.guardianLinks
+              ? "Every student needs at least one parent or guardian. You can link more from the student's profile later."
+              : "Every student needs a parent or guardian. The school's server keeps one per student."
+          }
+        >
           <div className="form-field field-span people-mode-switch" role="radiogroup" aria-label="Parent or guardian">
             <label className="acad-check">
               <input type="radio" name="guardian-mode" checked={guardian.mode === "existing"} onChange={() => setGuardianField("mode", "existing")} />
@@ -332,40 +351,63 @@ export function StudentForm({
               ) : null}
             </>
           )}
-          <SelectField
-            id="guardian-relationship"
-            label="Relationship to student"
-            required
-            placeholder="Choose"
-            value={guardian.relationship}
-            onChange={(v) => setGuardianField("relationship", v as Relationship)}
-            options={RELATIONSHIPS.map((r) => ({ value: r, label: r }))}
-            error={fe["guardian.relationship"]}
-          />
+          {support.guardianLinks ? (
+            <SelectField
+              id="guardian-relationship"
+              label="Relationship to student"
+              required
+              placeholder="Choose"
+              value={guardian.relationship}
+              onChange={(v) => setGuardianField("relationship", v as Relationship)}
+              options={RELATIONSHIPS.map((r) => ({ value: r, label: r }))}
+              error={fe["guardian.relationship"]}
+            />
+          ) : null}
         </FormSection>
       ) : null}
 
-      <FormSection title="Contact and address">
-        <TextField id="student-email" label="Student email" type="email" autoComplete="off" value={values.email} onChange={(v) => set("email", v)} error={fe.email} hint="Optional. Needed only if the student signs in to the app." />
-        <TextField id="student-mobile" label="Student phone" type="tel" value={values.mobile} onChange={(v) => set("mobile", v)} error={fe.mobile} hint="Optional." />
-        <TextAreaField id="student-address" label="Current address" required span maxLength={512} value={values.current_address} onChange={(v) => set("current_address", v)} error={fe.current_address} />
-        <div className="form-field field-span">
-          <StatusToggle id="student-same-address" checked={values.same_address} onChange={(v) => set("same_address", v)} label="Permanent address is the same as current address" />
-        </div>
-        {!values.same_address ? (
-          <TextAreaField id="student-permanent-address" label="Permanent address" required span maxLength={512} value={values.permanent_address} onChange={(v) => set("permanent_address", v)} error={fe.permanent_address} />
+      <FormSection title={support.details ? "Contact and address" : "Contact"}>
+        {support.details ? (
+          <TextField id="student-email" label="Student email" type="email" autoComplete="off" value={values.email} onChange={(v) => set("email", v)} error={fe.email} hint="Optional. Needed only if the student signs in to the app." />
+        ) : (
+          <TextField
+            id="student-email"
+            label="Student email"
+            type="email"
+            required={!student}
+            disabled={Boolean(student)}
+            autoComplete="off"
+            value={values.email}
+            onChange={(v) => set("email", v)}
+            error={fe.email}
+            hint={student ? "The school's server can't change a student's email yet." : "The school's server needs an email for every student."}
+          />
+        )}
+        {support.details ? (
+          <>
+            <TextField id="student-mobile" label="Student phone" type="tel" value={values.mobile} onChange={(v) => set("mobile", v)} error={fe.mobile} hint="Optional." />
+            <TextAreaField id="student-address" label="Current address" required span maxLength={512} value={values.current_address} onChange={(v) => set("current_address", v)} error={fe.current_address} />
+            <div className="form-field field-span">
+              <StatusToggle id="student-same-address" checked={values.same_address} onChange={(v) => set("same_address", v)} label="Permanent address is the same as current address" />
+            </div>
+            {!values.same_address ? (
+              <TextAreaField id="student-permanent-address" label="Permanent address" required span maxLength={512} value={values.permanent_address} onChange={(v) => set("permanent_address", v)} error={fe.permanent_address} />
+            ) : null}
+          </>
         ) : null}
       </FormSection>
 
-      <FormSection title="Documents" description="Files upload after the student is saved.">
-        {student ? (
-          <div className="form-field field-span">
-            <span className="people-label">Uploaded</span>
-            <StoredDocuments documents={student.documents} onRemove={onRemoveDocument} />
-          </div>
-        ) : null}
-        <DocumentPicker id="student-documents" pending={documents} onChange={setDocuments} existingCount={student?.documents.length ?? 0} suggestions={STUDENT_DOCUMENTS} />
-      </FormSection>
+      {support.files ? (
+        <FormSection title="Documents" description="Files upload after the student is saved.">
+          {student ? (
+            <div className="form-field field-span">
+              <span className="people-label">Uploaded</span>
+              <StoredDocuments documents={student.documents} onRemove={onRemoveDocument} />
+            </div>
+          ) : null}
+          <DocumentPicker id="student-documents" pending={documents} onChange={setDocuments} existingCount={student?.documents.length ?? 0} suggestions={STUDENT_DOCUMENTS} />
+        </FormSection>
+      ) : null}
 
       <div className="people-form-actions">
         <button className="btn-pill btn-pill-green" type="submit" disabled={saving}>

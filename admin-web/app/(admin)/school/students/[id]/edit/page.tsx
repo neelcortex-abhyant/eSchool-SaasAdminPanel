@@ -9,10 +9,11 @@ import { GuardianManager } from "@/components/people/Links";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";
 import { ProfileSkeleton, useRecord } from "@/components/people/Profile";
 import { StudentForm } from "@/components/people/StudentForm";
-import { peopleService } from "@/lib/people";
+import { peopleService, peopleSupport } from "@/lib/people";
 import { IconUsers } from "@/lib/icons";
 
 const service = peopleService("students");
+const support = peopleSupport("students");
 
 export default function EditStudentPage() {
   const id = routeId(useParams<{ id: string }>().id);
@@ -57,7 +58,7 @@ function EditStudent({ id }: { id: number }) {
           router.push(`/school/students/${saved.id}`);
         }}
       />
-      <GuardianManager student={student} onChange={setRecord} />
+      <GuardianManager student={student} onChange={setRecord} editable={support.guardianLinks} />
     </div>
   );
 }

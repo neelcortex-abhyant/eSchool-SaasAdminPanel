@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { AccessGate, useSchoolAdminAccess } from "@/components/academics/AcademicPage";
 import { ToastProvider, useToast } from "@/components/academics/Toasts";
-import { peopleSource, type PeopleModule } from "@/lib/people";
+import { LIVE_LIMITS_NOTE, peopleSource, type PeopleModule } from "@/lib/people";
 
 const FLASH_KEY = "people-flash";
 
@@ -89,7 +89,9 @@ export function PeoplePage({
           <div className="alert alert-info acad-mock-note">
             Showing sample data. Changes are saved only in this browser until the {MODULE_LABEL[module]} API is connected.
           </div>
-        ) : null}
+        ) : (
+          <div className="alert alert-info acad-mock-note">{LIVE_LIMITS_NOTE[module]}</div>
+        )}
 
         <AccessGate access={access}>{children}</AccessGate>
       </div>

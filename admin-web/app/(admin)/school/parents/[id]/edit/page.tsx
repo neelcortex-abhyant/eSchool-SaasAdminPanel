@@ -7,10 +7,11 @@ import { ChildrenManager } from "@/components/people/Links";
 import { ParentForm } from "@/components/people/ParentForm";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";
 import { ProfileSkeleton, useRecord } from "@/components/people/Profile";
-import { peopleService } from "@/lib/people";
+import { peopleService, peopleSupport } from "@/lib/people";
 import { IconUsers } from "@/lib/icons";
 
 const service = peopleService("parents");
+const support = peopleSupport("parents");
 
 export default function EditParentPage() {
   const id = routeId(useParams<{ id: string }>().id);
@@ -31,6 +32,13 @@ function EditParent({ id }: { id: number }) {
   const loader = useCallback(() => service.getParent(id), [id]);
   const { record: parent, loading, error, reload } = useRecord(loader);
 
+  if (!support.edit) {
+    return (
+      <div className="alert alert-info" role="status">
+        Editing parents isn&apos;t available on the school&apos;s server yet.
+      </div>
+    );
+  }
   if (error) return <ErrorAlert error={error} onRetry={() => void reload()} />;
   if (loading && !parent) return <ProfileSkeleton />;
   if (!parent) return null;

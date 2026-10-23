@@ -7,7 +7,7 @@ import { SelectField, StatusToggle, TextAreaField, TextField } from "@/component
 import { useFormErrors } from "@/components/academics/hooks";
 import { StudentSearch, useDuplicateParent } from "@/components/people/Pickers";
 import { FormSection } from "@/components/people/Profile";
-import { RELATIONSHIPS, type Parent, type ParentCreateInput, type ParentInput, type Relationship, type StudentRow } from "@/lib/people";
+import { peopleSupport, RELATIONSHIPS, type Parent, type ParentCreateInput, type ParentInput, type Relationship, type StudentRow } from "@/lib/people";
 import { email, focusFirstError, phone, required, type Errors } from "@/lib/people/validate";
 
 type PendingLink = { student: StudentRow; relationship: Relationship | "" };
@@ -16,6 +16,9 @@ type PendingLink = { student: StudentRow; relationship: Relationship | "" };
  * Create form (no `parent`, with student links) and edit form (with `parent`; links are
  * managed with the Linked children card next to it).
  */
+// The live server stores only name, email and phone, and one guardian per student.
+const support = peopleSupport("parents");
+
 export function ParentForm({
   parent,
   cancelHref,
@@ -46,7 +49,7 @@ export function ParentForm({
     required(invalid, "last_name", lastName, "Enter the last name.");
     email(invalid, "email", emailValue, true);
     phone(invalid, "mobile", mobile, true);
-    if (links.some((link) => !link.relationship)) invalid.students = "Choose the relationship for each linked student.";
+    if (support.guardianLinks && links.some((link) => !link.relationship)) invalid.students = "Choose the relationship for each linked student.";
     return invalid;
   }
 
@@ -78,7 +81,7 @@ export function ParentForm({
       status: active ? 1 : 0,
     };
     try {
-      await onSave(parent ? input : { ...input, students: links.map((link) => ({ student_id: link.student.id, relationship: link.relationship as Relationship })) });
+      await onSave(parent ? input : { ...input, students: links.map((link) => ({ student_id: link.student.id, relationship: (link.relationship || "Guardian") as Relationship })) });
     } catch (caught) {
       errors.fromError(caught, "Unable to save the parent.");
       setSaving(false);
@@ -109,15 +112,28 @@ export function ParentForm({
             </Link>
           </div>
         ) : null}
-        <TextField id="parent-occupation" label="Occupation" maxLength={255} value={occupation} onChange={setOccupation} error={fe.occupation} />
-        <TextAreaField id="parent-address" label="Address" span maxLength={512} value={address} onChange={setAddress} error={fe.current_address} />
-        <div className="form-field field-span">
-          <StatusToggle id="parent-active" checked={active} onChange={setActive} label="Active account" />
-        </div>
+        {support.details ? (
+          <>
+            <TextField id="parent-occupation" label="Occupation" maxLength={255} value={occupation} onChange={setOccupation} error={fe.occupation} />
+            <TextAreaField id="parent-address" label="Address" span maxLength={512} value={address} onChange={setAddress} error={fe.current_address} />
+          </>
+        ) : null}
+        {support.status ? (
+          <div className="form-field field-span">
+            <StatusToggle id="parent-active" checked={active} onChange={setActive} label="Active account" />
+          </div>
+        ) : null}
       </FormSection>
 
       {!parent ? (
-        <FormSection title="Linked students" description="A parent can be linked to several children, and a student can have up to 4 guardians.">
+        <FormSection
+          title="Linked students"
+          description={
+            support.guardianLinks
+              ? "A parent can be linked to several children, and a student can have up to 4 guardians."
+              : "The school's server keeps one guardian per student, so this parent replaces the current guardian of each student you add here."
+          }
+        >
           <StudentSearch
             id="parent-student-search"
             label="Add a student"
@@ -136,16 +152,18 @@ export function ParentForm({
                       · {link.student.admission_no} · {link.student.class_name} {link.student.section_name}
                     </span>
                   </span>
-                  <SelectField
-                    id={`link-relationship-${link.student.id}`}
-                    label="Relationship"
-                    required
-                    placeholder="Choose"
-                    value={link.relationship}
-                    onChange={(value) => setLinks((current) => current.map((item, i) => (i === index ? { ...item, relationship: value as Relationship } : item)))}
-                    options={RELATIONSHIPS.map((r) => ({ value: r, label: r }))}
-                    error={!link.relationship ? fe.students : undefined}
-                  />
+                  {support.guardianLinks ? (
+                    <SelectField
+                      id={`link-relationship-${link.student.id}`}
+                      label="Relationship"
+                      required
+                      placeholder="Choose"
+                      value={link.relationship}
+                      onChange={(value) => setLinks((current) => current.map((item, i) => (i === index ? { ...item, relationship: value as Relationship } : item)))}
+                      options={RELATIONSHIPS.map((r) => ({ value: r, label: r }))}
+                      error={!link.relationship ? fe.students : undefined}
+                    />
+                  ) : null}
                   <button className="link-btn acad-danger-link" type="button" onClick={() => setLinks((current) => current.filter((_, i) => i !== index))}>
                     Remove<span className="acad-sr"> {link.student.name}</span>
                   </button>

@@ -8,10 +8,11 @@ import { ChildrenManager } from "@/components/people/Links";
 import { PeoplePage, routeId } from "@/components/people/PeoplePage";
 import { InfoCard, ProfileHeader, ProfileSkeleton, useRecord } from "@/components/people/Profile";
 import { StatusAction } from "@/components/people/StatusAction";
-import { peopleService } from "@/lib/people";
+import { peopleService, peopleSupport } from "@/lib/people";
 import { IconUsers } from "@/lib/icons";
 
 const service = peopleService("parents");
+const support = peopleSupport("parents");
 
 export default function ParentProfilePage() {
   const id = routeId(useParams<{ id: string }>().id);
@@ -39,17 +40,21 @@ function ParentProfile({ id }: { id: number }) {
         meta={`${parent.children.length} linked ${parent.children.length === 1 ? "student" : "students"}`}
         actions={
           <>
-            <Link className="btn-pill btn-pill-green" href={`/school/parents/${parent.id}/edit`}>
-              Edit parent
-            </Link>
-            <StatusAction
-              name={parent.name}
-              noun="parent"
-              active={parent.status === 1}
-              deactivateEffect={`${parent.name} won't be able to sign in to the parent app. Their links to students are kept.`}
-              change={(next) => service.setParentStatus(parent.id, next)}
-              onChanged={setRecord}
-            />
+            {support.edit ? (
+              <Link className="btn-pill btn-pill-green" href={`/school/parents/${parent.id}/edit`}>
+                Edit parent
+              </Link>
+            ) : null}
+            {support.status ? (
+              <StatusAction
+                name={parent.name}
+                noun="parent"
+                active={parent.status === 1}
+                deactivateEffect={`${parent.name} won't be able to sign in to the parent app. Their links to students are kept.`}
+                change={(next) => service.setParentStatus(parent.id, next)}
+                onChanged={setRecord}
+              />
+            ) : null}
           </>
         }
       />
@@ -72,7 +77,7 @@ function ParentProfile({ id }: { id: number }) {
           ]}
         />
       </div>
-      <ChildrenManager parent={parent} onChanged={reload} editable={false} manageHref={`/school/parents/${parent.id}/edit`} />
+      <ChildrenManager parent={parent} onChanged={reload} editable={false} manageHref={support.edit ? `/school/parents/${parent.id}/edit` : undefined} />
     </div>
   );
 }

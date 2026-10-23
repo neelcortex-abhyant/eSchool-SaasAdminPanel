@@ -8,11 +8,12 @@ import { StatusBadge } from "@/components/academics/StatusBadge";
 import { useDebounced, usePagedList } from "@/components/academics/hooks";
 import { PeoplePage } from "@/components/people/PeoplePage";
 import { StatusAction } from "@/components/people/StatusAction";
-import { peopleService, type Parent } from "@/lib/people";
+import { peopleService, peopleSupport, type Parent } from "@/lib/people";
 import { IconUsers } from "@/lib/icons";
 
 const PAGE_SIZE = 10;
 const service = peopleService("parents");
+const support = peopleSupport("parents");
 
 export default function ParentsPage() {
   return (
@@ -109,18 +110,22 @@ function ParentList() {
                 <Link className="link-btn" href={`/school/parents/${row.id}`}>
                   View<span className="acad-sr"> {row.name}</span>
                 </Link>
-                <Link className="link-btn" href={`/school/parents/${row.id}/edit`}>
-                  Edit<span className="acad-sr"> {row.name}</span>
-                </Link>
-                <StatusAction
-                  variant="link"
-                  name={row.name}
-                  noun="parent"
-                  active={row.status === 1}
-                  deactivateEffect={`${row.name} won't be able to sign in to the parent app. Their links to students are kept.`}
-                  change={(next) => service.setParentStatus(row.id, next)}
-                  onChanged={() => reload()}
-                />
+                {support.edit ? (
+                  <Link className="link-btn" href={`/school/parents/${row.id}/edit`}>
+                    Edit<span className="acad-sr"> {row.name}</span>
+                  </Link>
+                ) : null}
+                {support.status ? (
+                  <StatusAction
+                    variant="link"
+                    name={row.name}
+                    noun="parent"
+                    active={row.status === 1}
+                    deactivateEffect={`${row.name} won't be able to sign in to the parent app. Their links to students are kept.`}
+                    change={(next) => service.setParentStatus(row.id, next)}
+                    onChanged={() => reload()}
+                  />
+                ) : null}
               </>
             )}
           />

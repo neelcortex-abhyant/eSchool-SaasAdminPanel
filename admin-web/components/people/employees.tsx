@@ -24,6 +24,7 @@ import {
   GENDERS,
   formatDate,
   peopleService,
+  peopleSupport,
   type Employee,
   type EmployeeInput,
   type EmployeeKind,
@@ -99,6 +100,7 @@ export function EmployeeListPage({ kind }: { kind: EmployeeKind }) {
 function EmployeeList({ kind }: { kind: EmployeeKind }) {
   const copy = EMPLOYEE_COPY[kind];
   const service = peopleService(kind);
+  const support = peopleSupport(kind);
   const [searchInput, setSearchInput] = useState("");
   const search = useDebounced(searchInput.trim());
   const [department, setDepartment] = useState("");
@@ -116,7 +118,7 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
 
   const columns = useMemo<Column<EmployeeRow>[]>(
     () => [
-      { key: "code", label: "Employee ID", render: (row) => <code className="people-code">{row.employee_code}</code> },
+      ...(support.details ? [{ key: "code", label: "Employee ID", render: (row: EmployeeRow) => <code className="people-code">{row.employee_code}</code> }] : []),
       {
         key: "name",
         label: "Name",
@@ -127,13 +129,19 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
           </Link>
         ),
       },
-      { key: "role", label: "Department", render: (row) => <span>{row.department}<span className="muted people-sub">{row.designation}</span></span> },
+      ...(support.details
+        ? [{ key: "role", label: "Department", render: (row: EmployeeRow) => <span>{row.department}<span className="muted people-sub">{row.designation}</span></span> }]
+        : []),
       { key: "contact", label: "Contact", render: (row) => <span>{row.email}<span className="muted people-sub">{row.mobile}</span></span> },
-      { key: "joined", label: "Joined", render: (row) => formatDate(row.joining_date) },
-      { key: "type", label: "Employment", render: (row) => row.employment_type },
+      ...(support.details
+        ? [
+            { key: "joined", label: "Joined", render: (row: EmployeeRow) => formatDate(row.joining_date) },
+            { key: "type", label: "Employment", render: (row: EmployeeRow) => row.employment_type },
+          ]
+        : []),
       { key: "status", label: "Status", render: (row) => <StatusBadge active={row.status === 1} /> },
     ],
-    [copy.base],
+    [copy.base, support.details],
   );
 
   return (
@@ -149,22 +157,26 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
             setPage(1);
           }}
         />
-        <select aria-label="Filter by department" value={department} onChange={(event) => { setDepartment(event.target.value); setPage(1); }}>
-          <option value="">{departments.loading ? "Loading departments…" : "All departments"}</option>
-          {departments.options.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Filter by employment type" value={employmentType} onChange={(event) => { setEmploymentType(event.target.value as EmploymentType | ""); setPage(1); }}>
-          <option value="">All employment types</option>
-          {EMPLOYMENT_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
+        {support.employeeFilters ? (
+          <>
+            <select aria-label="Filter by department" value={department} onChange={(event) => { setDepartment(event.target.value); setPage(1); }}>
+              <option value="">{departments.loading ? "Loading departments…" : "All departments"}</option>
+              {departments.options.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select aria-label="Filter by employment type" value={employmentType} onChange={(event) => { setEmploymentType(event.target.value as EmploymentType | ""); setPage(1); }}>
+              <option value="">All employment types</option>
+              {EMPLOYMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
         <select aria-label="Filter by status" value={status} onChange={(event) => { setStatus(event.target.value as "" | "0" | "1"); setPage(1); }}>
           <option value="">All statuses</option>
           <option value="1">Active</option>
@@ -186,18 +198,22 @@ function EmployeeList({ kind }: { kind: EmployeeKind }) {
                 <Link className="link-btn" href={`${copy.base}/${row.id}`}>
                   View<span className="acad-sr"> {row.name}</span>
                 </Link>
-                <Link className="link-btn" href={`${copy.base}/${row.id}/edit`}>
-                  Edit<span className="acad-sr"> {row.name}</span>
-                </Link>
-                <StatusAction
-                  variant="link"
-                  name={row.name}
-                  noun={copy.singular}
-                  active={row.status === 1}
-                  deactivateEffect={copy.deactivateEffect(row.name)}
-                  change={(next) => service.setEmployeeStatus(kind, row.id, next)}
-                  onChanged={() => reload()}
-                />
+                {support.edit ? (
+                  <Link className="link-btn" href={`${copy.base}/${row.id}/edit`}>
+                    Edit<span className="acad-sr"> {row.name}</span>
+                  </Link>
+                ) : null}
+                {support.status ? (
+                  <StatusAction
+                    variant="link"
+                    name={row.name}
+                    noun={copy.singular}
+                    active={row.status === 1}
+                    deactivateEffect={copy.deactivateEffect(row.name)}
+                    change={(next) => service.setEmployeeStatus(kind, row.id, next)}
+                    onChanged={() => reload()}
+                  />
+                ) : null}
               </>
             )}
           />
@@ -262,6 +278,7 @@ export function EmployeeForm({
   onRemoveDocument?: Parameters<typeof StoredDocuments>[0]["onRemove"];
 }) {
   const copy = EMPLOYEE_COPY[kind];
+  const support = peopleSupport(kind);
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<FormValues>(() => initialValues(employee));
   const [photo, setPhoto] = useState<File | null>(null);
@@ -278,12 +295,13 @@ export function EmployeeForm({
 
   function check(): Errors {
     const invalid: Errors = {};
-    if (employee) required(invalid, "employee_code", values.employee_code, "Enter the employee ID.");
+    if (employee && support.details) required(invalid, "employee_code", values.employee_code, "Enter the employee ID.");
     required(invalid, "first_name", values.first_name, "Enter the first name.");
     required(invalid, "last_name", values.last_name, "Enter the last name.");
     email(invalid, "email", values.email, true);
     phone(invalid, "mobile", values.mobile, true);
     if (kind === "teachers") required(invalid, "qualification", values.qualification, "Enter the teacher's qualification.");
+    if (!support.details) return invalid; // the live server stores only name, contact and qualification
     required(invalid, "department", values.department, "Enter or choose a department.");
     required(invalid, "designation", values.designation, "Enter the designation.");
     if (!values.joining_date) invalid.joining_date = "Enter the joining date.";
@@ -348,54 +366,64 @@ export function EmployeeForm({
       <FormSection title="Personal details">
         <TextField id="emp-first-name" label="First name" required maxLength={128} value={values.first_name} onChange={(v) => set("first_name", v)} error={fe.first_name} />
         <TextField id="emp-last-name" label="Last name" required maxLength={128} value={values.last_name} onChange={(v) => set("last_name", v)} error={fe.last_name} />
-        <SelectField id="emp-gender" label="Gender" placeholder="Choose" value={values.gender} onChange={(v) => set("gender", v as Gender)} options={GENDERS.map((g) => ({ value: g.value, label: g.label }))} error={fe.gender} />
-        <TextField id="emp-dob" label="Date of birth" type="date" max={todayIso()} value={values.dob} onChange={(v) => set("dob", v)} error={fe.dob} hint="Optional." />
-        <PhotoPicker id="emp-photo" name={name} currentUrl={employee?.photo_url ?? null} file={photo} onChange={setPhoto} error={fe.file} />
+        {support.details ? (
+          <>
+            <SelectField id="emp-gender" label="Gender" placeholder="Choose" value={values.gender} onChange={(v) => set("gender", v as Gender)} options={GENDERS.map((g) => ({ value: g.value, label: g.label }))} error={fe.gender} />
+            <TextField id="emp-dob" label="Date of birth" type="date" max={todayIso()} value={values.dob} onChange={(v) => set("dob", v)} error={fe.dob} hint="Optional." />
+          </>
+        ) : null}
+        {support.files ? <PhotoPicker id="emp-photo" name={name} currentUrl={employee?.photo_url ?? null} file={photo} onChange={setPhoto} error={fe.file} /> : null}
       </FormSection>
 
       <FormSection title="Contact">
         <TextField id="emp-email" label="Email" type="email" required autoComplete="off" value={values.email} onChange={(v) => set("email", v)} error={fe.email} hint="Used to sign in. Must be unique in your school." />
         <TextField id="emp-mobile" label="Phone" type="tel" required value={values.mobile} onChange={(v) => set("mobile", v)} error={fe.mobile} />
-        <TextAreaField id="emp-address" label="Address" span maxLength={512} value={values.current_address} onChange={(v) => set("current_address", v)} error={fe.current_address} />
+        {support.details ? (
+          <TextAreaField id="emp-address" label="Address" span maxLength={512} value={values.current_address} onChange={(v) => set("current_address", v)} error={fe.current_address} />
+        ) : null}
       </FormSection>
 
       <FormSection title="Employment">
-        <TextField
-          id="emp-code"
-          label="Employee ID"
-          required={Boolean(employee)}
-          maxLength={32}
-          placeholder={employee ? undefined : "Generated automatically"}
-          value={values.employee_code}
-          onChange={(v) => set("employee_code", v)}
-          error={fe.employee_code}
-          hint={employee ? undefined : "Leave blank to use the next ID."}
-        />
-        <TextField id="emp-joining" label="Joining date" type="date" required value={values.joining_date} onChange={(v) => set("joining_date", v)} error={fe.joining_date} />
-        <div className="form-field">
-          <label htmlFor="emp-department">Department *</label>
-          <input
-            id="emp-department"
-            list={listId}
-            value={values.department}
-            maxLength={128}
-            className={fe.department ? "invalid" : undefined}
-            aria-invalid={Boolean(fe.department)}
-            aria-describedby={fe.department ? "emp-department-error" : undefined}
-            onChange={(event) => set("department", event.target.value)}
-          />
-          <datalist id={listId}>
-            {departments.map((department) => (
-              <option key={department} value={department} />
-            ))}
-          </datalist>
-          {fe.department ? (
-            <p className="field-error" id="emp-department-error">
-              {fe.department}
-            </p>
-          ) : null}
-        </div>
-        <TextField id="emp-designation" label="Designation" required maxLength={128} value={values.designation} onChange={(v) => set("designation", v)} error={fe.designation} />
+        {support.details ? (
+          <>
+            <TextField
+              id="emp-code"
+              label="Employee ID"
+              required={Boolean(employee)}
+              maxLength={32}
+              placeholder={employee ? undefined : "Generated automatically"}
+              value={values.employee_code}
+              onChange={(v) => set("employee_code", v)}
+              error={fe.employee_code}
+              hint={employee ? undefined : "Leave blank to use the next ID."}
+            />
+            <TextField id="emp-joining" label="Joining date" type="date" required value={values.joining_date} onChange={(v) => set("joining_date", v)} error={fe.joining_date} />
+            <div className="form-field">
+              <label htmlFor="emp-department">Department *</label>
+              <input
+                id="emp-department"
+                list={listId}
+                value={values.department}
+                maxLength={128}
+                className={fe.department ? "invalid" : undefined}
+                aria-invalid={Boolean(fe.department)}
+                aria-describedby={fe.department ? "emp-department-error" : undefined}
+                onChange={(event) => set("department", event.target.value)}
+              />
+              <datalist id={listId}>
+                {departments.map((department) => (
+                  <option key={department} value={department} />
+                ))}
+              </datalist>
+              {fe.department ? (
+                <p className="field-error" id="emp-department-error">
+                  {fe.department}
+                </p>
+              ) : null}
+            </div>
+            <TextField id="emp-designation" label="Designation" required maxLength={128} value={values.designation} onChange={(v) => set("designation", v)} error={fe.designation} />
+          </>
+        ) : null}
         <TextField
           id="emp-qualification"
           label="Qualification"
@@ -406,30 +434,36 @@ export function EmployeeForm({
           error={fe.qualification}
           hint={kind === "teachers" ? "For example: M.Sc. Mathematics, B.Ed." : "Optional."}
         />
-        <SelectField
-          id="emp-type"
-          label="Employment type"
-          required
-          placeholder="Choose"
-          value={values.employment_type}
-          onChange={(v) => set("employment_type", v as EmploymentType)}
-          options={EMPLOYMENT_TYPES.map((type) => ({ value: type, label: type }))}
-          error={fe.employment_type}
-        />
-        <div className="form-field field-span">
-          <StatusToggle id="emp-active" checked={values.active} onChange={(v) => set("active", v)} label="Active account" />
-        </div>
-      </FormSection>
-
-      <FormSection title="Documents" description="Files upload after the record is saved.">
-        {employee ? (
+        {support.details ? (
+          <SelectField
+            id="emp-type"
+            label="Employment type"
+            required
+            placeholder="Choose"
+            value={values.employment_type}
+            onChange={(v) => set("employment_type", v as EmploymentType)}
+            options={EMPLOYMENT_TYPES.map((type) => ({ value: type, label: type }))}
+            error={fe.employment_type}
+          />
+        ) : null}
+        {support.status ? (
           <div className="form-field field-span">
-            <span className="people-label">Uploaded</span>
-            <StoredDocuments documents={employee.documents} onRemove={onRemoveDocument} />
+            <StatusToggle id="emp-active" checked={values.active} onChange={(v) => set("active", v)} label="Active account" />
           </div>
         ) : null}
-        <DocumentPicker id="emp-documents" pending={documents} onChange={setDocuments} existingCount={employee?.documents.length ?? 0} suggestions={copy.documents} />
       </FormSection>
+
+      {support.files ? (
+        <FormSection title="Documents" description="Files upload after the record is saved.">
+          {employee ? (
+            <div className="form-field field-span">
+              <span className="people-label">Uploaded</span>
+              <StoredDocuments documents={employee.documents} onRemove={onRemoveDocument} />
+            </div>
+          ) : null}
+          <DocumentPicker id="emp-documents" pending={documents} onChange={setDocuments} existingCount={employee?.documents.length ?? 0} suggestions={copy.documents} />
+        </FormSection>
+      ) : null}
 
       <div className="people-form-actions">
         <button className="btn-pill btn-pill-green" type="submit" disabled={saving}>
@@ -480,7 +514,7 @@ function EmployeeCreate({ kind }: { kind: EmployeeKind }) {
         const saved = await service.createEmployee(kind, input);
         const failures = await uploadFiles(service, kind, saved.id, photo, documents);
         if (failures.length) flashMessage(`${saved.name} was added (${saved.employee_code}), but some files didn't upload. ${failures.join(" ")} Upload them again from Edit.`, "error");
-        else flashMessage(`${saved.name} was added with employee ID ${saved.employee_code}.`);
+        else flashMessage(saved.employee_code ? `${saved.name} was added with employee ID ${saved.employee_code}.` : `${saved.name} was added.`);
         router.push(`${copy.base}/${saved.id}`);
       }}
     />
@@ -511,6 +545,13 @@ function EmployeeEdit({ kind, id }: { kind: EmployeeKind; id: number }) {
   const { record: employee, loading, error, reload } = useRecord(loader);
   const departments = useOptions(useCallback(() => service.listDepartments(kind), [service, kind]));
 
+  if (!peopleSupport(kind).edit) {
+    return (
+      <div className="alert alert-info" role="status">
+        Editing {copy.plural} isn&apos;t available on the school&apos;s server yet.
+      </div>
+    );
+  }
   if (error) return <ErrorAlert error={error} onRetry={() => void reload()} />;
   if (loading && !employee) return <ProfileSkeleton />;
   if (!employee) return null;
@@ -554,6 +595,7 @@ function EmployeeProfile({ kind, id }: { kind: EmployeeKind; id: number }) {
   const service = peopleService(kind);
   const loader = useCallback(() => service.getEmployee(kind, id), [service, kind, id]);
   const { record: employee, setRecord, loading, error, reload } = useRecord(loader);
+  const support = peopleSupport(kind);
 
   if (error) return <ErrorAlert error={error} onRetry={() => void reload()} />;
   if (loading && !employee) return <ProfileSkeleton />;
@@ -566,20 +608,24 @@ function EmployeeProfile({ kind, id }: { kind: EmployeeKind; id: number }) {
         name={employee.name}
         photoUrl={employee.photo_url}
         active={employee.status === 1}
-        meta={`${employee.employee_code} · ${employee.designation}, ${employee.department}`}
+        meta={support.details ? `${employee.employee_code} · ${employee.designation}, ${employee.department}` : employee.email}
         actions={
           <>
-            <Link className="btn-pill btn-pill-green" href={`${copy.base}/${employee.id}/edit`}>
-              Edit {copy.singular}
-            </Link>
-            <StatusAction
-              name={employee.name}
-              noun={copy.singular}
-              active={employee.status === 1}
-              deactivateEffect={copy.deactivateEffect(employee.name)}
-              change={(next) => service.setEmployeeStatus(kind, employee.id, next)}
-              onChanged={setRecord}
-            />
+            {support.edit ? (
+              <Link className="btn-pill btn-pill-green" href={`${copy.base}/${employee.id}/edit`}>
+                Edit {copy.singular}
+              </Link>
+            ) : null}
+            {support.status ? (
+              <StatusAction
+                name={employee.name}
+                noun={copy.singular}
+                active={employee.status === 1}
+                deactivateEffect={copy.deactivateEffect(employee.name)}
+                change={(next) => service.setEmployeeStatus(kind, employee.id, next)}
+                onChanged={setRecord}
+              />
+            ) : null}
           </>
         }
       />
@@ -608,9 +654,11 @@ function EmployeeProfile({ kind, id }: { kind: EmployeeKind; id: number }) {
         />
       </div>
       {kind === "teachers" ? <TeacherAssignments teacherId={employee.id} /> : null}
-      <InfoCard title="Documents" action={<Link className="link-btn" href={`${copy.base}/${employee.id}/edit`}>Upload</Link>}>
-        <StoredDocuments documents={employee.documents} />
-      </InfoCard>
+      {support.files ? (
+        <InfoCard title="Documents" action={<Link className="link-btn" href={`${copy.base}/${employee.id}/edit`}>Upload</Link>}>
+          <StoredDocuments documents={employee.documents} />
+        </InfoCard>
+      ) : null}
     </div>
   );
 }
