@@ -7,6 +7,7 @@ import { SelectField, StatusToggle, TextAreaField, TextField } from "@/component
 import { useFormErrors } from "@/components/academics/hooks";
 import { classLabel, sectionLabel, sessionLabel, useClassesFor, useSectionsFor, useSessions } from "@/components/people/academicOptions";
 import { DocumentPicker, PhotoPicker, StoredDocuments, type PendingDocument } from "@/components/people/Files";
+import { PasswordField } from "@/components/people/PasswordField";
 import { ParentSearch, useDuplicateParent } from "@/components/people/Pickers";
 import { FormSection } from "@/components/people/Profile";
 import { GENDERS, peopleSupport, RELATIONSHIPS, type Gender, type GuardianChoice, type Parent, type Relationship, type StoredFile, type Student, type StudentInput } from "@/lib/people";
@@ -44,6 +45,8 @@ type GuardianState = {
   last_name: string;
   email: string;
   mobile: string;
+  /** Sign-in password for a new parent (live backend only). */
+  password: string;
 };
 
 function initialValues(student: Student | null): Values {
@@ -90,7 +93,7 @@ export function StudentForm({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<Values>(() => initialValues(student));
-  const [guardian, setGuardian] = useState<GuardianState>({ mode: "existing", parent: null, relationship: "", first_name: "", last_name: "", email: "", mobile: "" });
+  const [guardian, setGuardian] = useState<GuardianState>({ mode: "existing", parent: null, relationship: "", first_name: "", last_name: "", email: "", mobile: "", password: "" });
   const [photo, setPhoto] = useState<File | null>(null);
   const [documents, setDocuments] = useState<PendingDocument[]>([]);
   const [saving, setSaving] = useState(false);
@@ -156,6 +159,7 @@ export function StudentForm({
         required(invalid, "guardian.last_name", guardian.last_name, "Enter the parent's last name.");
         email(invalid, "guardian.email", guardian.email, true);
         phone(invalid, "guardian.mobile", guardian.mobile, true);
+        if (support.password && guardian.password.length < 8) invalid["guardian.password"] = "Enter a password of at least 8 characters, or use Generate.";
       }
     }
     return invalid;
@@ -200,7 +204,14 @@ export function StudentForm({
       input.guardian =
         guardian.mode === "existing" && guardian.parent
           ? { parent_id: guardian.parent.id, relationship }
-          : { first_name: guardian.first_name.trim(), last_name: guardian.last_name.trim(), email: guardian.email.trim(), mobile: guardian.mobile.trim(), relationship };
+          : {
+              first_name: guardian.first_name.trim(),
+              last_name: guardian.last_name.trim(),
+              email: guardian.email.trim(),
+              mobile: guardian.mobile.trim(),
+              relationship,
+              password: support.password ? guardian.password : undefined,
+            };
     }
     try {
       await onSave({ input, photo, documents });
@@ -335,6 +346,16 @@ export function StudentForm({
               <TextField id="guardian-last-name" label="Last name" required maxLength={128} value={guardian.last_name} onChange={(v) => setGuardianField("last_name", v)} error={fe["guardian.last_name"]} />
               <TextField id="guardian-email" label="Email" type="email" required autoComplete="off" value={guardian.email} onChange={(v) => setGuardianField("email", v)} error={fe["guardian.email"]} hint="Used to sign in to the parent app." />
               <TextField id="guardian-mobile" label="Phone" type="tel" required value={guardian.mobile} onChange={(v) => setGuardianField("mobile", v)} error={fe["guardian.mobile"]} />
+              {support.password ? (
+                <PasswordField
+                  id="guardian-password"
+                  label="Parent sign-in password"
+                  value={guardian.password}
+                  onChange={(v) => setGuardianField("password", v)}
+                  error={fe["guardian.password"]}
+                  hint="At least 8 characters. Copy it and give it to the parent; they sign in to the parent app with their email and this password."
+                />
+              ) : null}
               {duplicate ? (
                 <div className="alert alert-info field-span people-duplicate" role="status">
                   <span>

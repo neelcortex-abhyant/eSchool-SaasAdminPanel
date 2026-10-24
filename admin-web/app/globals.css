@@ -3852,6 +3852,19 @@ html[data-theme="dark"] .admin-shell.is-school .acad-chips li {
   font-size: 12px;
 }
 
+/* Password input with Show / Generate / Copy (new parent, teacher and staff accounts). */
+.people-password {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.people-password input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
 .people-photo-picker {
   display: flex;
   align-items: center;

@@ -60,7 +60,7 @@ export type PeopleSupport = {
   employmentOptions: { value: string; label: string }[];
   /** "Employment type" (sample data) or "Employment status" (live). */
   employmentLabel: string;
-  /** The live backend needs an initial password when a teacher or staff member is added. */
+  /** The live backend needs a sign-in password when a teacher, staff member or parent is added (incl. a new parent during admission). */
   password: boolean;
   /** Document titles the backend keeps (as categories); null allows any title. */
   documentTitles: string[] | null;
@@ -92,8 +92,8 @@ const EMPLOYEES_LIVE: PeopleSupport = { ...FULL_SUPPORT, guardianLinks: false, e
  * photos and documents.
  */
 const LIVE_SUPPORT: Record<PeopleModule, PeopleSupport> = {
-  students: { ...LIMITED, edit: true, status: true },
-  parents: LIMITED,
+  students: { ...LIMITED, edit: true, status: true, password: true },
+  parents: { ...LIMITED, password: true },
   teachers: EMPLOYEES_LIVE,
   staff: EMPLOYEES_LIVE,
 };

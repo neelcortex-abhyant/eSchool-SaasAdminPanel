@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
 import { useFormErrors } from "@/components/academics/hooks";
+import { PasswordField } from "@/components/people/PasswordField";
 import { StudentSearch, useDuplicateParent } from "@/components/people/Pickers";
 import { FormSection } from "@/components/people/Profile";
 import { peopleSupport, RELATIONSHIPS, type Parent, type ParentCreateInput, type ParentInput, type Relationship, type StudentRow } from "@/lib/people";
@@ -33,6 +34,7 @@ export function ParentForm({
   const [lastName, setLastName] = useState(parent?.last_name ?? "");
   const [emailValue, setEmail] = useState(parent?.email ?? "");
   const [mobile, setMobile] = useState(parent?.mobile ?? "");
+  const [password, setPassword] = useState("");
   const [occupation, setOccupation] = useState(parent?.occupation ?? "");
   const [address, setAddress] = useState(parent?.current_address ?? "");
   const [active, setActive] = useState(parent ? parent.status === 1 : true);
@@ -49,6 +51,7 @@ export function ParentForm({
     required(invalid, "last_name", lastName, "Enter the last name.");
     email(invalid, "email", emailValue, true);
     phone(invalid, "mobile", mobile, true);
+    if (!parent && support.password && password.length < 8) invalid.password = "Enter a password of at least 8 characters, or use Generate.";
     if (support.guardianLinks && links.some((link) => !link.relationship)) invalid.students = "Choose the relationship for each linked student.";
     return invalid;
   }
@@ -81,7 +84,15 @@ export function ParentForm({
       status: active ? 1 : 0,
     };
     try {
-      await onSave(parent ? input : { ...input, students: links.map((link) => ({ student_id: link.student.id, relationship: (link.relationship || "Guardian") as Relationship })) });
+      await onSave(
+        parent
+          ? input
+          : {
+              ...input,
+              students: links.map((link) => ({ student_id: link.student.id, relationship: (link.relationship || "Guardian") as Relationship })),
+              password: support.password ? password : undefined,
+            },
+      );
     } catch (caught) {
       errors.fromError(caught, "Unable to save the parent.");
       setSaving(false);
@@ -102,6 +113,16 @@ export function ParentForm({
         <TextField id="parent-last-name" label="Last name" required maxLength={128} value={lastName} onChange={setLastName} error={fe.last_name} />
         <TextField id="parent-email" label="Email" type="email" required autoComplete="off" value={emailValue} onChange={setEmail} error={fe.email} hint="Used to sign in to the parent app. Must be unique in your school." />
         <TextField id="parent-mobile" label="Phone" type="tel" required value={mobile} onChange={setMobile} error={fe.mobile} />
+        {!parent && support.password ? (
+          <PasswordField
+            id="parent-password"
+            label="Sign-in password"
+            value={password}
+            onChange={setPassword}
+            error={fe.password}
+            hint="At least 8 characters. Copy it and give it to the parent; they sign in to the parent app with their email and this password."
+          />
+        ) : null}
         {duplicate ? (
           <div className="alert alert-info field-span people-duplicate" role="status">
             <span>

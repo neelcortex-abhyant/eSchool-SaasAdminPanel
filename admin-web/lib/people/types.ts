@@ -79,7 +79,7 @@ export type Student = StudentRow & {
 /** Either an existing parent's id, or the details of a new parent to create with the student. */
 export type GuardianChoice =
   | { parent_id: number; relationship: Relationship }
-  | { first_name: string; last_name: string; email: string; mobile: string; relationship: Relationship };
+  | { first_name: string; last_name: string; email: string; mobile: string; relationship: Relationship; password?: string };
 
 export type StudentInput = {
   first_name: string;
@@ -155,7 +155,8 @@ export type ParentInput = {
 
 export type StudentLinkInput = { student_id: number; relationship: Relationship };
 
-export type ParentCreateInput = ParentInput & { students: StudentLinkInput[] };
+/** password: the new parent's sign-in password, required by the live backend. */
+export type ParentCreateInput = ParentInput & { students: StudentLinkInput[]; password?: string };
 
 export type ParentQuery = {
   page?: number;

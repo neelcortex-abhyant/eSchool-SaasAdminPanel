@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/academics/StatusBadge";
 import { useToast } from "@/components/academics/Toasts";
 import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
 import { DocumentPicker, PhotoPicker, StoredDocuments, uploadFiles, type PendingDocument } from "@/components/people/Files";
+import { PasswordField } from "@/components/people/PasswordField";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";
 import { Avatar, FormSection, InfoCard, ProfileHeader, ProfileSkeleton, useRecord } from "@/components/people/Profile";
 import { StatusAction } from "@/components/people/StatusAction";
@@ -389,16 +390,13 @@ export function EmployeeForm({
         <TextField id="emp-email" label="Email" type="email" required autoComplete="off" value={values.email} onChange={(v) => set("email", v)} error={fe.email} hint="Used to sign in. Must be unique in your school." />
         <TextField id="emp-mobile" label="Phone" type="tel" required value={values.mobile} onChange={(v) => set("mobile", v)} error={fe.mobile} />
         {!employee && support.password ? (
-          <TextField
+          <PasswordField
             id="emp-password"
-            label="Password"
-            type="password"
-            required
-            autoComplete="new-password"
+            label="Sign-in password"
             value={values.password}
             onChange={(v) => set("password", v)}
             error={fe.password}
-            hint={`At least 8 characters. Share it with the ${copy.singular} so they can sign in with their email.`}
+            hint={`At least 8 characters. Copy it and give it to the ${copy.singular}; they sign in with their email and this password.`}
           />
         ) : null}
         {support.details ? (

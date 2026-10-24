@@ -442,7 +442,15 @@ export const httpPeopleService: PeopleService = {
       guardianId = Number(input.guardian.parent_id);
     } else {
       const g = input.guardian;
-      const parent = await send<Raw>("POST", "/parents", { first_name: g.first_name, last_name: g.last_name, email: g.email, mobile: g.mobile }, "Unable to add the parent.");
+      if (!g.password || g.password.length < 8) {
+        throw new AcademicApiError(422, "Check the highlighted fields.", { "guardian.password": "Enter a password of at least 8 characters." });
+      }
+      const parent = await send<Raw>(
+        "POST",
+        "/parents",
+        { first_name: g.first_name, last_name: g.last_name, email: g.email, mobile: g.mobile, password: g.password },
+        "Unable to add the parent.",
+      );
       guardianId = num(parent.id);
     }
     const created = await send<Raw>(
@@ -506,7 +514,15 @@ export const httpPeopleService: PeopleService = {
   },
 
   async createParent(input: ParentCreateInput) {
-    const created = await send<Raw>("POST", "/parents", { first_name: input.first_name, last_name: input.last_name, email: input.email, mobile: input.mobile }, "Unable to add the parent.");
+    if (!input.password || input.password.length < 8) {
+      throw new AcademicApiError(422, "Check the highlighted fields.", { password: "Enter a password of at least 8 characters." });
+    }
+    const created = await send<Raw>(
+      "POST",
+      "/parents",
+      { first_name: input.first_name, last_name: input.last_name, email: input.email, mobile: input.mobile, password: input.password },
+      "Unable to add the parent.",
+    );
     const id = num(created.id);
     // Linking a student makes this parent their guardian, replacing the current one.
     for (const link of input.students ?? []) {
