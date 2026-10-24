@@ -105,6 +105,7 @@ export default function PaymentsPage() {
           <option value="successful">Successful</option>
           <option value="pending">Pending</option>
           <option value="failed">Failed</option>
+          <option value="refunded">Refunded</option>
         </select>
         <select
           aria-label="Filter by payment gateway"

@@ -117,6 +117,6 @@ export function PaymentHistory({ schoolId }: { schoolId: number }) {
 }
 
 export function StatusBadge({ status }: { status: PaymentTransaction["status"] }) {
-  const tone = status === "successful" ? "paid" : status === "failed" ? "failed" : "pending";
+  const tone = status === "successful" ? "paid" : status === "failed" ? "failed" : status === "refunded" ? "refunded" : "pending";
   return <span className={`status-badge ${tone}`}>{paymentStatusLabel(status)}</span>;
 }

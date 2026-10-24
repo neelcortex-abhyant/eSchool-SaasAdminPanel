@@ -3978,3 +3978,625 @@ html[data-theme="dark"] .admin-shell.is-school .people-chosen {
     display: block;
   }
 }
+
+/* ---------- Teaching modules: attendance, timetable, homework, materials, online exams ---------- */
+
+.status-badge.info { background: #eff6ff; color: #1d4ed8; }
+
+.alert-warning {
+  background: var(--color-warning-soft);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+button.acad-tab {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button.acad-tab.is-active {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.link-btn.danger {
+  color: var(--color-danger);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.teach-page .resource-card + .resource-card,
+.teach-page .teach-stats + .resource-card {
+  margin-top: 16px;
+}
+
+.teach-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.teach-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.teach-stat.is-green { border-left-color: var(--color-success); }
+.teach-stat.is-amber { border-left-color: var(--color-warning); }
+.teach-stat.is-red { border-left-color: var(--color-danger); }
+.teach-stat.is-blue { border-left-color: #2563eb; }
+.teach-stat.is-grey { border-left-color: #94a3b8; }
+
+.teach-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.teach-stat-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.teach-summary,
+.teach-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.teach-toolbar .btn-pill {
+  width: auto;
+}
+
+.teach-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.teach-segmented button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.teach-segmented button.is-active {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+/* Weekly timetable: a column per day, stacked on phones. */
+.teach-week {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.teach-week.is-single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 520px;
+}
+
+.teach-week.is-stale {
+  opacity: 0.6;
+}
+
+.teach-week-empty {
+  grid-column: 1 / -1;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.teach-day {
+  min-width: 0;
+  padding: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.teach-day header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.teach-day h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.teach-day ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teach-day-empty {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.teach-period {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.teach-period:disabled {
+  cursor: default;
+}
+
+.teach-period:not(:disabled):hover {
+  background: var(--color-primary-soft);
+}
+
+.teach-period.is-conflict {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.teach-period-time {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.teach-conflict-text {
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .teach-week {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .teach-week {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.teach-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.teach-facts dt {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.teach-facts dd {
+  margin: 2px 0 0;
+}
+
+.teach-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.teach-detail-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.teach-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.teach-detail-actions .btn-pill,
+.teach-detail-head > .btn-pill {
+  width: auto;
+}
+
+.teach-response {
+  margin: 8px 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.teach-list {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.teach-list li + li {
+  margin-top: 4px;
+}
+
+.teach-problems {
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.teach-file {
+  overflow-wrap: anywhere;
+}
+
+.teach-strong-link {
+  font-weight: 600;
+  color: inherit;
+}
+
+.teach-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.teach-inline-form .form-field {
+  min-width: 140px;
+  margin: 0;
+}
+
+.teach-inline-form .btn-pill {
+  width: auto;
+}
+
+.teach-availability {
+  margin-top: 16px;
+}
+
+.teach-availability h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.teach-progress {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 22px;
+  overflow: hidden;
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-pill);
+}
+
+.teach-progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-success);
+  transition: width 0.2s ease;
+}
+
+.teach-progress em {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* Online exams */
+.teach-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teach-question {
+  padding: 12px 14px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.teach-question-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.teach-choice-list {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.teach-choice-list li.is-correct {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.teach-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.teach-choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.teach-choices legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.teach-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.teach-choice input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.teach-bank-list {
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.teach-bank-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Attendance marking */
+.teach-roster {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teach-roster li {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) auto minmax(140px, 1fr);
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.teach-roster li:last-child {
+  border-bottom: 0;
+}
+
+.teach-roster li.has-error {
+  background: var(--color-danger-soft);
+}
+
+.teach-roster-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.teach-roster-name .muted,
+.teach-roster-name .field-error {
+  font-size: 12px;
+  margin: 0;
+}
+
+.teach-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.teach-status-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.teach-status-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.teach-status-option:focus-within {
+  outline: 2px solid var(--color-primary-hover);
+  outline-offset: 1px;
+}
+
+.teach-status-option.is-present.is-checked { background: var(--color-success-soft); border-color: var(--color-success); color: var(--color-success); }
+.teach-status-option.is-absent.is-checked { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); }
+.teach-status-option.is-late.is-checked { background: var(--color-warning-soft); border-color: var(--color-warning); color: var(--color-warning); }
+.teach-status-option.is-leave.is-checked { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+
+.teach-remark {
+  width: 100%;
+  min-width: 0;
+}
+
+.teach-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.teach-savebar .btn-pill {
+  width: auto;
+}
+
+@media (max-width: 700px) {
+  .teach-roster li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Monthly attendance matrix: scrolls sideways inside its card. */
+.teach-matrix-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+
+.teach-matrix {
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 100%;
+}
+
+.teach-matrix th,
+.teach-matrix td {
+  min-width: 26px;
+  padding: 6px 4px;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.teach-matrix th.is-off {
+  color: var(--color-text-subtle);
+  font-weight: 400;
+}
+
+.teach-matrix .teach-matrix-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  background: var(--color-surface);
+}
+
+.teach-cell.is-green { background: var(--color-success-soft); color: var(--color-success); font-weight: 700; }
+.teach-cell.is-red { background: var(--color-danger-soft); color: var(--color-danger); font-weight: 700; }
+.teach-cell.is-amber { background: var(--color-warning-soft); color: var(--color-warning); font-weight: 700; }
+.teach-cell.is-blue { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+
+.teach-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teach-legend .teach-cell {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+html[data-theme="dark"] .admin-shell.is-school .teach-stat,
+html[data-theme="dark"] .admin-shell.is-school .teach-day,
+html[data-theme="dark"] .admin-shell.is-school .teach-savebar,
+html[data-theme="dark"] .admin-shell.is-school .teach-segmented,
+html[data-theme="dark"] .admin-shell.is-school .teach-matrix .teach-matrix-name {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+html[data-theme="dark"] .admin-shell.is-school .teach-period,
+html[data-theme="dark"] .admin-shell.is-school .teach-question,
+html[data-theme="dark"] .admin-shell.is-school .teach-response {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.teach-mark-inputs {
+  display: flex;
+  gap: 6px;
+}
+
+.teach-mark-inputs select {
+  min-width: 110px;
+}
+
+.teach-mark-inputs input {
+  width: 90px;
+}
+
+.teach-section-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}

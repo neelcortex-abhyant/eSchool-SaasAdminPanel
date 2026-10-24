@@ -264,14 +264,20 @@ export function safeFileUrl(url: string): boolean {
  * Opens a stored file in a new tab. auth: links are fetched with the sign-in token, and data:
  * URLs (blocked as tabs) are converted; both open as blob: URLs.
  */
-async function openFile(url: string) {
+export async function openFile(url: string) {
   if (!url.startsWith("data:") && !url.startsWith("auth:")) {
     window.open(url, "_blank", "noopener,noreferrer");
     return;
   }
   // Open the tab now, while the click still counts as a user action, then point it at the file.
   const tab = window.open("", "_blank");
-  const objectUrl = url.startsWith("auth:") ? await apiBlobUrl(url.slice("auth:".length)) : URL.createObjectURL(await (await fetch(url)).blob());
+  let objectUrl: string;
+  try {
+    objectUrl = url.startsWith("auth:") ? await apiBlobUrl(url.slice("auth:".length)) : URL.createObjectURL(await (await fetch(url)).blob());
+  } catch (caught) {
+    tab?.close();
+    throw caught;
+  }
   if (tab) tab.location.href = objectUrl;
   else window.open(objectUrl, "_blank", "noopener,noreferrer");
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);

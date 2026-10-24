@@ -52,7 +52,7 @@ export default function PaymentDetailPage() {
 
   return (
     <div>
-      <PageHeading title={payment?.id || "Payment"} description="Transaction details" icon={<IconFees width={20} height={20} />} />
+      <PageHeading title={payment ? (/^\d+$/.test(payment.id) ? `Payment #${payment.id}` : payment.id) : "Payment"} description="Transaction details" icon={<IconFees width={20} height={20} />} />
       <div className="page-actions">
         <Link className="btn-pill btn-pill-green-soft" href="/payments">
           All payments

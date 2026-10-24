@@ -14,6 +14,10 @@
   # those can't store yet); teachers and staff use /school-admin/teachers and /school-admin/staff.
   # See backend/docs/PEOPLE_API_CONTRACT.md.
   NEXT_PUBLIC_PEOPLE_API_MODE = "students:live,parents:live,teachers:live,staff:live"
+  # Attendance, timetable, homework, study materials and online exams use the backend's
+  # /school-admin v1 routes. The question bank, Leave status and attendance corrections/locks
+  # aren't on the server yet, so those stay in the browser or are hidden.
+  NEXT_PUBLIC_TEACHING_API_MODE = "live"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

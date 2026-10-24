@@ -368,13 +368,22 @@ export async function updateSchoolAdminRoles(
   return { ok: true, status: 200, data: toUser(result.data) };
 }
 
+/**
+ * Emails a new password-setup link through /super-admin/schools/{school}/admins/{id}/invite.
+ * Earlier unused links stop working. The server reports invite_sent=false when mail isn't
+ * configured or delivery failed, which is returned as an error so the page doesn't claim it went.
+ */
 export async function sendSchoolAdminPasswordReset(id: string, email: string): Promise<ApiResult<{ message: string }>> {
   if (useMock()) return { ok: true, status: 200, data: { message: "Password reset link sent." } };
-  void id;
-  return api<{ message: string }>("/auth/forgot-password", {
-    method: "POST",
-    body: JSON.stringify({ email, app_origin: typeof window !== "undefined" ? window.location.origin : undefined }),
-  });
+  void email;
+  const path = await adminPath(id);
+  if (!path) return fail(404, { detail: "School admin not found" });
+  const result = await api<BackendAdmin>(`${path}/invite`, { method: "POST" });
+  if (!result.ok) return fail(result.status, result.data);
+  if (result.data.invite_sent === false) {
+    return fail(503, { detail: "The server couldn't send the email (mail isn't set up or delivery failed). Try again later." });
+  }
+  return { ok: true, status: 200, data: { message: "Password-setup link sent." } };
 }
 
 export function schoolAdminDisplayName(user: Pick<SchoolAdminUser, "first_name" | "last_name">): string {

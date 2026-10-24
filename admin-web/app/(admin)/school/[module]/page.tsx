@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import SchoolModulePage from "@/components/school-admin/SchoolModulePage";
 
-/** Old menu slugs now served by the Academic structure pages. */
+/** Old menu slugs now served by dedicated pages. */
 const MOVED: Record<string, string> = {
   medium: "/school/academics/mediums",
   class: "/school/academics/classes",
@@ -12,6 +12,21 @@ const MOVED: Record<string, string> = {
   subject: "/school/academics/subjects",
   "class-subject": "/school/academics/subjects",
   "class-section-teachers": "/school/academics/teacher-assignments",
+  "create-timetable": "/school/timetable",
+  "teacher-timetable": "/school/timetable/teachers",
+  "student-attendance": "/school/attendance",
+  "month-wise-attendance": "/school/attendance/reports",
+  "assignment-submission": "/school/homework",
+  "study-material": "/school/study-materials",
+  "manage-online-exam": "/school/online-exams",
+  "manage-questions": "/school/online-exams",
+  "add-bulk-questions": "/school/online-exams",
+  "manage-offline-exam": "/school/offline-exams",
+  "exam-timetable": "/school/offline-exams/timetable",
+  "track-exam-marks": "/school/offline-exams",
+  "offline-exam-result": "/school/offline-exams",
+  "exam-reports": "/school/offline-exams",
+  "session-year": "/school/academics/sessions",
 };
 
 export default function SchoolModuleRoute() {

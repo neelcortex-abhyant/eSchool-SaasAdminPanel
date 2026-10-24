@@ -117,16 +117,18 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       {
         label: "Timetable",
         children: [
-          { href: "/school/create-timetable", label: "Create timetable" },
-          { href: "/school/teacher-timetable", label: "Teacher timetable" },
+          { href: "/school/timetable", label: "Class timetable" },
+          { href: "/school/timetable/teachers", label: "Teacher schedules" },
           { href: "/school/online-classes", label: "Online classes" },
         ],
       },
       {
         label: "Attendance",
         children: [
-          { href: "/school/student-attendance", label: "Student attendance" },
-          { href: "/school/month-wise-attendance", label: "Month-wise attendance" },
+          { href: "/school/attendance", label: "Attendance dashboard" },
+          { href: "/school/attendance/mark", label: "Mark attendance" },
+          { href: "/school/attendance/history", label: "Student history" },
+          { href: "/school/attendance/reports", label: "Monthly report" },
         ],
       },
       { href: "/school/student-leave", label: "Student leave" },
@@ -138,25 +140,25 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
     icon: IconExam,
     children: [
       {
-        label: "Assignment",
-        children: [{ href: "/school/assignment-submission", label: "Assignment submission" }],
+        label: "Homework & materials",
+        children: [
+          { href: "/school/homework", label: "Homework & assignments" },
+          { href: "/school/study-materials", label: "Study materials" },
+        ],
       },
       {
         label: "Offline exam",
         children: [
-          { href: "/school/manage-offline-exam", label: "Manage offline exam" },
-          { href: "/school/exam-timetable", label: "Exam timetable" },
-          { href: "/school/track-exam-marks", label: "Track exam marks" },
-          { href: "/school/offline-exam-result", label: "Offline exam result" },
+          { href: "/school/offline-exams", label: "Manage offline exams" },
+          { href: "/school/offline-exams/timetable", label: "Exam timetable" },
           { href: "/school/exam-grade", label: "Exam grade" },
         ],
       },
       {
         label: "Online exam",
         children: [
-          { href: "/school/manage-online-exam", label: "Manage online exam" },
-          { href: "/school/manage-questions", label: "Manage questions" },
-          { href: "/school/add-bulk-questions", label: "Add bulk questions" },
+          { href: "/school/online-exams", label: "Manage online exams" },
+          { href: "/school/online-exams/question-bank", label: "Question bank" },
         ],
       },
     ],
@@ -267,7 +269,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       { href: "/school/student-reports", label: "Student reports" },
       { href: "/school/teacher-reports", label: "Teacher reports" },
       { href: "/school/staff-reports", label: "Staff reports" },
-      { href: "/school/exam-reports", label: "Exam reports" },
+      { href: "/school/offline-exams", label: "Exam reports" },
       { href: "/school/expense-report", label: "Expense report" },
       { href: "/school/income-report", label: "Income report" },
       { href: "/school/financial-summary-report", label: "Financial summary" },

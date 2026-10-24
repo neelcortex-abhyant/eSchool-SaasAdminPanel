@@ -1,9 +1,11 @@
 import { api, apiUrl, getAccessToken, type ApiResult } from "@/lib/api";
 import { money } from "@/lib/billing";
 
-export type PaymentStatus = "successful" | "pending" | "failed";
+export type PaymentStatus = "successful" | "pending" | "failed" | "refunded";
 
 export type PaymentInvoice = {
+  /** Server invoice id, used for the PDF download (absent on sample rows). */
+  id?: number;
   number: string;
   date: string;
 };
@@ -112,6 +114,7 @@ function row(
 export function paymentStatusLabel(status: PaymentStatus): string {
   if (status === "successful") return "Successful";
   if (status === "pending") return "Pending";
+  if (status === "refunded") return "Refunded";
   return "Failed";
 }
 
@@ -161,118 +164,212 @@ export function queryPayments(items: PaymentTransaction[], query: PaymentQuery):
   };
 }
 
-function listParams(query: PaymentQuery): string {
-  const params = new URLSearchParams({
-    page: String(query.page ?? 1),
-    page_size: String(query.pageSize ?? 20),
-    sort: query.sort ?? "-created_at",
-  });
-  if (query.q) params.set("q", query.q);
-  if (query.status) params.set("status", query.status);
-  if (query.gateway) params.set("gateway", query.gateway);
-  if (query.from) params.set("from", query.from);
-  if (query.to) params.set("to", query.to);
+// ---------- live: /api/v1/super-admin/payments, /payments/summary and /invoices ----------
+//
+// The server returns amounts in paise, numeric-free status names (created, authorized,
+// captured, failed, refunded) and ids only, so rows are joined here with the schools list and
+// the invoices list. It filters by school, status and date; search, gateway and sort run on the
+// page over every row (up to 2,000 payments).
+
+type ApiPayment = {
+  id: number;
+  school_id: number;
+  bill_id: number;
+  gateway: string;
+  order_id: string;
+  payment_id: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  invoice_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type ApiInvoice = {
+  id: number;
+  invoice_number: string;
+  issued_at: string;
+  payment_transaction_id: number;
+  plan_name: string;
+  school_name: string;
+};
+
+type ApiPage<T> = { items?: T[]; total?: number };
+
+/** Server status values for each filter option (status may repeat in the query). */
+const STATUS_CODES: Record<PaymentStatus, number[]> = { successful: [2], pending: [0, 1], failed: [3], refunded: [4] };
+
+function statusOf(value: string): PaymentStatus {
+  if (value === "captured") return "successful";
+  if (value === "failed") return "failed";
+  if (value === "refunded") return "refunded";
+  return "pending";
+}
+
+async function allApiPages<T>(path: string, params: URLSearchParams): Promise<ApiResult<T[]>> {
+  const rows: T[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    params.set("page", String(page));
+    params.set("page_size", "100");
+    const result = await api<ApiPage<T>>(`${path}?${params.toString()}`);
+    if (!result.ok) return result as unknown as ApiResult<T[]>;
+    const items = Array.isArray(result.data.items) ? result.data.items : [];
+    rows.push(...items);
+    if (items.length === 0 || rows.length >= Number(result.data.total ?? rows.length)) break;
+  }
+  return { ok: true, status: 200, data: rows };
+}
+
+type SchoolName = { id: number; name: string; code?: string | null };
+
+async function lookups(schoolId?: number) {
+  const invoiceParams = new URLSearchParams();
+  if (schoolId) invoiceParams.set("school_id", String(schoolId));
+  const [schools, invoices] = await Promise.all([
+    allApiPages<SchoolName>("/super-admin/schools", new URLSearchParams()),
+    allApiPages<ApiInvoice>("/super-admin/invoices", invoiceParams),
+  ]);
+  return {
+    schools: new Map((schools.ok ? schools.data : []).map((school) => [school.id, school])),
+    invoices: new Map((invoices.ok ? invoices.data : []).map((invoice) => [invoice.payment_transaction_id, invoice])),
+  };
+}
+
+function fromApi(row: ApiPayment, refs: Awaited<ReturnType<typeof lookups>>): PaymentTransaction {
+  const school = refs.schools.get(row.school_id);
+  const invoice = refs.invoices.get(row.id);
+  const status = statusOf(row.status);
+  const created = row.created_at || "";
+  return {
+    id: String(row.id),
+    school_id: row.school_id,
+    school_name: school?.name || invoice?.school_name || `School #${row.school_id}`,
+    school_code: school?.code ?? null,
+    plan_name: invoice?.plan_name || "—",
+    amount: row.amount / 100,
+    currency: row.currency || "INR",
+    gateway: row.gateway,
+    gateway_reference: row.payment_id || row.order_id || null,
+    status,
+    created_at: created,
+    paid_at: status === "successful" ? row.updated_at || created : null,
+    invoice: invoice
+      ? { id: invoice.id, number: invoice.invoice_number, date: invoice.issued_at }
+      : row.invoice_id
+        ? { id: row.invoice_id, number: `Invoice #${row.invoice_id}`, date: row.updated_at || created }
+        : null,
+  };
+}
+
+async function loadLive(query: PaymentQuery): Promise<ApiResult<PaymentList>> {
+  const params = new URLSearchParams();
   if (query.schoolId) params.set("school_id", String(query.schoolId));
-  return params.toString();
+  if (query.status) STATUS_CODES[query.status].forEach((code) => params.append("status", String(code)));
+  if (query.from) params.set("from_date", query.from);
+  if (query.to) params.set("to_date", query.to);
+  const [rows, refs] = await Promise.all([allApiPages<ApiPayment>("/super-admin/payments", params), lookups(query.schoolId)]);
+  if (!rows.ok) return rows as unknown as ApiResult<PaymentList>;
+  const list = queryPayments(rows.data.map((row) => fromApi(row, refs)), { ...query, status: "", from: "", to: "" });
+  return { ok: true, status: 200, data: { ...list, source: "api" } };
+}
+
+function failure<T>(err: unknown): ApiResult<T> {
+  const message = err instanceof Error ? err.message : "Network error.";
+  return { ok: false, status: 0, data: { detail: message } as unknown as T };
 }
 
 export async function loadPayments(query: PaymentQuery = {}): Promise<ApiResult<PaymentList>> {
   try {
-    const result = await api<PaymentList>(`/super-admin/payments?${listParams(query)}`);
-    if (result.ok) return { ...result, data: { ...result.data, source: "api" } };
-    if (result.status === 404) return { ok: true, status: 200, data: queryPayments(SAMPLE, query) };
-    return result;
+    return await loadLive(query);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error.";
-    return { ok: false, status: 0, data: { detail: message } as unknown as PaymentList };
+    return failure(err);
   }
 }
 
 export async function loadSchoolPayments(schoolId: number, query: PaymentQuery = {}): Promise<ApiResult<PaymentList>> {
   try {
-    const result = await api<PaymentList>(`/super-admin/schools/${schoolId}/payments?${listParams(query)}`);
-    if (result.ok) return { ...result, data: { ...result.data, source: "api" } };
-    if (result.status === 404) {
-      return {
-        ok: true,
-        status: 200,
-        data: { items: [], total: 0, page: query.page ?? 1, page_size: query.pageSize ?? 10, source: "api" },
-      };
-    }
-    return result;
+    return await loadLive({ ...query, schoolId });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error.";
-    return { ok: false, status: 0, data: { detail: message } as unknown as PaymentList };
+    return failure(err);
   }
 }
 
 export async function loadPayment(id: string): Promise<ApiResult<PaymentTransaction & { source: "api" | "sample" }>> {
+  const sample = SAMPLE.find((item) => item.id === id);
+  if (sample) return { ok: true, status: 200, data: { ...sample, source: "sample" } };
+  if (!/^\d+$/.test(id)) return { ok: false, status: 404, data: { detail: "Transaction not found." } as unknown as PaymentTransaction & { source: "api" } };
   try {
-    const result = await api<PaymentTransaction>(`/super-admin/payments/${encodeURIComponent(id)}`);
-    if (result.ok) return { ...result, data: { ...result.data, source: "api" } };
-    if (result.status === 404) {
-      const sample = SAMPLE.find((item) => item.id === id);
-      if (!sample) return { ok: false, status: 404, data: { detail: "Transaction not found." } as unknown as PaymentTransaction & { source: "sample" } };
-      return { ok: true, status: 200, data: { ...sample, source: "sample" } };
-    }
-    return result as ApiResult<PaymentTransaction & { source: "api" }>;
+    const result = await api<ApiPayment>(`/super-admin/payments/${id}`);
+    if (!result.ok) return result as unknown as ApiResult<PaymentTransaction & { source: "api" }>;
+    const refs = await lookups(result.data.school_id);
+    return { ok: true, status: 200, data: { ...fromApi(result.data, refs), source: "api" } };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error.";
-    return { ok: false, status: 0, data: { detail: message } as unknown as PaymentTransaction & { source: "api" } };
+    return failure(err);
   }
 }
 
 export async function loadPaymentSummary(): Promise<ApiResult<PaymentSummary>> {
   try {
-    const result = await api<PaymentSummary>("/super-admin/payments/summary");
-    if (result.ok) return { ...result, data: { ...result.data, source: "api" } };
-    if (result.status === 404) return { ok: true, status: 200, data: summarize(SAMPLE, "sample") };
-    return result;
+    const result = await api<{ currency: string; successful_amount: number; successful_count: number; pending_count: number; failed_count: number }>("/super-admin/payments/summary");
+    if (!result.ok) return result as unknown as ApiResult<PaymentSummary>;
+    const data = result.data;
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        successful_amount: Number(data.successful_amount || 0),
+        currency: data.currency || "INR",
+        successful_count: Number(data.successful_count || 0),
+        pending_count: Number(data.pending_count || 0),
+        failed_count: Number(data.failed_count || 0),
+        source: "api",
+      },
+    };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error.";
-    return { ok: false, status: 0, data: { detail: message } as unknown as PaymentSummary };
+    return failure(err);
   }
 }
 
+/** Downloads the invoice PDF from /super-admin/invoices/{id}/pdf (sample rows get a text file). */
 export async function downloadInvoice(payment: PaymentTransaction): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!payment.invoice) return { ok: false, message: "No invoice has been generated for this transaction." };
+  const sample = SAMPLE.find((item) => item.id === payment.id);
+  if (sample?.invoice) {
+    const text = [
+      "SAMPLE INVOICE",
+      "This file is sample data. It is not a collected payment and not a tax invoice.",
+      "",
+      `Invoice: ${sample.invoice.number}`,
+      `Invoice date: ${sample.invoice.date}`,
+      `Transaction: ${sample.id}`,
+      `School: ${sample.school_name}`,
+      `Plan: ${sample.plan_name}`,
+      `Amount: ${money(sample.amount, sample.currency)}`,
+      `Status: ${paymentStatusLabel(sample.status)}`,
+    ].join("\n");
+    saveBlob(new Blob([text], { type: "text/plain" }), `${sample.invoice.number}.txt`);
+    return { ok: true };
+  }
+  if (!payment.invoice.id) return { ok: false, message: "No invoice has been generated for this transaction." };
   try {
     const token = getAccessToken();
-    const response = await fetch(apiUrl(`/super-admin/payments/${encodeURIComponent(payment.id)}/invoice`), {
+    const response = await fetch(apiUrl(`/super-admin/invoices/${payment.invoice.id}/pdf`), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (response.status === 401) return { ok: false, message: "Sign in again to download this invoice." };
     if (response.status === 403) return { ok: false, message: "This account cannot download invoices." };
-    if (response.ok) {
-      const blob = await response.blob();
-      saveBlob(blob, fileName(response, payment.invoice.number));
-      return { ok: true };
-    }
-    if (response.status !== 404) {
+    if (response.status === 404) return { ok: false, message: "This invoice is no longer on the server." };
+    if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { detail?: string };
       return { ok: false, message: typeof data.detail === "string" ? data.detail : "Unable to download this invoice." };
     }
+    saveBlob(await response.blob(), fileName(response, payment.invoice.number));
+    return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Network error.";
     return { ok: false, message: `Unable to download this invoice. (${message})` };
   }
-
-  const sample = SAMPLE.find((item) => item.id === payment.id);
-  if (!sample?.invoice) return { ok: false, message: "No invoice has been generated for this transaction." };
-  const text = [
-    "SAMPLE INVOICE",
-    "This file is sample data. It is not a collected payment and not a tax invoice.",
-    "",
-    `Invoice: ${sample.invoice.number}`,
-    `Invoice date: ${sample.invoice.date}`,
-    `Transaction: ${sample.id}`,
-    `School: ${sample.school_name}`,
-    `Plan: ${sample.plan_name}`,
-    `Amount: ${money(sample.amount, sample.currency)}`,
-    `Status: ${paymentStatusLabel(sample.status)}`,
-  ].join("\n");
-  saveBlob(new Blob([text], { type: "text/plain" }), `${sample.invoice.number}.txt`);
-  return { ok: true };
 }
 
 function fileName(response: Response, invoiceNumber: string): string {
