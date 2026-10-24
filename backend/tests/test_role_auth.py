@@ -98,9 +98,10 @@ def _unlinked_demo_student() -> int:
         db.close()
 
 
-def _login(client, role: str, **form):
+def _login(client, login_as: str, **form):
+    """POST /api/{login_as}/login. Extra form keys (e.g. role=) are forwarded as-is."""
     data = {"school_code": "DEMO", **form}
-    return client.post(f"/api/{role}/login", data=data).json()
+    return client.post(f"/api/{login_as}/login", data=data).json()
 
 
 def _student_token(client) -> str:

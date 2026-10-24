@@ -105,7 +105,7 @@ def test_module6_server_defaults_match_0036():
     assert _server_default_text(OfflineExamResult, "passed") == "0"
 
 
-def test_modules_revision_chain_0032_through_0036_is_linear():
+def test_modules_revision_chain_0032_through_0037_is_linear():
     cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     expected = [
@@ -114,9 +114,10 @@ def test_modules_revision_chain_0032_through_0036_is_linear():
         ("20261023_0034", "20261023_0033"),
         ("20261023_0035", "20261023_0034"),
         ("20261023_0036", "20261023_0035"),
+        ("20261024_0037", "20261023_0036"),
     ]
     for revision, parent in expected:
         rev = script.get_revision(revision)
         assert rev is not None, revision
         assert rev.down_revision == parent, (revision, rev.down_revision)
-    assert "20261023_0036" in script.get_heads()
+    assert "20261024_0037" in script.get_heads()

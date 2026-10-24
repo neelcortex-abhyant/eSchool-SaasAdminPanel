@@ -186,19 +186,68 @@ def _teacher_item(user: User, staff: Staff, *, assignment_count: int | None = No
         "permanent_address": user.permanent_address,
         "country_code": user.country_code,
         "image": user.image,
+        "photo_url": user.image,
         "status": user.status,
         "role": TEACHER_ROLE_NAME,
         "qualification": staff.qualification,
         "salary": staff.salary,
         "employee_id": staff.employee_id,
+        "employee_code": staff.employee_id,
         "joining_date": staff.joining_date.isoformat() if staff.joining_date else None,
         "employment_status": staff.employment_status,
+        # People-contract alias; employment_type enum is not stored — status is the live field.
+        "employment_type": staff.employment_status,
         "department": staff.department,
         "designation": staff.designation,
     }
     if assignment_count is not None:
         item["assignment_count"] = assignment_count
     return item
+
+
+def _next_employee_code(db: Session, school_id: int, prefix: str) -> str:
+    like = f"{prefix}%"
+    rows = (
+        db.query(Staff.employee_id)
+        .filter(
+            Staff.school_id == school_id,
+            Staff.employee_id.isnot(None),
+            Staff.employee_id.ilike(like),
+        )
+        .with_for_update()
+        .all()
+    )
+    max_seq = 0
+    for (code,) in rows:
+        suffix = str(code)[len(prefix) :]
+        if suffix.isdigit():
+            max_seq = max(max_seq, int(suffix))
+    return f"{prefix}{max_seq + 1:04d}"
+
+
+def list_departments(db: Session, school_id: int, *, teachers_only: bool) -> dict:
+    query = db.query(Staff.department).filter(
+        Staff.school_id == school_id,
+        Staff.department.isnot(None),
+        Staff.department != "",
+    )
+    if teachers_only:
+        query = (
+            query.join(User, User.id == Staff.user_id)
+            .join(
+                ModelHasRole,
+                (ModelHasRole.model_id == User.id) & (ModelHasRole.model_type == USER_MODEL),
+            )
+            .join(Role, Role.id == ModelHasRole.role_id)
+            .filter(
+                Role.name == TEACHER_ROLE_NAME,
+                Role.school_id == school_id,
+                Role.guard_name == "web",
+                User.deleted_at.is_(None),
+            )
+        )
+    values = sorted({(row[0] or "").strip() for row in query.all() if row[0] and str(row[0]).strip()})
+    return {"items": values}
 
 
 def _apply_employment_filters(query, *, status, employment_status, department, designation):
@@ -245,9 +294,17 @@ def create_teacher(db: Session, school_id: int, body: dict) -> dict:
     email = str(body["email"]).strip().lower()
     _assert_unique_school_email(db, school_id, email)
 
-    employee_id = _normalize_employee_id(body.get("employee_id"))
+    # Accept people-contract alias employee_code.
+    employee_id = _normalize_employee_id(body.get("employee_id") or body.get("employee_code"))
+    if employee_id is None:
+        employee_id = _next_employee_code(db, school_id, "TCH")
     _assert_unique_employee_id(db, school_id, employee_id)
-    employment_status = _normalize_employment_status(body.get("employment_status"))
+    raw_status = body.get("employment_status")
+    if raw_status is None:
+        alias = str(body.get("employment_type") or "").strip().lower()
+        if alias in EMPLOYMENT_STATUSES:
+            raw_status = alias
+    employment_status = _normalize_employment_status(raw_status)
     joining_date = _parse_date(body.get("joining_date"), "joining_date")
     department = _normalize_org_label(body.get("department"), "department")
     designation = _normalize_org_label(body.get("designation"), "designation")
@@ -410,7 +467,7 @@ def update_teacher(db: Session, school_id: int, teacher_id: int, body: dict) -> 
             raise AcademicError(422, "salary must be >= 0")
         staff.salary = salary
     if "employee_id" in body:
-        employee_id = _normalize_employee_id(body.get("employee_id"))
+        employee_id = _normalize_employee_id(body.get("employee_id") or body.get("employee_code"))
         _assert_unique_employee_id(db, school_id, employee_id, exclude_staff_id=staff.id)
         staff.employee_id = employee_id
     if "joining_date" in body:

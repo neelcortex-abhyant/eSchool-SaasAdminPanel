@@ -23,6 +23,7 @@ from app.services.v1 import rbac, school_service
 from app.services.v1 import school_academics as academics
 from app.services.v1 import school_staff as staff_svc
 from app.services.v1 import school_teachers as teachers_svc
+from app.services.v1 import school_people as people_svc
 from app.services.v1 import school_homework as homework_svc
 from app.services.v1 import school_offline_exams as offline_svc
 from app.services.v1 import school_online_assessments as oa_svc
@@ -37,6 +38,7 @@ require_structure_write = require_school_permission(rbac.PERM_SCHOOL)
 # Teacher assignments use teachers.manage (same as academics/teacher-assignments).
 require_teachers = require_school_permission(rbac.PERM_TEACHERS)
 require_staff = require_school_permission(rbac.PERM_STAFF)
+require_students = require_school_permission(rbac.PERM_STUDENTS)
 require_exams = require_school_permission(rbac.PERM_EXAMS)
 
 
@@ -128,8 +130,10 @@ class TeacherCreateBody(BaseModel):
     qualification: str | None = Field(default=None, max_length=512)
     salary: float | None = Field(default=None, ge=0)
     employee_id: str | None = Field(default=None, max_length=64)
+    employee_code: str | None = Field(default=None, max_length=64)
     joining_date: date | None = None
     employment_status: str | None = Field(default=None, max_length=32)
+    employment_type: str | None = Field(default=None, max_length=32)
     department: str | None = Field(default=None, max_length=128)
     designation: str | None = Field(default=None, max_length=128)
 
@@ -152,8 +156,10 @@ class TeacherUpdateBody(BaseModel):
     qualification: str | None = Field(default=None, max_length=512)
     salary: float | None = Field(default=None, ge=0)
     employee_id: str | None = Field(default=None, max_length=64)
+    employee_code: str | None = Field(default=None, max_length=64)
     joining_date: date | None = None
     employment_status: str | None = Field(default=None, max_length=32)
+    employment_type: str | None = Field(default=None, max_length=32)
     department: str | None = Field(default=None, max_length=128)
     designation: str | None = Field(default=None, max_length=128)
 
@@ -185,8 +191,10 @@ class StaffCreateBody(BaseModel):
     qualification: str | None = Field(default=None, max_length=512)
     salary: float | None = Field(default=None, ge=0)
     employee_id: str | None = Field(default=None, max_length=64)
+    employee_code: str | None = Field(default=None, max_length=64)
     joining_date: date | None = None
     employment_status: str | None = Field(default=None, max_length=32)
+    employment_type: str | None = Field(default=None, max_length=32)
     department: str | None = Field(default=None, max_length=128)
     designation: str | None = Field(default=None, max_length=128)
 
@@ -209,8 +217,10 @@ class StaffUpdateBody(BaseModel):
     qualification: str | None = Field(default=None, max_length=512)
     salary: float | None = Field(default=None, ge=0)
     employee_id: str | None = Field(default=None, max_length=64)
+    employee_code: str | None = Field(default=None, max_length=64)
     joining_date: date | None = None
     employment_status: str | None = Field(default=None, max_length=32)
+    employment_type: str | None = Field(default=None, max_length=32)
     department: str | None = Field(default=None, max_length=128)
     designation: str | None = Field(default=None, max_length=128)
 
@@ -221,6 +231,102 @@ class StaffStatusBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: int = Field(ge=0, le=1)
+
+
+class GuardianInlineBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: int | None = Field(default=None, ge=1)
+    relationship: str = Field(min_length=1, max_length=32)
+    first_name: str | None = Field(default=None, max_length=128)
+    last_name: str | None = Field(default=None, max_length=128)
+    email: EmailStr | None = None
+    mobile: str | None = Field(default=None, max_length=32)
+
+
+class StudentCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    dob: date
+    gender: str = Field(min_length=1, max_length=16)
+    admission_no: str | None = Field(default=None, max_length=32)
+    admission_date: date
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    roll_number: int | None = Field(default=None, ge=1, le=9999)
+    email: EmailStr | None = None
+    mobile: str | None = Field(default=None, max_length=32)
+    current_address: str = Field(min_length=1, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    status: int | None = Field(default=1, ge=0, le=1)
+    guardian: GuardianInlineBody
+
+
+class StudentUpdateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    dob: date
+    gender: str = Field(min_length=1, max_length=16)
+    admission_no: str = Field(min_length=1, max_length=32)
+    admission_date: date
+    session_year_id: int = Field(ge=1)
+    class_section_id: int = Field(ge=1)
+    roll_number: int | None = Field(default=None, ge=1, le=9999)
+    email: EmailStr | None = None
+    mobile: str | None = Field(default=None, max_length=32)
+    current_address: str = Field(min_length=1, max_length=512)
+    permanent_address: str | None = Field(default=None, max_length=512)
+    status: int | None = Field(default=None, ge=0, le=1)
+
+
+class PeopleStatusBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: int = Field(ge=0, le=1)
+
+
+class GuardianLinkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: int = Field(ge=1)
+    relationship: str = Field(min_length=1, max_length=32)
+    is_primary: bool | None = None
+
+
+class ParentStudentLinkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: int = Field(ge=1)
+    relationship: str = Field(min_length=1, max_length=32)
+
+
+class ParentCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    email: EmailStr
+    mobile: str = Field(min_length=7, max_length=32)
+    current_address: str | None = Field(default=None, max_length=512)
+    occupation: str | None = Field(default=None, max_length=255)
+    status: int | None = Field(default=1, ge=0, le=1)
+    students: list[ParentStudentLinkBody] = Field(default_factory=list)
+
+
+class ParentUpdateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=128)
+    last_name: str = Field(min_length=1, max_length=128)
+    email: EmailStr
+    mobile: str = Field(min_length=7, max_length=32)
+    current_address: str | None = Field(default=None, max_length=512)
+    occupation: str | None = Field(default=None, max_length=255)
+    status: int | None = Field(default=None, ge=0, le=1)
 
 
 class TimetableEntryCreateBody(BaseModel):
@@ -615,6 +721,303 @@ def replace_subject_classes(
 # --- Module 3: Teacher & Staff Management ---
 
 
+# --- People API: students / parents (keeps /academics/... for compatibility) ---
+
+
+@router.get("/students")
+def list_people_students(
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+    q: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=1),
+    session_year_id: int | None = Query(default=None, ge=1),
+    class_id: int | None = Query(default=None, ge=1),
+    class_section_id: int | None = Query(default=None, ge=1),
+    parent_id: int | None = Query(default=None, ge=1),
+    sort: str = Query(default="name"),
+    order: str = Query(default="asc"),
+) -> dict:
+    return _run(
+        lambda: people_svc.list_students(
+            db,
+            _school_id(auth),
+            q=q,
+            page=page,
+            page_size=page_size,
+            status=status_filter,
+            session_year_id=session_year_id,
+            class_id=class_id,
+            class_section_id=class_section_id,
+            parent_id=parent_id,
+            sort=sort,
+            order=order,
+        )
+    )
+
+
+@router.post("/students", status_code=status.HTTP_201_CREATED)
+def create_people_student(
+    body: StudentCreateBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: people_svc.create_student(db, _school_id(auth), _write_body(body)))
+
+
+@router.get("/students/{student_id}")
+def get_people_student(
+    student_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: people_svc.get_student(db, _school_id(auth), student_id))
+
+
+@router.patch("/students/{student_id}")
+def update_people_student(
+    student_id: int,
+    body: StudentUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.update_student(db, _school_id(auth), student_id, _write_body(body))
+    )
+
+
+@router.patch("/students/{student_id}/status")
+def update_people_student_status(
+    student_id: int,
+    body: PeopleStatusBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.update_student_status(db, _school_id(auth), student_id, body.status)
+    )
+
+
+@router.post("/students/{student_id}/guardians")
+def link_people_guardian(
+    student_id: int,
+    body: GuardianLinkBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.link_guardian(db, _school_id(auth), student_id, _write_body(body))
+    )
+
+
+@router.delete("/students/{student_id}/guardians/{parent_id}")
+def unlink_people_guardian(
+    student_id: int,
+    parent_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.unlink_guardian(db, _school_id(auth), student_id, parent_id)
+    )
+
+
+@router.post("/students/{student_id}/photo", status_code=status.HTTP_201_CREATED)
+async def upload_student_photo(
+    student_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+) -> dict:
+    data, filename = await _read_upload(file)
+    result = _run(
+        lambda: docs_svc.upload_photo(
+            db, _school_id(auth), "student", student_id, data=data, filename=filename
+        )
+    )
+    return {"photo_url": result["photo_url"]}
+
+
+@router.get("/students/{student_id}/photo")
+def get_student_photo(
+    student_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    data, content_type = _run(
+        lambda: docs_svc.get_profile_photo_bytes(db, _school_id(auth), "student", student_id)
+    )
+    return Response(content=data, media_type=content_type, headers={"X-Content-Type-Options": "nosniff"})
+
+
+@router.post("/students/{student_id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_student_document(
+    student_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+    title: str = Form(default=""),
+    category: str = Form(default="other"),
+) -> dict:
+    data, filename = await _read_upload(file)
+    return _run(
+        lambda: docs_svc.upload_document(
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            category=category,
+            data=data,
+            filename=filename,
+            title=title or None,
+        )
+    )
+
+
+@router.get("/students/{student_id}/documents")
+def list_student_documents(
+    student_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    category: str | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: docs_svc.list_documents(
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            page=page,
+            page_size=page_size,
+            category=category,
+        )
+    )
+
+
+@router.get("/students/{student_id}/documents/{document_id}")
+def get_student_document(
+    student_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.get_document(
+            db, _school_id(auth), "student", student_id, document_id
+        )
+    )
+
+
+@router.delete("/students/{student_id}/documents/{document_id}")
+def delete_student_document(
+    student_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: docs_svc.delete_document(
+            db, _school_id(auth), "student", student_id, document_id
+        )
+    )
+
+
+@router.get("/students/{student_id}/documents/{document_id}/download")
+def download_student_document(
+    student_id: int,
+    document_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    data, content_type, filename = _run(
+        lambda: docs_svc.download_document(
+            db, _school_id(auth), "student", student_id, document_id
+        )
+    )
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if filename:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return Response(content=data, media_type=content_type, headers=headers)
+
+
+@router.get("/parents")
+def list_people_parents(
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+    q: str = "",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    status_filter: int | None = Query(default=None, alias="status", ge=0, le=1),
+    email: str | None = Query(default=None),
+    mobile: str | None = Query(default=None),
+) -> dict:
+    return _run(
+        lambda: people_svc.list_parents(
+            db,
+            _school_id(auth),
+            q=q,
+            page=page,
+            page_size=page_size,
+            status=status_filter,
+            email=email,
+            mobile=mobile,
+        )
+    )
+
+
+@router.post("/parents", status_code=status.HTTP_201_CREATED)
+def create_people_parent(
+    body: ParentCreateBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: people_svc.create_parent(db, _school_id(auth), _write_body(body)))
+
+
+@router.get("/parents/{parent_id}")
+def get_people_parent(
+    parent_id: int,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: people_svc.get_parent(db, _school_id(auth), parent_id))
+
+
+@router.patch("/parents/{parent_id}")
+def update_people_parent(
+    parent_id: int,
+    body: ParentUpdateBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.update_parent(db, _school_id(auth), parent_id, _write_body(body))
+    )
+
+
+@router.patch("/parents/{parent_id}/status")
+def update_people_parent_status(
+    parent_id: int,
+    body: PeopleStatusBody,
+    auth: Annotated[AuthContext, Depends(require_students)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: people_svc.update_parent_status(db, _school_id(auth), parent_id, body.status)
+    )
+
+
+@router.get("/teachers/departments")
+def list_teacher_departments(
+    auth: Annotated[AuthContext, Depends(require_teachers)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: teachers_svc.list_departments(db, _school_id(auth), teachers_only=True))
+
+
 @router.get("/teachers")
 def list_teachers(
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -705,6 +1108,7 @@ async def upload_teacher_document(
     db: Annotated[Session, Depends(central_db)],
     file: UploadFile = File(...),
     category: str = Form(default="other"),
+    title: str = Form(default=""),
 ) -> dict:
     data, filename = await _read_upload(file)
     return _run(
@@ -716,6 +1120,7 @@ async def upload_teacher_document(
             category=category,
             data=data,
             filename=filename,
+            title=title or None,
         )
     )
 
@@ -796,17 +1201,12 @@ async def upload_teacher_photo(
     file: UploadFile = File(...),
 ) -> dict:
     data, filename = await _read_upload(file)
-    return _run(
-        lambda: docs_svc.upload_document(
-            db,
-            _school_id(auth),
-            "teacher",
-            teacher_id,
-            category="profile_photo",
-            data=data,
-            filename=filename,
+    result = _run(
+        lambda: docs_svc.upload_photo(
+            db, _school_id(auth), "teacher", teacher_id, data=data, filename=filename
         )
     )
+    return {"photo_url": result["photo_url"]}
 
 
 @router.get("/teachers/{teacher_id}/photo")
@@ -911,6 +1311,14 @@ def get_teacher_availability(
     )
 
 
+@router.get("/staff/departments")
+def list_staff_departments(
+    auth: Annotated[AuthContext, Depends(require_staff)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: staff_svc.list_departments(db, _school_id(auth)))
+
+
 @router.get("/staff")
 def list_staff(
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -991,6 +1399,7 @@ async def upload_staff_document(
     db: Annotated[Session, Depends(central_db)],
     file: UploadFile = File(...),
     category: str = Form(default="other"),
+    title: str = Form(default=""),
 ) -> dict:
     data, filename = await _read_upload(file)
     return _run(
@@ -1002,6 +1411,7 @@ async def upload_staff_document(
             category=category,
             data=data,
             filename=filename,
+            title=title or None,
         )
     )
 
@@ -1082,17 +1492,12 @@ async def upload_staff_photo(
     file: UploadFile = File(...),
 ) -> dict:
     data, filename = await _read_upload(file)
-    return _run(
-        lambda: docs_svc.upload_document(
-            db,
-            _school_id(auth),
-            "staff",
-            staff_id,
-            category="profile_photo",
-            data=data,
-            filename=filename,
+    result = _run(
+        lambda: docs_svc.upload_photo(
+            db, _school_id(auth), "staff", staff_id, data=data, filename=filename
         )
     )
+    return {"photo_url": result["photo_url"]}
 
 
 @router.get("/staff/{staff_id}/photo")

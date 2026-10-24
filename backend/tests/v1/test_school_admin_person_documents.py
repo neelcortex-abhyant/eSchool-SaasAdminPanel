@@ -131,7 +131,8 @@ def test_teacher_document_upload_list_download_and_isolation(
         files={"file": ("x.txt", b"not-a-real-type", "text/plain")},
         data={"category": "other"},
     )
-    assert bad.status_code == 422
+    # People upload contract: unsupported magic bytes → 415 (not 422).
+    assert bad.status_code == 415
 
     uploaded = v1_client.post(
         f"{TEACHERS}/{teacher_id}/documents",

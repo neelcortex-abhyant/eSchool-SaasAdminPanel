@@ -741,6 +741,15 @@ class Student(Base, TimestampMixin):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_students_school_session_cs_roll_active",
+            "school_id",
+            "session_year_id",
+            "class_section_id",
+            "roll_number",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND roll_number IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -862,7 +871,7 @@ class AttendanceEvent(Base):
 
 
 class PersonDocument(Base, TimestampMixin):
-    """Private teacher/staff document metadata (migration 0029)."""
+    """Private person document metadata (migration 0029; title added in 0037)."""
 
     __tablename__ = "person_documents"
 
@@ -870,6 +879,7 @@ class PersonDocument(Base, TimestampMixin):
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     owner_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -133,22 +133,37 @@ def _staff_item(user: User, staff: Staff) -> dict:
         "permanent_address": user.permanent_address,
         "country_code": user.country_code,
         "image": user.image,
+        "photo_url": user.image,
         "status": user.status,
         "role": STAFF_ROLE_NAME,
         "qualification": staff.qualification,
         "salary": staff.salary,
         "employee_id": staff.employee_id,
+        "employee_code": staff.employee_id,
         "joining_date": staff.joining_date.isoformat() if staff.joining_date else None,
         "employment_status": staff.employment_status,
+        "employment_type": staff.employment_status,
         "department": staff.department,
         "designation": staff.designation,
     }
 
 
-def _parse_employment_body(body: dict) -> dict:
-    employee_id = _normalize_employee_id(body.get("employee_id"))
+def _parse_employment_body(body: dict, *, school_id: int, db: Session) -> dict:
+    from app.services.v1.school_teachers import _next_employee_code
+
+    employee_id = _normalize_employee_id(body.get("employee_id") or body.get("employee_code"))
+    if employee_id is None:
+        employee_id = _next_employee_code(db, school_id, "STF")
+    from app.services.v1.school_teachers import EMPLOYMENT_STATUSES
+
+    # Prefer employment_status; accept employment_type only when it matches known statuses.
+    raw_status = body.get("employment_status")
+    if raw_status is None:
+        alias = str(body.get("employment_type") or "").strip().lower()
+        if alias in EMPLOYMENT_STATUSES:
+            raw_status = alias
     joining_date = _parse_date(body.get("joining_date"), "joining_date")
-    employment_status = _normalize_employment_status(body.get("employment_status"))
+    employment_status = _normalize_employment_status(raw_status)
     department = _normalize_org_label(body.get("department"), "department")
     designation = _normalize_org_label(body.get("designation"), "designation")
     qualification = _opt_str(body.get("qualification"), 512)
@@ -175,7 +190,7 @@ def create_staff(db: Session, school_id: int, body: dict) -> dict:
     email = str(body["email"]).strip().lower()
     _assert_unique_school_email(db, school_id, email)
 
-    emp = _parse_employment_body(body)
+    emp = _parse_employment_body(body, school_id=school_id, db=db)
     _assert_unique_employee_id(db, school_id, emp["employee_id"])
 
     user = User(
@@ -315,6 +330,29 @@ def get_staff(db: Session, school_id: int, staff_user_id: int) -> dict:
     return _staff_item(user, staff)
 
 
+def list_departments(db: Session, school_id: int) -> dict:
+    query = (
+        db.query(Staff.department)
+        .join(User, User.id == Staff.user_id)
+        .join(
+            ModelHasRole,
+            (ModelHasRole.model_id == User.id) & (ModelHasRole.model_type == USER_MODEL),
+        )
+        .join(Role, Role.id == ModelHasRole.role_id)
+        .filter(
+            Staff.school_id == school_id,
+            Staff.department.isnot(None),
+            Staff.department != "",
+            Role.name == STAFF_ROLE_NAME,
+            Role.school_id == school_id,
+            Role.guard_name == "web",
+            User.deleted_at.is_(None),
+        )
+    )
+    values = sorted({(row[0] or "").strip() for row in query.all() if row[0] and str(row[0]).strip()})
+    return {"items": values}
+
+
 def update_staff(db: Session, school_id: int, staff_user_id: int, body: dict) -> dict:
     user, staff = _owned_non_teaching_staff(db, school_id, staff_user_id)
     if "status" in body:
@@ -361,14 +399,17 @@ def update_staff(db: Session, school_id: int, staff_user_id: int, body: dict) ->
         if salary < 0:
             raise AcademicError(422, "salary must be >= 0")
         staff.salary = salary
-    if "employee_id" in body:
-        employee_id = _normalize_employee_id(body.get("employee_id"))
+    if "employee_id" in body or "employee_code" in body:
+        employee_id = _normalize_employee_id(body.get("employee_id") or body.get("employee_code"))
         _assert_unique_employee_id(db, school_id, employee_id, exclude_staff_id=staff.id)
         staff.employee_id = employee_id
     if "joining_date" in body:
         staff.joining_date = _parse_date(body.get("joining_date"), "joining_date")
-    if "employment_status" in body:
-        staff.employment_status = _normalize_employment_status(body.get("employment_status"))
+    if "employment_status" in body or "employment_type" in body:
+        raw = body.get("employment_status")
+        if raw is None:
+            raw = body.get("employment_type")
+        staff.employment_status = _normalize_employment_status(raw)
     if "department" in body:
         staff.department = _normalize_org_label(body.get("department"), "department")
     if "designation" in body:

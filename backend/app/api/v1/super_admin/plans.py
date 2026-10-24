@@ -25,14 +25,34 @@ def _http(exc: plan_service.PlanServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
+def _audited(db: Session, detail: str, work, audit):
+    """Run work uncommitted, then commit it with the audit row (same pattern as subscriptions)."""
+    try:
+        result = work()
+    except plan_service.PlanServiceError as exc:
+        db.rollback()
+        raise _http(exc) from exc
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    try:
+        audit(result)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=detail) from None
+    return result
+
+
 @router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
 def create_plan(
     body: PlanCreateRequest,
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> PlanResponse:
-    try:
-        plan = plan_service.create_plan(
+    plan = _audited(
+        db,
+        "Plan could not be recorded",
+        lambda: plan_service.create_plan(
             db,
             name=body.name,
             description=body.description,
@@ -40,16 +60,16 @@ def create_plan(
             yearly_price=body.yearly_price,
             student_limit=body.student_limit,
             staff_limit=body.staff_limit,
-        )
-    except plan_service.PlanServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db,
-        actor=auth.user,
-        action="plan.create",
-        entity_type="plan",
-        entity_id=plan.id,
-        metadata={"name": plan.name},
+            commit=False,
+        ),
+        lambda created: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="plan.create",
+            entity_type="plan",
+            entity_id=created.id,
+            metadata={"name": created.name},
+        ),
     )
     return PlanResponse.model_validate(plan)
 
@@ -104,8 +124,10 @@ def patch_plan(
     db: Annotated[Session, Depends(central_db)],
 ) -> PlanResponse:
     fields = body.model_fields_set
-    try:
-        plan = plan_service.update_plan(
+    plan = _audited(
+        db,
+        "Plan could not be recorded",
+        lambda: plan_service.update_plan(
             db,
             plan_id,
             name=body.name,
@@ -116,16 +138,16 @@ def patch_plan(
             student_limit_set="student_limit" in fields,
             staff_limit=body.staff_limit,
             staff_limit_set="staff_limit" in fields,
-        )
-    except plan_service.PlanServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
-        db,
-        actor=auth.user,
-        action="plan.update",
-        entity_type="plan",
-        entity_id=plan.id,
-        metadata={"name": plan.name},
+            commit=False,
+        ),
+        lambda updated: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="plan.update",
+            entity_type="plan",
+            entity_id=updated.id,
+            metadata={"name": updated.name},
+        ),
     )
     return PlanResponse.model_validate(plan)
 
@@ -137,16 +159,19 @@ def patch_plan_status(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> PlanResponse:
-    try:
-        plan = plan_service.set_plan_status(db, plan_id, status=body.status)
-    except plan_service.PlanServiceError as exc:
-        raise _http(exc) from exc
-    audit_service.record_audit(
+    plan = _audited(
         db,
-        actor=auth.user,
-        action="plan.status",
-        entity_type="plan",
-        entity_id=plan.id,
-        metadata={"status": plan.status},
+        "Plan could not be recorded",
+        lambda: plan_service.set_plan_status(
+            db, plan_id, status=body.status, commit=False
+        ),
+        lambda updated: audit_service.record_audit(
+            db,
+            actor=auth.user,
+            action="plan.status",
+            entity_type="plan",
+            entity_id=updated.id,
+            metadata={"status": updated.status},
+        ),
     )
     return PlanResponse.model_validate(plan)
