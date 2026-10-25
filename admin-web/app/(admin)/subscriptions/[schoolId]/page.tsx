@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { PaymentHistory } from "@/components/payments/PaymentHistory";
 import { PageHeading } from "@/components/dashboard/StatCard";
 import { IconFees } from "@/lib/icons";
@@ -20,6 +21,11 @@ import {
   type Subscription,
 } from "@/lib/billing";
 
+type Renewal = { id: number; plan_name: string; cycle: string; amount: number; period_start: string; period_end: string; created_at: string };
+
+/** Status values: subscription 0 inactive, 1 active, 3 cancelled; bill 0 pending, 1 paid, 3 cancelled. */
+type PendingChange = { kind: "subscription" | "bill"; billId?: number; status: number; title: string; body: string; done: string; danger?: boolean };
+
 export default function SubscriptionDetailPage() {
   const params = useParams<{ schoolId: string }>();
   const [school, setSchool] = useState<SchoolRecord | null>(null);
@@ -30,6 +36,10 @@ export default function SubscriptionDetailPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [renewals, setRenewals] = useState<Renewal[]>([]);
+  const [version, setVersion] = useState(0);
+  const [confirm, setConfirm] = useState<PendingChange | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     // Read once on mount: useSearchParams would force a Suspense fallback over the whole page.
@@ -66,12 +76,14 @@ export default function SubscriptionDetailPage() {
       const current = items.find((item) => item.status === 1) || items[0] || null;
       setSubscription(current);
       if (current) {
-        const [planResult, billsResult] = await Promise.all([
+        const [planResult, billsResult, renewalsResult] = await Promise.all([
           api<Plan>(`/super-admin/plans/${current.package_id}`),
           api<{ items?: Bill[] }>(`/super-admin/schools/${params.schoolId}/subscriptions/${current.id}/bills?page=1&page_size=10`),
+          api<{ items?: Renewal[] }>(`/super-admin/schools/${params.schoolId}/subscriptions/${current.id}/renewals?page=1&page_size=20`),
         ]);
         if (!cancelled && planResult.ok) setPlan(planResult.data);
         if (!cancelled && billsResult.ok) setBills(billsResult.data.items || []);
+        if (!cancelled && renewalsResult.ok) setRenewals(renewalsResult.data.items || []);
       }
       if (!cancelled) setLoading(false);
     }
@@ -79,7 +91,25 @@ export default function SubscriptionDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.schoolId]);
+  }, [params.schoolId, version]);
+
+  /** Sends a status change to the subscription or one of its bills, after confirmation. */
+  async function applyChange(change: PendingChange) {
+    if (!subscription) return;
+    setBusy(true);
+    setError("");
+    const base = `/super-admin/schools/${params.schoolId}/subscriptions/${subscription.id}`;
+    const path = change.kind === "subscription" ? `${base}/status` : `${base}/bills/${change.billId}/status`;
+    const result = await api(path, { method: "PATCH", body: JSON.stringify({ status: change.status }) });
+    setBusy(false);
+    setConfirm(null);
+    if (!result.ok) {
+      setError(accessError(result.status, apiErrorMessage(result.data, "Unable to change the status.")));
+      return;
+    }
+    setNotice(change.done);
+    setVersion((value) => value + 1);
+  }
 
   const price = subscription && plan ? (subscription.cycle === "yearly" ? plan.yearly_price : plan.monthly_price) : 0;
   const days = subscription ? remainingDays(subscription.end_date) : 0;
@@ -126,7 +156,21 @@ export default function SubscriptionDetailPage() {
               <dd>
                 <span className={`status-badge ${subscription.status === 1 ? "paid" : subscription.status === 3 ? "failed" : "pending"}`}>
                   {subscriptionStatusLabel(subscription.status)}
-                </span>
+                </span>{" "}
+                {subscription.status !== 1 ? (
+                  <button className="link-btn" type="button" onClick={() => setConfirm({ kind: "subscription", status: 1, title: "Activate this subscription?", body: "The school gets the plan's features again.", done: "Subscription activated." })}>
+                    Activate
+                  </button>
+                ) : (
+                  <button className="link-btn" type="button" onClick={() => setConfirm({ kind: "subscription", status: 0, title: "Pause this subscription?", body: "The subscription is marked inactive until it's activated again.", done: "Subscription paused." })}>
+                    Pause
+                  </button>
+                )}{" "}
+                {subscription.status !== 3 ? (
+                  <button className="link-btn danger" type="button" onClick={() => setConfirm({ kind: "subscription", status: 3, title: "Cancel this subscription?", body: "The school loses the plan when it's cancelled. This is recorded in the audit log.", done: "Subscription cancelled.", danger: true })}>
+                    Cancel
+                  </button>
+                ) : null}
               </dd>
             </div>
             <div>
@@ -162,6 +206,9 @@ export default function SubscriptionDetailPage() {
                     <th>Amount</th>
                     <th>Due</th>
                     <th>Status</th>
+                    <th>
+                      <span className="acad-sr">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -173,6 +220,22 @@ export default function SubscriptionDetailPage() {
                       <td>{money(bill.amount, currency)}</td>
                       <td>{formatDate(bill.due_date)}</td>
                       <td>{bill.status === 1 ? "Paid" : bill.status === 2 ? "Overdue" : bill.status === 3 ? "Cancelled" : "Pending"}</td>
+                      <td>
+                        {bill.status === 0 || bill.status === 2 ? (
+                          <>
+                            <button className="link-btn" type="button" onClick={() => setConfirm({ kind: "bill", billId: bill.id, status: 1, title: "Mark this bill as paid?", body: `Use this for a payment received outside the payment gateway (${money(bill.amount, currency)}).`, done: "Bill marked as paid." })}>
+                              Mark paid
+                            </button>{" "}
+                            <button className="link-btn danger" type="button" onClick={() => setConfirm({ kind: "bill", billId: bill.id, status: 3, title: "Cancel this bill?", body: "The school won't be asked to pay it.", done: "Bill cancelled.", danger: true })}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : bill.status === 3 ? (
+                          <button className="link-btn" type="button" onClick={() => setConfirm({ kind: "bill", billId: bill.id, status: 0, title: "Reopen this bill?", body: "It goes back to pending.", done: "Bill reopened." })}>
+                            Reopen
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -181,7 +244,41 @@ export default function SubscriptionDetailPage() {
           )}
         </div>
       ) : null}
+      {subscription && renewals.length ? (
+        <div className="panel-card resource-form">
+          <h2 style={{ fontSize: 18 }}>Renewal history</h2>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Renewed on</th>
+                  <th>Plan</th>
+                  <th>Period</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {renewals.map((row) => (
+                  <tr key={row.id}>
+                    <td>{formatDate(row.created_at)}</td>
+                    <td>
+                      {row.plan_name} · {cycleLabel(row.cycle)}
+                    </td>
+                    <td>
+                      {formatDate(row.period_start)} – {formatDate(row.period_end)}
+                    </td>
+                    <td>{money(row.amount, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       {!loading && !error ? <PaymentHistory schoolId={Number(params.schoolId)} /> : null}
+      {confirm ? (
+        <ConfirmDialog title={confirm.title} body={confirm.body} confirmLabel="Confirm" tone={confirm.danger ? "danger" : "default"} pending={busy} onCancel={() => setConfirm(null)} onConfirm={() => void applyChange(confirm)} />
+      ) : null}
     </div>
   );
 }

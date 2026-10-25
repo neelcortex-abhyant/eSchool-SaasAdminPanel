@@ -7,6 +7,8 @@ import { AccessGate, useSchoolAdminAccess } from "@/components/academics/Academi
 import { ToastProvider, useToast } from "@/components/academics/Toasts";
 import { openFile, safeFileUrl } from "@/components/people/Files";
 import type { FileMeta } from "@/lib/teaching/types";
+import { OPS_SAMPLE_NOTE } from "@/components/ops/notes";
+import { opsSource, OPS_MODULES, type OpsModule } from "@/lib/ops/mode";
 import { teachingSource, type TeachingModule } from "@/lib/teaching/mode";
 
 export type Tab = { href: string; label: string };
@@ -26,7 +28,7 @@ export function TeachingPage({
   back,
   children,
 }: {
-  module: TeachingModule;
+  module: TeachingModule | OpsModule;
   title: string;
   description?: string;
   icon: ReactNode;
@@ -39,7 +41,8 @@ export function TeachingPage({
 }) {
   const pathname = usePathname();
   const access = useSchoolAdminAccess();
-  const mock = teachingSource(module) === "mock";
+  const ops = (OPS_MODULES as string[]).includes(module);
+  const mock = (ops ? opsSource(module as OpsModule) : teachingSource(module as TeachingModule)) === "mock";
   return (
     <ToastProvider>
       <div className="acad-page teach-page">
@@ -58,7 +61,7 @@ export function TeachingPage({
               {description ? <p className="muted acad-subtitle">{description}</p> : null}
             </div>
           </div>
-          {access.state === "allowed" && actions ? <div className="acad-header-actions">{actions}</div> : null}
+          {(access.state === "allowed" || access.state === "loading") && actions ? <div className="acad-header-actions">{actions}</div> : null}
         </header>
         {tabs ? (
           <nav className="acad-tabs" aria-label={title}>
@@ -70,7 +73,9 @@ export function TeachingPage({
           </nav>
         ) : null}
         {mock ? (
-          <div className="alert alert-info acad-mock-note">Showing sample data. Changes are saved only in this browser until this page is connected to the server.</div>
+          <div className="alert alert-info acad-mock-note">
+            {ops ? OPS_SAMPLE_NOTE : "Showing sample data. Changes are saved only in this browser until this page is connected to the server."}
+          </div>
         ) : liveNote ? (
           <div className="alert alert-info acad-mock-note">{liveNote}</div>
         ) : null}

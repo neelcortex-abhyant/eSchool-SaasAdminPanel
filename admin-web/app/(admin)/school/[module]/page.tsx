@@ -27,6 +27,13 @@ const MOVED: Record<string, string> = {
   "offline-exam-result": "/school/offline-exams",
   "exam-reports": "/school/offline-exams",
   "session-year": "/school/academics/sessions",
+  "exam-grade": "/school/grading",
+  "fees-type": "/school/fees/types",
+  "fee-paid": "/school/fees/payments",
+  "optional-fees-log": "/school/fees/payments",
+  "fee-transaction-logs": "/school/fees/payments",
+  "student-fees-discount": "/school/fees/assignments",
+  transportation: "/school/transport/vehicles",
 };
 
 export default function SchoolModuleRoute() {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { DataTable, type Column } from "@/components/academics/DataTable";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
@@ -11,7 +12,9 @@ import { Chip, formatDateTime, Stat, TeachingPage } from "@/components/teaching/
 import { MarksEntry, OFFLINE_LIVE_NOTE, OfflineExamForm, PaperForm, PublishChip, dayLabel, paperTime } from "@/components/teaching/offline";
 import { useTeachers } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
-import { offlineService } from "@/lib/teaching/offline";
+import { activeScale } from "@/lib/ops/grading";
+import { gradeFor } from "@/lib/ops/grading-math";
+import { offlineService, paperEditing } from "@/lib/teaching/offline";
 import type { OfflineExamDetail, OfflineResult, OfflineSchedule } from "@/lib/teaching/offlineTypes";
 import { IconExam } from "@/lib/icons";
 
@@ -26,7 +29,13 @@ export default function OfflineExamPage() {
       liveNote={OFFLINE_LIVE_NOTE}
       back={{ href: "/school/offline-exams", label: "All offline exams" }}
     >
-      {Number.isInteger(id) && id > 0 ? <ExamBody id={id} /> : <div className="alert alert-danger">This exam link isn't valid.</div>}
+      {Number.isInteger(id) && id > 0 ? (
+        <Suspense fallback={<div className="skeleton" style={{ height: 180 }} />}>
+          <ExamBody id={id} />
+        </Suspense>
+      ) : (
+        <div className="alert alert-danger">This exam link isn't valid.</div>
+      )}
     </TeachingPage>
   );
 }
@@ -37,10 +46,12 @@ function ExamBody({ id }: { id: number }) {
   const toast = useToast();
   const state = useOptions(useCallback(() => offlineService().get(id).then((row) => [row]), [id]));
   const exam = state.options[0] ?? null;
-  const [tab, setTab] = useState<Tab>("papers");
+  const params = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (["papers", "marks", "results"].includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "papers"));
   const [paperId, setPaperId] = useState<number | "">("");
   const [editing, setEditing] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<OfflineSchedule | "new" | null>(null);
+  const [removing, setRemoving] = useState<OfflineSchedule | null>(null);
   const [confirm, setConfirm] = useState<"publish" | "unpublish" | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -114,7 +125,16 @@ function ExamBody({ id }: { id: number }) {
       </nav>
 
       {tab === "papers" ? (
-        <PapersPanel exam={exam} onAdd={() => setAdding(true)} onMarks={(paperIdValue) => { setPaperId(paperIdValue); setTab("marks"); }} />
+        <PapersPanel
+          exam={exam}
+          onAdd={() => setAdding("new")}
+          onEdit={(paper) => setAdding(paper)}
+          onRemove={(paper) => setRemoving(paper)}
+          onMarks={(paperIdValue) => {
+            setPaperId(paperIdValue);
+            setTab("marks");
+          }}
+        />
       ) : tab === "marks" ? (
         <section className="resource-card" aria-label="Marks entry">
           {exam.schedules.length === 0 ? (
@@ -152,11 +172,36 @@ function ExamBody({ id }: { id: number }) {
       {adding ? (
         <PaperForm
           exam={exam}
-          onClose={() => setAdding(false)}
+          paper={adding === "new" ? null : adding}
+          onClose={() => setAdding(null)}
           onSaved={(saved) => {
-            setAdding(false);
-            toast("success", `${saved.subject_name ?? "Paper"} added to the exam timetable.`);
+            const edited = adding !== "new";
+            setAdding(null);
+            toast("success", `${saved.subject_name ?? "Paper"} ${edited ? "updated" : "added to the exam timetable"}.`);
             void state.reload();
+          }}
+        />
+      ) : null}
+      {removing ? (
+        <ConfirmDialog
+          title="Remove this paper?"
+          body={`${removing.subject_name ?? "This paper"} on ${dayLabel(removing.exam_date)} will be taken off the exam timetable. Papers with marks can't be removed.`}
+          confirmLabel="Remove paper"
+          tone="danger"
+          pending={busy}
+          onCancel={() => setRemoving(null)}
+          onConfirm={async () => {
+            setBusy(true);
+            try {
+              await offlineService().removeSchedule(removing.id);
+              toast("success", "Paper removed.");
+              void state.reload();
+            } catch (caught) {
+              toast("error", errorMessage(caught, "Unable to remove the paper."));
+            } finally {
+              setBusy(false);
+              setRemoving(null);
+            }
           }}
         />
       ) : null}
@@ -178,7 +223,20 @@ function ExamBody({ id }: { id: number }) {
   );
 }
 
-function PapersPanel({ exam, onAdd, onMarks }: { exam: OfflineExamDetail; onAdd: () => void; onMarks: (paperId: number) => void }) {
+function PapersPanel({
+  exam,
+  onAdd,
+  onEdit,
+  onRemove,
+  onMarks,
+}: {
+  exam: OfflineExamDetail;
+  onAdd: () => void;
+  onEdit: (paper: OfflineSchedule) => void;
+  onRemove: (paper: OfflineSchedule) => void;
+  onMarks: (paperId: number) => void;
+}) {
+  const editable = paperEditing();
   const teachers = useTeachers();
   const names = useMemo(() => new Map(teachers.options.map((row) => [row.id, row.name])), [teachers.options]);
   const columns: Column<OfflineSchedule>[] = [
@@ -194,6 +252,7 @@ function PapersPanel({ exam, onAdd, onMarks }: { exam: OfflineExamDetail; onAdd:
         <button className="btn-pill btn-pill-green" type="button" onClick={onAdd}>
           Add subject paper
         </button>
+        {!editable ? <span className="muted">The server can't edit or remove a paper yet.</span> : null}
       </div>
       <DataTable
         columns={columns}
@@ -201,9 +260,21 @@ function PapersPanel({ exam, onAdd, onMarks }: { exam: OfflineExamDetail; onAdd:
         loading={false}
         emptyText="No subject papers yet. Add one for each subject in this exam."
         actions={(row) => (
-          <button className="link-btn" type="button" onClick={() => onMarks(row.id)}>
-            Enter marks
-          </button>
+          <>
+            <button className="link-btn" type="button" onClick={() => onMarks(row.id)}>
+              Enter marks
+            </button>
+            {editable ? (
+              <>
+                <button className="link-btn" type="button" disabled={exam.publish} onClick={() => onEdit(row)}>
+                  Edit
+                </button>
+                <button className="link-btn danger" type="button" disabled={exam.publish} onClick={() => onRemove(row)}>
+                  Remove
+                </button>
+              </>
+            ) : null}
+          </>
         )}
       />
     </section>
@@ -220,8 +291,8 @@ function ResultsPanel({ exam, onProcessed }: { exam: OfflineExamDetail; onProces
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const loader = useCallback(async () => {
-    const [summary, results] = await Promise.all([offlineService().summary(exam.id), offlineService().results(exam.id)]);
-    return [{ summary, results }];
+    const [summary, results, scale] = await Promise.all([offlineService().summary(exam.id), offlineService().results(exam.id), activeScale()]);
+    return [{ summary, results, scale }];
   }, [exam.id]);
   const state = useOptions(loader);
   const data = state.options[0] ?? null;
@@ -247,7 +318,7 @@ function ResultsPanel({ exam, onProcessed }: { exam: OfflineExamDetail; onProces
   function exportCsv() {
     if (!data) return;
     const subjects = exam.schedules.map((paper) => paper.subject_name || `Subject ${paper.subject_id}`);
-    const header = ["Student", "Admission no.", ...subjects, "Total", "Out of", "Percentage", "Result"];
+    const header = ["Student", "Admission no.", ...subjects, "Total", "Out of", "Percentage", "Grade", "Result"];
     const lines = data.results.map((row) =>
       [
         row.student_name,
@@ -259,6 +330,7 @@ function ResultsPanel({ exam, onProcessed }: { exam: OfflineExamDetail; onProces
         row.total_obtained,
         row.total_max_marks,
         row.percentage,
+        gradeFor(row.percentage, data.scale)?.grade ?? "",
         row.passed ? "Pass" : "Fail",
       ]
         .map(csvCell)
@@ -292,6 +364,7 @@ function ResultsPanel({ exam, onProcessed }: { exam: OfflineExamDetail; onProces
     },
     { key: "total", label: "Total", render: (row) => `${row.total_obtained} / ${row.total_max_marks}` },
     { key: "percent", label: "%", render: (row) => `${row.percentage}%` },
+    { key: "grade", label: "Grade", render: (row) => gradeFor(row.percentage, data?.scale)?.grade ?? "—" },
     { key: "result", label: "Result", render: (row) => <Chip tone={row.passed ? "green" : "red"}>{row.passed ? "Pass" : "Fail"}</Chip> },
   ];
 
@@ -306,6 +379,19 @@ function ResultsPanel({ exam, onProcessed }: { exam: OfflineExamDetail; onProces
         </button>
       </div>
       {exam.publish ? <p className="muted">Results are published. Unpublish them to correct marks or process again.</p> : null}
+      {data ? (
+        <p className="muted">
+          {data.scale ? `Grades use “${data.scale.name}”` : "No grading scale is set up, so grades aren't shown"}
+          {" · "}
+          <Link className="link-btn" href="/school/grading">
+            Grading scales
+          </Link>
+          {" · "}
+          <Link className="link-btn" href="/school/report-cards">
+            Student report cards
+          </Link>
+        </p>
+      ) : null}
       {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
       <ErrorAlert error={state.error} onRetry={() => void state.reload()} />
       {data ? (

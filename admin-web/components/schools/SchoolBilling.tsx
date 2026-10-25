@@ -46,6 +46,19 @@ export function SchoolBilling({ schoolId }: { schoolId: number }) {
     void load();
   }, [schoolId]);
 
+  async function setAddonStatus(row: Assignment) {
+    setSaving(true);
+    setError("");
+    const result = await api(`/super-admin/schools/${schoolId}/addons/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: row.status === 1 ? 0 : 1 }) });
+    setSaving(false);
+    if (!result.ok) {
+      setError(apiErrorMessage(result.data, "Unable to change the add-on."));
+      return;
+    }
+    setNotice(row.status === 1 ? "Add-on deactivated." : "Add-on activated.");
+    await load();
+  }
+
   async function onSubscribe(event: FormEvent) {
     event.preventDefault();
     if (!packageId || !startDate || !endDate) {
@@ -157,15 +170,42 @@ export function SchoolBilling({ schoolId }: { schoolId: number }) {
             </button>
           </div>
         </form>
-        <RecordTable
-          rows={addons.map((row) => ({
-            id: row.id,
-            addon: row.addon_id,
-            status: row.status,
-            start: row.start_date,
-            end: row.end_date,
-          }))}
-        />
+        {addons.length === 0 ? (
+          <div className="empty-state">No records.</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>id</th>
+                  <th>addon</th>
+                  <th>status</th>
+                  <th>start</th>
+                  <th>end</th>
+                  <th>
+                    <span className="acad-sr">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {addons.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.id}</td>
+                    <td>{row.addon_id}</td>
+                    <td>{row.status === 1 ? "Active" : "Inactive"}</td>
+                    <td>{row.start_date ?? "—"}</td>
+                    <td>{row.end_date ?? "—"}</td>
+                    <td>
+                      <button className="link-btn" type="button" disabled={saving} onClick={() => void setAddonStatus(row)}>
+                        {row.status === 1 ? "Deactivate" : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </article>
     </section>
   );

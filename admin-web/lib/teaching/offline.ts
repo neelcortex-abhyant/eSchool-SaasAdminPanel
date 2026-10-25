@@ -11,7 +11,7 @@
  */
 import { listAll } from "@/lib/academics";
 import { peopleService } from "@/lib/people";
-import { allPages, get, hhmm, num, optNum, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
+import { allPages, get, hhmm, notAvailable, num, optNum, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
 import { isLive } from "@/lib/teaching/mode";
 import { placementOf, sectionMap, subjectName } from "@/lib/teaching/lookups";
 import { conflict, db, delay, invalid, matches, nextId, notFound, nowIso, paginate, save } from "@/lib/teaching/store";
@@ -45,6 +45,9 @@ export interface OfflineExamService {
   setPublish(id: number, publish: boolean): Promise<OfflineExam>;
   remove(id: number): Promise<void>;
   addSchedule(examId: number, input: OfflineScheduleInput): Promise<OfflineSchedule>;
+  /** The server has no route for these yet; the live client says so (sample data only). */
+  updateSchedule(scheduleId: number, input: OfflineScheduleInput): Promise<OfflineSchedule>;
+  removeSchedule(scheduleId: number): Promise<void>;
   schedules(query: { sessionYearId?: number | ""; classSectionId?: number | ""; examId?: number }): Promise<OfflineSchedule[]>;
   marks(scheduleId: number): Promise<OfflineMark[]>;
   /** New marks go in one bulk request; corrections after processing go one by one with their reason. */
@@ -216,6 +219,12 @@ export const liveOffline: OfflineExamService = {
     const errors = scheduleProblems(input);
     if (Object.keys(errors).length) invalid(errors);
     return scheduleOf(await send("POST", `${BASE}/offline-exams/${examId}/schedules`, scheduleBody(input), "Unable to add the paper."));
+  },
+  async updateSchedule() {
+    return notAvailable("Changing a paper isn't available on the school's server yet. Delete isn't either; ask the server team to add it.");
+  },
+  async removeSchedule() {
+    return notAvailable("Removing a paper isn't available on the school's server yet.");
   },
   async schedules(query) {
     const rows = await allPages(`${BASE}/offline-exam-schedules`, {
@@ -391,6 +400,25 @@ export const mockOffline: OfflineExamService = {
     save();
     return delay(row);
   },
+  async updateSchedule(scheduleId, input) {
+    const row = schedules().find((item) => item.id === scheduleId) ?? notFound("Exam paper");
+    if (marks().some((mark) => mark.schedule_id === scheduleId) && (input.subject_id !== row.subject_id || input.max_marks < Math.max(0, ...marks().filter((mark) => mark.schedule_id === scheduleId).map((mark) => mark.marks_obtained ?? 0)))) {
+      conflict("Marks are already entered for this paper, so its subject can't change and its maximum can't go below the highest mark.");
+    }
+    const errors = scheduleProblems(input);
+    if (Object.keys(errors).length) invalid(errors);
+    const others = schedules().filter((item) => item.id !== scheduleId && item.class_section_id === row.class_section_id && item.session_year_id === row.session_year_id);
+    if (others.some((item) => overlaps(item, input))) conflict("Schedule conflicts with another exam for this class-section");
+    Object.assign(row, scheduleBody(input), { subject_name: await subjectName(input.subject_id) });
+    save();
+    return delay(row);
+  },
+  async removeSchedule(scheduleId) {
+    if (marks().some((mark) => mark.schedule_id === scheduleId)) conflict("Marks are already entered for this paper, so it can't be removed.");
+    db().offlineSchedules = schedules().filter((item) => item.id !== scheduleId);
+    save();
+    await delay(null);
+  },
   async schedules(query) {
     return delay(
       schedules()
@@ -532,6 +560,19 @@ export const mockOffline: OfflineExamService = {
     });
   },
 };
+
+/** Editing or removing a paper works only on sample data until the server has routes for it. */
+export function paperEditing(): boolean {
+  return !isLive("offline");
+}
+
+/** Every exam matching the filters (all pages), for sorting on the page. */
+export async function allOfflineExams(query: OfflineExamQuery): Promise<OfflineExam[]> {
+  const first = await offlineService().list({ ...query, page: 1, pageSize: 50 });
+  const pages = Math.min(20, Math.ceil(first.total / 50));
+  const rest = await Promise.all(Array.from({ length: Math.max(pages - 1, 0) }, (_, index) => offlineService().list({ ...query, page: index + 2, pageSize: 50 })));
+  return [...first.items, ...rest.flatMap((page) => page.items)];
+}
 
 export function offlineService(): OfflineExamService {
   return isLive("offline") ? liveOffline : mockOffline;

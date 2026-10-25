@@ -151,7 +151,8 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
         children: [
           { href: "/school/offline-exams", label: "Manage offline exams" },
           { href: "/school/offline-exams/timetable", label: "Exam timetable" },
-          { href: "/school/exam-grade", label: "Exam grade" },
+          { href: "/school/grading", label: "Grading scales" },
+          { href: "/school/report-cards", label: "Report cards" },
         ],
       },
       {
@@ -214,12 +215,13 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       {
         label: "Fees",
         children: [
-          { href: "/school/fees-type", label: "Fees type" },
-          { href: "/school/manage-fees", label: "Manage fees" },
-          { href: "/school/fee-paid", label: "Fee paid" },
-          { href: "/school/optional-fees-log", label: "Optional fees log" },
-          { href: "/school/fee-transaction-logs", label: "Fee transaction logs" },
-          { href: "/school/student-fees-discount", label: "Student fees discount" },
+          { href: "/school/fees/collect", label: "Collect fees" },
+          { href: "/school/fees/outstanding", label: "Outstanding fees" },
+          { href: "/school/fees/payments", label: "Fee payments" },
+          { href: "/school/fees/structures", label: "Fee structures" },
+          { href: "/school/fees/assignments", label: "Assignments & concessions" },
+          { href: "/school/fees/types", label: "Fee types" },
+          { href: "/school/manage-fees", label: "Fee amounts (server)" },
         ],
       },
       {
@@ -249,7 +251,11 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
   {
     label: "Transportation module",
     icon: IconBuilding,
-    children: [{ href: "/school/transportation", label: "Transportation" }],
+    children: [
+      { href: "/school/transport/vehicles", label: "Vehicles" },
+      { href: "/school/transport/routes", label: "Routes & stops" },
+      { href: "/school/transport/assignments", label: "Student transport" },
+    ],
   },
   {
     label: "Certificate & ID card",

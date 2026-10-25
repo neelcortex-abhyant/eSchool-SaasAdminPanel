@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { adminApi, adminErrorMessage } from "@/lib/adminApi";
+import { sessionLabel, useSessions } from "@/components/people/academicOptions";
 import { api, apiErrorMessage } from "@/lib/api";
 import { readWorkspace, writeWorkspace } from "@/lib/workspace";
 import { IconClasses, IconExam, IconFees, IconHome, IconUsers } from "@/lib/icons";
@@ -87,30 +87,27 @@ export default function SchoolAdminPage() {
   );
 }
 
-type AdminRow = {
-  id: number;
-  school_id?: number | null;
-  session_year_id?: number | null;
-  due_date?: string | null;
-  due_charges?: number | null;
-  date?: string | null;
-  amount?: number | null;
-  type?: number | null;
-  reason?: string | null;
-  from_date?: string | null;
-  to_date?: string | null;
+type Summary = {
+  students?: number;
+  classes?: number;
+  subjects?: number;
+  exams?: number;
+  fees?: number;
+  attendance_today?: { present?: number; absent?: number };
+  leaves_today?: { count?: number; items?: { id: number; reason: string | null }[] };
+  finance_months?: { month: string; expenses: number; fee_charges: number }[];
 };
 
-function owned(rows: AdminRow[] | undefined, schoolId: number) {
-  return (rows || []).filter((row) => Number(row.school_id) === schoolId);
-}
-
+/**
+ * Counts, today's attendance and leaves, and fee/expense totals by month come from one
+ * request to /school-admin/academics/summary, worked out on the server for this school only.
+ */
 function SchoolDashboard({ schoolId }: { schoolId: number }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [attendance, setAttendance] = useState<{ present: number; absent: number } | null>(null);
   const [leaves, setLeaves] = useState<{ count: number; items: { id: number; reason: string }[] } | null>(null);
   const [months, setMonths] = useState<{ month: string; expenses: number; fee_charges: number }[]>([]);
-  const [sessions, setSessions] = useState<number[]>([]);
+  const sessions = useSessions();
   const [sessionId, setSessionId] = useState("");
 
   useEffect(() => {
@@ -129,69 +126,28 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
     async function loadCounts() {
       setLoading(true);
       setError("");
-      const [students, classes, subjects, exams, fees, expenses, attendances, leaveRows] = await Promise.all([
-        adminApi<{ data?: AdminRow[] }>("/students"),
-        adminApi<{ data?: AdminRow[] }>("/classes"),
-        adminApi<{ data?: AdminRow[] }>("/subjects"),
-        adminApi<{ data?: AdminRow[] }>("/exams"),
-        adminApi<{ data?: AdminRow[] }>("/fees"),
-        adminApi<{ data?: AdminRow[] }>("/expenses"),
-        adminApi<{ data?: AdminRow[] }>("/attendances"),
-        adminApi<{ data?: AdminRow[] }>("/leaves"),
-      ]);
+      const session = /^\d+$/.test(sessionId) ? `?session_year_id=${sessionId}` : "";
+      const result = await api<Summary>(`/school-admin/academics/summary${session}`);
       if (cancelled) return;
-      const failed = [students, classes, subjects, exams, fees, expenses, attendances, leaveRows].find((result) => !result.ok);
-      if (failed) {
-        setError(adminErrorMessage(failed.data, "Unable to load dashboard counts."));
+      if (!result.ok) {
+        setError(apiErrorMessage(result.data, "Unable to load dashboard counts."));
         setLoading(false);
         return;
       }
-      const feeRows = owned(fees.data.data, schoolId).filter((row) => !sessionId || String(row.session_year_id) === sessionId);
-      const expenseRows = owned(expenses.data.data, schoolId).filter((row) => !sessionId || String(row.session_year_id) === sessionId);
-      const buckets = new Map<string, { month: string; expenses: number; fee_charges: number }>();
-      feeRows.forEach((row) => {
-        const month = (row.due_date || "").slice(0, 7);
-        if (!month) return;
-        const bucket = buckets.get(month) || { month, expenses: 0, fee_charges: 0 };
-        bucket.fee_charges += Number(row.due_charges || 0);
-        buckets.set(month, bucket);
-      });
-      expenseRows.forEach((row) => {
-        const month = (row.date || "").slice(0, 7);
-        if (!month) return;
-        const bucket = buckets.get(month) || { month, expenses: 0, fee_charges: 0 };
-        bucket.expenses += Number(row.amount || 0);
-        buckets.set(month, bucket);
-      });
-      const today = new Date().toISOString().slice(0, 10);
-      const todayAttendance = owned(attendances.data.data, schoolId).filter((row) => (row.date || "").slice(0, 10) === today);
-      const todayLeaves = owned(leaveRows.data.data, schoolId).filter((row) => {
-        const from = (row.from_date || "").slice(0, 10);
-        const to = (row.to_date || "").slice(0, 10);
-        return from && to && from <= today && today <= to;
-      });
-      const sessionIds = Array.from(new Set(
-        [...owned(fees.data.data, schoolId), ...owned(expenses.data.data, schoolId)]
-          .map((row) => row.session_year_id)
-          .filter((id): id is number => typeof id === "number"),
-      ));
-      setSessions(sessionIds);
+      const data = result.data;
       setCounts({
-        students: owned(students.data.data, schoolId).length,
-        classes: owned(classes.data.data, schoolId).length,
-        subjects: owned(subjects.data.data, schoolId).length,
-        exams: owned(exams.data.data, schoolId).length,
-        fees: owned(fees.data.data, schoolId).length,
+        students: Number(data.students ?? 0),
+        classes: Number(data.classes ?? 0),
+        subjects: Number(data.subjects ?? 0),
+        exams: Number(data.exams ?? 0),
+        fees: Number(data.fees ?? 0),
       });
-      setAttendance({
-        present: todayAttendance.filter((row) => row.type === 1).length,
-        absent: todayAttendance.filter((row) => row.type !== 1).length,
-      });
+      setAttendance({ present: Number(data.attendance_today?.present ?? 0), absent: Number(data.attendance_today?.absent ?? 0) });
       setLeaves({
-        count: todayLeaves.length,
-        items: todayLeaves.slice(0, 8).map((row) => ({ id: row.id, reason: row.reason || "Leave" })),
+        count: Number(data.leaves_today?.count ?? 0),
+        items: (data.leaves_today?.items ?? []).map((row) => ({ id: row.id, reason: row.reason || "Leave" })),
       });
-      setMonths(Array.from(buckets.values()).sort((a, b) => a.month.localeCompare(b.month)));
+      setMonths((data.finance_months ?? []).map((row) => ({ month: row.month, expenses: Number(row.expenses || 0), fee_charges: Number(row.fee_charges || 0) })));
       setLoading(false);
     }
     void loadCounts();
@@ -214,10 +170,10 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
       {loading && !counts ? <div className="panel-card"><div className="skeleton" style={{ height: 120 }} /></div> : null}
       <section className="school-stat-row">
         <Stat href="/school/students" label="Total students" value={counts?.students} icon={<IconUsers width={18} height={18} />} tone="green" />
-        <Stat href="/school/classes" label="Total classes" value={counts?.classes} icon={<IconClasses width={18} height={18} />} tone="teal" />
-        <Stat href="/school/subjects" label="Total subjects" value={counts?.subjects} icon={<IconClasses width={18} height={18} />} tone="blue" />
-        <Stat href="/school/exams" label="Total exams" value={counts?.exams} icon={<IconExam width={18} height={18} />} tone="navy" />
-        <Stat href="/school/fees" label="Fee definitions" value={counts?.fees} icon={<IconFees width={18} height={18} />} tone="slate" />
+        <Stat href="/school/academics/classes" label="Total classes" value={counts?.classes} icon={<IconClasses width={18} height={18} />} tone="teal" />
+        <Stat href="/school/academics/subjects" label="Total subjects" value={counts?.subjects} icon={<IconClasses width={18} height={18} />} tone="blue" />
+        <Stat href="/school/offline-exams" label="Total exams" value={counts?.exams} icon={<IconExam width={18} height={18} />} tone="navy" />
+        <Stat href="/school/manage-fees" label="Fee definitions" value={counts?.fees} icon={<IconFees width={18} height={18} />} tone="slate" />
       </section>
       <section className="school-dash-grid">
         <article className="panel-card school-chart-card">
@@ -225,8 +181,8 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
             <h2>Income &amp; Expense</h2>
             <select aria-label="Academic session" value={sessionId} onChange={(event) => { setSessionId(event.target.value); writeWorkspace(event.target.value); }}>
               <option value="">All sessions</option>
-              {sessions.map((session) => (
-                <option key={session} value={session}>Session {session}</option>
+              {sessions.options.map((session) => (
+                <option key={session.id} value={String(session.id)}>{sessionLabel(session)}</option>
               ))}
             </select>
           </div>
@@ -255,7 +211,7 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
         <article className="panel-card school-leave-card">
           <div className="school-card-head">
             <h2>Leaves</h2>
-            <Link className="workspace-pill" href="/school/leaves">Today</Link>
+            <Link className="workspace-pill" href="/school/student-leave">Today</Link>
           </div>
           {!leaves || leaves.count === 0 ? (
             <p className="school-leave-empty">All are present.</p>

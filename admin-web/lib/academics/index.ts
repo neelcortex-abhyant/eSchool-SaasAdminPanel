@@ -94,11 +94,17 @@ export { formatDate, toId } from "@/lib/academics/format";
 
 /** Reads every page of a list for a dropdown. Stops after 20 pages (1,000 rows at the API's 50-row cap). */
 export async function listAll<T>(load: (page: number) => Promise<import("@/lib/academics/types").Page<T>>): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 1; page <= 20; page += 1) {
-    const result = await load(page);
-    rows.push(...result.items);
-    if (result.items.length === 0 || rows.length >= result.total) break;
+  // The first page gives the total and page size; the remaining pages load together, four at a time.
+  const first = await load(1);
+  const size = Math.max(first.page_size || first.items.length, 1);
+  const pages = Math.min(20, Math.ceil(first.total / size));
+  const rows = [...first.items];
+  if (first.items.length === 0 || pages <= 1 || rows.length >= first.total) return rows;
+  const rest: T[][] = [];
+  for (let page = 2; page <= pages; page += 4) {
+    const batch = await Promise.all(Array.from({ length: Math.min(4, pages - page + 1) }, (_, index) => load(page + index)));
+    rest.push(...batch.map((result) => result.items));
   }
+  for (const items of rest) rows.push(...items);
   return rows;
 }
