@@ -8,6 +8,7 @@ import { useToast } from "@/components/academics/Toasts";
 import { Chip, formatDateTime } from "@/components/teaching/Frame";
 import { EMPTY_PLACEMENT, PlacementFields, useSubjects, useTeachers, type PlacementValue } from "@/components/teaching/Pickers";
 import { MARK_STATUS_LABEL, examRoster, markProblem, offlineService, scheduleProblems } from "@/lib/teaching/offline";
+import { MARKS_CSV_TEMPLATE_HEADER, parseMarksCsv } from "@/lib/teaching/marksCsv";
 import type { MarkInput, MarkStatus, OfflineExam, OfflineExamDetail, OfflineExamInput, OfflineMark, OfflineSchedule } from "@/lib/teaching/offlineTypes";
 
 export const OFFLINE_TABS = [
@@ -15,7 +16,8 @@ export const OFFLINE_TABS = [
   { href: "/school/offline-exams/timetable", label: "Exam timetable" },
 ];
 
-export const OFFLINE_LIVE_NOTE = "Connected to the school's server. A subject paper can't be edited or removed once added; letter grades aren't worked out by the server yet.";
+export const OFFLINE_LIVE_NOTE =
+  "Connected to the school's server. The server can't edit or remove a subject paper yet, and doesn't grade results; grades come from the school's grading scale (sample data until the server has one).";
 
 export function PublishChip({ exam }: { exam: Pick<OfflineExam, "publish" | "results_processed_at"> }) {
   if (exam.publish) return <Chip tone="green">Results published</Chip>;
@@ -96,19 +98,19 @@ export function OfflineExamForm({ exam, onClose, onSaved }: { exam: OfflineExam 
 }
 
 /** Add one subject paper (date, time, marks) to an exam. */
-export function PaperForm({ exam, onClose, onSaved }: { exam: OfflineExamDetail; onClose: () => void; onSaved: (paper: OfflineSchedule) => void }) {
+export function PaperForm({ exam, paper, onClose, onSaved }: { exam: OfflineExamDetail; paper?: OfflineSchedule | null; onClose: () => void; onSaved: (paper: OfflineSchedule) => void }) {
   const subjects = useSubjects(String(exam.class_id || ""));
   const teachers = useTeachers();
-  const [subjectId, setSubjectId] = useState("");
-  const [teacherId, setTeacherId] = useState("");
-  const [date, setDate] = useState(exam.exam_date ?? "");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [max, setMax] = useState("100");
-  const [passing, setPassing] = useState("33");
+  const [subjectId, setSubjectId] = useState(paper ? String(paper.subject_id) : "");
+  const [teacherId, setTeacherId] = useState(paper?.teacher_user_id ? String(paper.teacher_user_id) : "");
+  const [date, setDate] = useState(paper?.exam_date ?? exam.exam_date ?? "");
+  const [start, setStart] = useState(paper?.start_time ?? "");
+  const [end, setEnd] = useState(paper?.end_time ?? "");
+  const [max, setMax] = useState(paper ? String(paper.max_marks) : "100");
+  const [passing, setPassing] = useState(paper ? String(paper.passing_marks) : "33");
   const [saving, setSaving] = useState(false);
   const errors = useFormErrors();
-  const used = new Set(exam.schedules.map((paper) => paper.subject_id));
+  const used = new Set(exam.schedules.filter((item) => item.id !== paper?.id).map((item) => item.subject_id));
 
   async function submit() {
     const input = {
@@ -130,7 +132,7 @@ export function PaperForm({ exam, onClose, onSaved }: { exam: OfflineExamDetail;
     errors.clear();
     setSaving(true);
     try {
-      onSaved(await offlineService().addSchedule(exam.id, input));
+      onSaved(paper ? await offlineService().updateSchedule(paper.id, input) : await offlineService().addSchedule(exam.id, input));
     } catch (caught) {
       errors.fromError(caught, "Unable to add the paper.");
       setSaving(false);
@@ -139,11 +141,11 @@ export function PaperForm({ exam, onClose, onSaved }: { exam: OfflineExamDetail;
 
   return (
     <FormModal
-      title="Add subject paper"
-      description={`${exam.name} · ${exam.class_name} ${exam.section_name}. Papers can't overlap for this class, and can't be edited after they're added.`}
+      title={paper ? "Edit subject paper" : "Add subject paper"}
+      description={`${exam.name} · ${exam.class_name} ${exam.section_name}. Papers for one class can't overlap.`}
       error={errors.formError}
       saving={saving}
-      submitLabel="Add paper"
+      submitLabel={paper ? "Save paper" : "Add paper"}
       wide
       onSubmit={() => void submit()}
       onClose={onClose}
@@ -194,6 +196,7 @@ export function MarksEntry({ exam, paper, onSaved }: { exam: OfflineExamDetail; 
   const [failures, setFailures] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<OfflineMark | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const rows: MarkRow[] = useMemo(() => {
     if (!data) return [];
@@ -279,6 +282,11 @@ export function MarksEntry({ exam, paper, onSaved }: { exam: OfflineExamDetail; 
           {entered} of {rows.length} entered
         </Chip>
       </div>
+      <div className="teach-toolbar">
+        <button className="btn-pill btn-pill-green-soft" type="button" disabled={locked} onClick={() => setUploading(true)}>
+          Upload CSV
+        </button>
+      </div>
       {locked ? <div className="alert alert-info">Results are published, so marks are read-only. Unpublish the results to make changes.</div> : null}
       {!locked && needsReason ? <div className="alert alert-info">Results were already processed. Each correction needs a reason, which is kept in the mark's history.</div> : null}
       <ul className="teach-roster" aria-label="Marks">
@@ -335,6 +343,20 @@ export function MarksEntry({ exam, paper, onSaved }: { exam: OfflineExamDetail; 
         </button>
       </div>
       {history ? <MarkHistory mark={history} onClose={() => setHistory(null)} /> : null}
+      {uploading ? (
+        <CsvMarksUpload
+          exam={exam}
+          paper={paper}
+          saved={data.saved}
+          roster={data.roster.map((student) => ({ id: student.id, name: student.name, admission_no: student.admission_no }))}
+          onClose={() => setUploading(false)}
+          onDone={() => {
+            setEdits({});
+            void state.reload();
+            onSaved();
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -365,6 +387,167 @@ function MarkHistory({ mark, onClose }: { mark: OfflineMark; onClose: () => void
         <div className="page-actions">
           <button className="btn-pill btn-pill-green-soft" type="button" onClick={onClose}>
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Upload a CSV of one paper's marks: read → preview with per-row checks → confirm → summary. */
+export function CsvMarksUpload({
+  exam,
+  paper,
+  saved,
+  roster,
+  onClose,
+  onDone,
+}: {
+  exam: OfflineExamDetail;
+  paper: OfflineSchedule;
+  saved: OfflineMark[];
+  roster: { id: number; name: string; admission_no: string }[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState<{ saved: number; failures: { line: number; name: string; message: string }[] } | null>(null);
+  const [error, setError] = useState("");
+  const parsed = useMemo(() => (text.trim() ? parseMarksCsv(text, roster, paper.max_marks) : null), [text, roster, paper.max_marks]);
+  const savedBy = useMemo(() => new Map(saved.map((mark) => [mark.student_id, mark])), [saved]);
+  // After results are processed a changed mark needs a reason, which a CSV doesn't carry.
+  const rows = (parsed?.rows ?? []).map((row) => {
+    const current = row.student_id ? savedBy.get(row.student_id) : undefined;
+    const changed = current && (current.status !== row.status || (row.status === "present" && current.marks_obtained !== row.marks_obtained));
+    const unchanged = current && !changed;
+    if (!row.error && exam.results_processed_at && changed) return { ...row, error: "Results are processed; correct this mark in the grid with a reason.", unchanged: false };
+    return { ...row, unchanged: Boolean(unchanged) };
+  });
+  const ready = rows.filter((row) => !row.error && !row.unchanged);
+  const problems = rows.filter((row) => row.error);
+
+  async function confirm() {
+    if (!ready.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      const outcome = await offlineService().saveMarks(
+        exam,
+        paper.id,
+        ready.map((row) => ({ student_id: row.student_id as number, status: row.status, marks_obtained: row.marks_obtained })),
+        saved,
+      );
+      const byStudent = new Map(ready.map((row) => [row.student_id, row]));
+      setSummary({
+        saved: outcome.saved,
+        failures: outcome.failures.map((failure) => ({ line: byStudent.get(failure.student_id)?.line ?? 0, name: byStudent.get(failure.student_id)?.student_name ?? `#${failure.student_id}`, message: failure.message })),
+      });
+      onDone();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save the marks.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const template = `${MARKS_CSV_TEMPLATE_HEADER}\n${roster.map((student) => `${student.admission_no},,present`).join("\n")}\n`;
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-card acad-modal is-wide" role="dialog" aria-modal="true" aria-labelledby="csv-title">
+        <h2 id="csv-title">Upload marks · {paper.subject_name}</h2>
+        <p className="muted">
+          Columns: admission_no, marks, status (present, absent or withheld). Marks out of {paper.max_marks}.{" "}
+          <a className="link-btn" href={`data:text/csv;charset=utf-8,${encodeURIComponent(template)}`} download={`marks-${(paper.subject_name ?? "paper").replace(/\W+/g, "-")}.csv`}>
+            Download this class's sheet
+          </a>
+        </p>
+        {summary ? (
+          <div role="status">
+            <div className="teach-stats">
+              <div className="teach-stat is-green"><span className="teach-stat-value">{summary.saved}</span><span className="teach-stat-label">Saved</span></div>
+              <div className={`teach-stat ${summary.failures.length ? "is-red" : "is-grey"}`}><span className="teach-stat-value">{summary.failures.length}</span><span className="teach-stat-label">Not saved</span></div>
+              <div className="teach-stat is-amber"><span className="teach-stat-value">{problems.length}</span><span className="teach-stat-label">Skipped (errors)</span></div>
+            </div>
+            {summary.failures.length ? (
+              <ul className="teach-list teach-problems">
+                {summary.failures.map((failure) => (
+                  <li key={`${failure.line}-${failure.name}`}>
+                    Row {failure.line} ({failure.name}): {failure.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="resource-fields">
+              <div className="form-field field-span">
+                <label htmlFor="csv-file">CSV file</label>
+                <input
+                  id="csv-file"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 512 * 1024) {
+                      setError("The file is larger than 512 KB.");
+                      return;
+                    }
+                    setError("");
+                    setText(await file.text());
+                  }}
+                />
+              </div>
+              <TextAreaField id="csv-text" label="Or paste the CSV" span rows={4} value={text} onChange={setText} />
+            </div>
+            {error || parsed?.problem ? <div className="alert alert-danger" role="alert">{error || parsed?.problem}</div> : null}
+            {rows.length ? (
+              <>
+                <p role="status">
+                  <Chip tone="green">{ready.length} to save</Chip> {problems.length ? <Chip tone="red">{problems.length} with errors</Chip> : null}{" "}
+                  {rows.length - ready.length - problems.length ? <Chip tone="grey">{rows.length - ready.length - problems.length} unchanged</Chip> : null}
+                </p>
+                <div className="table-wrap teach-csv-preview">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Row</th>
+                        <th scope="col">Student</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Marks</th>
+                        <th scope="col">Check</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr key={row.line} className={row.error ? "has-error" : undefined}>
+                          <td>{row.line}</td>
+                          <td>
+                            {row.student_name ?? row.admission_no} <span className="muted">{row.admission_no}</span>
+                          </td>
+                          <td>{MARK_STATUS_LABEL[row.status]}</td>
+                          <td>{row.status === "present" ? row.marks_obtained ?? "—" : "—"}</td>
+                          <td>{row.error ? <span className="field-error">{row.error}</span> : row.unchanged ? <span className="muted">Unchanged</span> : <Chip tone="green">OK</Chip>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : null}
+          </>
+        )}
+        <div className="page-actions">
+          {summary ? null : (
+            <button className="btn-pill btn-pill-green" type="button" disabled={busy || !ready.length} onClick={() => void confirm()}>
+              {busy ? "Saving…" : `Save ${ready.length} mark${ready.length === 1 ? "" : "s"}`}
+            </button>
+          )}
+          <button className="btn-pill btn-pill-green-soft" type="button" disabled={busy} onClick={onClose}>
+            {summary ? "Done" : "Cancel"}
           </button>
         </div>
       </div>

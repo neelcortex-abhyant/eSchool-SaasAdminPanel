@@ -4600,3 +4600,379 @@ html[data-theme="dark"] .admin-shell.is-school .teach-response {
   margin: 0 0 12px;
   font-size: 16px;
 }
+
+/* ---------- Grading, report cards, fees and transport ---------- */
+
+.ops-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+}
+
+.ops-scale h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.ops-range-table td,
+.ops-range-table th {
+  padding: 8px 10px;
+}
+
+.ops-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.ops-ranges,
+.ops-lines {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.ops-ranges legend,
+.ops-lines legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ops-range-row {
+  display: grid;
+  grid-template-columns: 70px 90px 90px 80px minmax(0, 1fr) 44px auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ops-range-row input {
+  min-width: 0;
+  width: 100%;
+}
+
+.ops-range-row input[type="checkbox"] {
+  width: auto;
+  justify-self: center;
+}
+
+.ops-range-head {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ops-range-error,
+.ops-line-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.ops-line {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ops-line-3 {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.ops-line > * {
+  min-width: 0;
+}
+
+.ops-line-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 4px 0 8px;
+}
+
+@media (max-width: 700px) {
+  .ops-range-row {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .ops-range-head {
+    display: none;
+  }
+
+  .ops-line,
+  .ops-line-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ops-picked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.ops-results {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+
+.ops-results li {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ops-results li:last-child {
+  border-bottom: 0;
+}
+
+.ops-results li.muted {
+  padding: 8px 10px;
+}
+
+.ops-results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ops-results button:hover,
+.ops-results button:focus-visible {
+  background: var(--color-primary-soft);
+}
+
+.ops-inline-btn {
+  width: auto;
+}
+
+.ops-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* Report cards and receipts print on their own, without the admin shell. */
+.ops-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--color-border-strong);
+}
+
+.ops-report-head h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.ops-report-overall {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.ops-report-grade {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ops-receipt .ops-report-grade {
+  font-size: 16px;
+}
+
+.ops-report-exam {
+  margin-top: 18px;
+}
+
+.ops-report-exam h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.ops-report-total th,
+.ops-report-total td {
+  font-weight: 700;
+  border-top: 2px solid var(--color-border-strong);
+}
+
+.ops-report-foot {
+  margin-top: 16px;
+  font-size: 12px;
+}
+
+@media print {
+  .admin-sidebar,
+  .admin-header,
+  .acad-tabs,
+  .acad-mock-note,
+  .people-back,
+  .acad-header,
+  .ops-no-print,
+  .acad-toasts {
+    display: none !important;
+  }
+
+  .admin-main,
+  .admin-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ops-report {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .ops-report .table-wrap {
+    overflow: visible !important;
+  }
+}
+
+/* Exam calendar */
+.teach-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.teach-cal-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.teach-cal-head .btn-pill {
+  width: auto;
+  min-width: 40px;
+}
+
+.teach-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.teach-cal-dow {
+  padding: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.teach-cal-cell {
+  min-height: 84px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.teach-cal-cell.is-blank {
+  border-style: dashed;
+  background: transparent;
+}
+
+.teach-cal-cell.has-papers {
+  background: var(--color-primary-soft);
+}
+
+.teach-cal-day {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.teach-cal-date {
+  display: none;
+  font-weight: 700;
+}
+
+.teach-cal-paper {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .teach-cal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teach-cal-dow,
+  .teach-cal-cell.is-blank,
+  .teach-cal-cell:not(.has-papers) {
+    display: none;
+  }
+
+  .teach-cal-day {
+    display: none;
+  }
+
+  .teach-cal-date {
+    display: block;
+  }
+
+  .teach-cal-cell {
+    min-height: 0;
+  }
+}
+
+.teach-csv-preview {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.teach-csv-preview tr.has-error {
+  background: var(--color-danger-soft);
+}
+
+html[data-theme="dark"] .admin-shell.is-school .teach-cal-cell,
+html[data-theme="dark"] .admin-shell.is-school .teach-cal-paper,
+html[data-theme="dark"] .admin-shell.is-school .ops-results,
+html[data-theme="dark"] .admin-shell.is-school .ops-picked {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
