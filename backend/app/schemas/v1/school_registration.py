@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class SchoolRegistrationRequest(BaseModel):
+    """Public school registration.
+
+    ``domain`` / ``domain_type`` follow the same rules as Super Admin Create School:
+    - omit ``domain_type``: legacy — store ``domain`` as provided;
+    - ``default``: ``domain`` is a subdomain prefix; full host is built from config;
+    - ``custom``: ``domain`` is a full hostname; remains unverified until verified out-of-band.
+
+    ``school_website`` is the school's public http(s) URL, not the SaaS hostname.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
@@ -18,7 +28,23 @@ class SchoolRegistrationRequest(BaseModel):
     postal_code: str = Field(min_length=3, max_length=16)
     tagline: str = Field(default="", max_length=255)
     logo: str = Field(default="", max_length=255)
-    domain: Optional[str] = Field(default=None, max_length=255)
+    domain: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "Application hostname. For domain_type=default this is the subdomain prefix; "
+            "for custom/legacy it is the full hostname."
+        ),
+    )
+    domain_type: Optional[Literal["default", "custom"]] = Field(
+        default=None,
+        description="Omit for legacy clients. default builds prefix.base; custom stores FQDN unverified.",
+    )
+    school_website: str = Field(
+        default="",
+        max_length=512,
+        description="Public school website URL (http/https). Not the SaaS hostname.",
+    )
     admin_first_name: str = Field(min_length=1, max_length=128)
     admin_last_name: str = Field(min_length=1, max_length=128)
     admin_email: EmailStr
@@ -51,7 +77,7 @@ class SchoolRegistrationRequest(BaseModel):
         if not text:
             return None
         if " " in text:
-            raise ValueError("Website cannot contain spaces.")
+            raise ValueError("Domain cannot contain spaces.")
         return text
 
     @field_validator("terms_accepted")

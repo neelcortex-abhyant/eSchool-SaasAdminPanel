@@ -615,3 +615,185 @@ def test_nonblank_email_unique_index_blocks_direct_insert(v1_client, v1_db):
     with pytest.raises(IntegrityError):
         v1_db.commit()
     v1_db.rollback()
+
+
+# --- domain / school_website ---
+
+
+def test_create_school_default_domain_builds_hostname(v1_client, v1_db, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("SCHOOL_BASE_DOMAIN", "schools.test")
+    get_settings.cache_clear()
+    headers = _super_admin_headers(v1_client, v1_db, email="dom-def@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        code="DOMDEF",
+        domain="alpha",
+        domain_type="default",
+        school_website="https://alpha-school.example/about",
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["domain"] == "alpha.schools.test"
+    assert data["domain_type"] == "default"
+    assert data["domain_verified"] == 1
+    assert data["school_website"] == "https://alpha-school.example/about"
+
+    got = v1_client.get(f"/api/v1/super-admin/schools/{data['id']}", headers=headers)
+    assert got.status_code == 200
+    assert got.json()["domain"] == "alpha.schools.test"
+    assert got.json()["domain_type"] == "default"
+    get_settings.cache_clear()
+
+
+def test_create_school_custom_domain_unverified(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="dom-cus@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        code="DOMCUS",
+        domain="portal.custom-school.org",
+        domain_type="custom",
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["domain"] == "portal.custom-school.org"
+    assert data["domain_type"] == "custom"
+    assert data["domain_verified"] == 0
+
+
+def test_create_school_legacy_json_without_domain_type(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="dom-leg@eschool.com")
+    created = _create_school(
+        v1_client,
+        headers,
+        code="DOMLEG",
+        domain="legacy.example.com",
+        tagline="",
+        logo="",
+        address="",
+        support_phone="",
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["domain"] == "legacy.example.com"
+    assert data["domain_type"] is None
+    assert data["domain_verified"] == 0
+    assert data["school_website"] == ""
+
+
+def test_create_school_rejects_invalid_domain_type_and_hostnames(v1_client, v1_db, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("SCHOOL_BASE_DOMAIN", "schools.test")
+    get_settings.cache_clear()
+    headers = _super_admin_headers(v1_client, v1_db, email="dom-bad@eschool.com")
+
+    bad_type = _create_school(
+        v1_client, headers, code="BADT1", domain="x", domain_type="other"
+    )
+    assert bad_type.status_code == 422
+
+    bad_prefix = _create_school(
+        v1_client,
+        headers,
+        code="BADP1",
+        domain="Alpha_School",
+        domain_type="default",
+    )
+    assert bad_prefix.status_code == 422
+
+    fqdn_as_default = _create_school(
+        v1_client,
+        headers,
+        code="BADP2",
+        domain="alpha.schools.test",
+        domain_type="default",
+    )
+    assert fqdn_as_default.status_code == 422
+
+    bad_custom = _create_school(
+        v1_client,
+        headers,
+        code="BADC1",
+        domain="https://not-a-host.example",
+        domain_type="custom",
+    )
+    assert bad_custom.status_code == 422
+
+    single_label = _create_school(
+        v1_client,
+        headers,
+        code="BADC2",
+        domain="onlylabel",
+        domain_type="custom",
+    )
+    assert single_label.status_code == 422
+    get_settings.cache_clear()
+
+
+def test_create_school_rejects_duplicate_domain(v1_client, v1_db, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("SCHOOL_BASE_DOMAIN", "schools.test")
+    get_settings.cache_clear()
+    headers = _super_admin_headers(v1_client, v1_db, email="dom-dup@eschool.com")
+    first = _create_school(
+        v1_client, headers, code="DUPD1", domain="twin", domain_type="default"
+    )
+    assert first.status_code == 201, first.text
+    again = _create_school(
+        v1_client, headers, code="DUPD2", domain="twin", domain_type="default"
+    )
+    assert again.status_code == 409
+    custom_clash = _create_school(
+        v1_client,
+        headers,
+        code="DUPD3",
+        domain="twin.schools.test",
+        domain_type="custom",
+    )
+    assert custom_clash.status_code == 409
+    get_settings.cache_clear()
+
+
+def test_create_school_website_validation_and_patch(v1_client, v1_db):
+    headers = _super_admin_headers(v1_client, v1_db, email="web-sa@eschool.com")
+    bad = _create_school(
+        v1_client,
+        headers,
+        code="WEB1",
+        school_website="ftp://files.example/school",
+    )
+    assert bad.status_code == 422
+
+    created = _create_school(v1_client, headers, code="WEB2", school_website="")
+    assert created.status_code == 201, created.text
+    school_id = created.json()["id"]
+
+    patched = v1_client.patch(
+        f"/api/v1/super-admin/schools/{school_id}",
+        headers=headers,
+        json={
+            "school_website": "https://www.example.edu",
+            "domain": "campus.example.edu",
+            "domain_type": "custom",
+        },
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["school_website"] == "https://www.example.edu"
+    assert patched.json()["domain"] == "campus.example.edu"
+    assert patched.json()["domain_type"] == "custom"
+    assert patched.json()["domain_verified"] == 0
+
+
+def test_create_school_domain_requires_super_admin(v1_client):
+    token = _signup(v1_client, email="dom-user@eschool.com").json()["access_token"]
+    res = v1_client.post(
+        "/api/v1/super-admin/schools",
+        headers=_auth_header(token),
+        json={"name": "Nope", "domain": "x.example.com", "domain_type": "custom"},
+    )
+    assert res.status_code == 403

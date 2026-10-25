@@ -34,6 +34,8 @@ def register_public_school(
             tagline=body.tagline,
             logo=body.logo,
             domain=body.domain,
+            domain_type=body.domain_type,
+            school_website=body.school_website,
             admin_first_name=body.admin_first_name,
             admin_last_name=body.admin_last_name,
             admin_email=str(body.admin_email),

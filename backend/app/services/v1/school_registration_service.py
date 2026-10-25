@@ -71,6 +71,8 @@ def register_school(
     admin_mobile: str | None,
     admin_password: str,
     terms_accepted: bool,
+    domain_type: str | None = None,
+    school_website: str = "",
 ) -> School:
     if terms_accepted is not True:
         raise SchoolRegistrationError("Accept the terms and conditions to continue.", status_code=422)
@@ -90,6 +92,8 @@ def register_school(
     _limit(admin_email.strip().lower())
 
     try:
+        # Domain rules reuse school_service.resolve_school_domain via create_school
+        # (default prefix→FQDN, custom FQDN unverified, legacy when domain_type omitted).
         school = create_school(
             db,
             name=name,
@@ -99,6 +103,8 @@ def register_school(
             tagline=tagline,
             logo=logo,
             domain=domain,
+            domain_type=domain_type,
+            school_website=school_website,
             status=STATUS_INACTIVE,
             installed=INSTALLED_NO,
             commit=False,

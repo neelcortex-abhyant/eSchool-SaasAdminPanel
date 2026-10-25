@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://127.0.0.1:6380/0"
     app_url: str = "https://eschool-saas.wrteam.me"
+    # Base hostname for default school subdomains (prefix.base).
+    # When blank, the hostname of APP_URL is used (no hardcoded alternate base).
+    school_base_domain: str = ""
     # NEVER true in production. create_schema is unit-test only.
     allow_ddl: bool = False
     pool_size: int = 5
@@ -90,6 +93,17 @@ class Settings(BaseSettings):
         backend = (self.document_storage_backend or "").strip().lower()
         path = (self.document_storage_path or "").strip()
         return backend == "local" and bool(path)
+
+    @property
+    def resolved_school_base_domain(self) -> str:
+        """Hostname used to build default school subdomains."""
+        explicit = (self.school_base_domain or "").strip().lower().rstrip(".")
+        if explicit:
+            return explicit
+        from urllib.parse import urlparse
+
+        host = (urlparse(self.app_url).hostname or "").strip().lower().rstrip(".")
+        return host
 
 
 @lru_cache

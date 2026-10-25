@@ -74,9 +74,16 @@ def test_login_correct(v1_client):
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["access_token"]
+    assert isinstance(data.get("access_token"), str) and data["access_token"]
     assert data["token_type"] == "bearer"
+    assert data.get("expires_at")
+    # expires_at must be a parseable timestamp in the future (or at least present).
+    expires = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+    assert expires > datetime.now(timezone.utc) - timedelta(seconds=5)
     assert data["user"]["email"] == "amit@school.com"
+    assert data["user"]["role"] == "user"
+    assert "password" not in data["user"]
+    assert "password_hash" not in data["user"]
 
 
 def test_login_wrong_password(v1_client):
@@ -86,7 +93,9 @@ def test_login_wrong_password(v1_client):
         json={"email": "amit@school.com", "password": "wrongpass"},
     )
     assert res.status_code == 401
-    assert res.json()["detail"] == "Invalid email or password"
+    body = res.json()
+    assert body["detail"] == "Invalid email or password"
+    assert "access_token" not in body
 
 
 def test_login_unknown_email(v1_client):
@@ -95,7 +104,9 @@ def test_login_unknown_email(v1_client):
         json={"email": "nobody@school.com", "password": "secret123"},
     )
     assert res.status_code == 401
-    assert res.json()["detail"] == "Invalid email or password"
+    body = res.json()
+    assert body["detail"] == "Invalid email or password"
+    assert "access_token" not in body
 
 
 def test_login_returns_bearer_token(v1_client):
@@ -105,8 +116,11 @@ def test_login_returns_bearer_token(v1_client):
         json={"email": "amit@school.com", "password": "secret123"},
     )
     assert res.status_code == 200
-    assert res.json()["access_token"]
-    assert res.json()["token_type"] == "bearer"
+    data = res.json()
+    assert isinstance(data.get("access_token"), str) and len(data["access_token"]) >= 20
+    assert data["token_type"] == "bearer"
+    assert data.get("expires_at")
+    assert data["user"]["email"] == "amit@school.com"
 
 
 # --- AUTH ME ---

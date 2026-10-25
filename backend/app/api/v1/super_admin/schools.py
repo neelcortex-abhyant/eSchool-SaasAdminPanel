@@ -70,6 +70,8 @@ def create_school(
             logo=body.logo,
             code=body.code,
             domain=body.domain,
+            domain_type=body.domain_type,
+            school_website=body.school_website,
         )
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
@@ -155,6 +157,7 @@ def patch_school(
     auth: Annotated[AuthContext, Depends(require_super_admin)],
     db: Annotated[Session, Depends(central_db)],
 ) -> SchoolResponse:
+    fields = body.model_fields_set
     try:
         school = school_service.update_school(
             db,
@@ -167,6 +170,10 @@ def patch_school(
             logo=body.logo,
             code=body.code,
             domain=body.domain,
+            domain_type=body.domain_type,
+            school_website=body.school_website,
+            domain_set="domain" in fields,
+            domain_type_set="domain_type" in fields,
         )
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
