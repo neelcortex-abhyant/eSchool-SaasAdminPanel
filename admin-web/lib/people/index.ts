@@ -60,7 +60,7 @@ export type PeopleSupport = {
   employmentOptions: { value: string; label: string }[];
   /** "Employment type" (sample data) or "Employment status" (live). */
   employmentLabel: string;
-  /** The live backend needs a sign-in password when a teacher, staff member or parent is added (incl. a new parent during admission). */
+  /** The live backend needs a sign-in password when a teacher or staff member is added. */
   password: boolean;
   /** Document titles the backend keeps (as categories); null allows any title. */
   documentTitles: string[] | null;
@@ -79,21 +79,17 @@ const FULL_SUPPORT: PeopleSupport = {
   documentTitles: null,
 };
 
-/** Live document categories (person_documents.category) offered as titles. */
-export const LIVE_DOCUMENT_TITLES = ["Resume", "ID proof", "Certificate", "Other"];
-
-const LIMITED: PeopleSupport = { ...FULL_SUPPORT, details: false, guardianLinks: false, files: false, edit: false, status: false, employeeFilters: false };
-const EMPLOYEES_LIVE: PeopleSupport = { ...FULL_SUPPORT, guardianLinks: false, employmentOptions: EMPLOYMENT_STATUSES, employmentLabel: "Employment status", password: true, documentTitles: LIVE_DOCUMENT_TITLES };
+const EMPLOYEES_LIVE: PeopleSupport = { ...FULL_SUPPORT, guardianLinks: false, employmentOptions: EMPLOYMENT_STATUSES, employmentLabel: "Employment status", password: true };
 
 /**
- * Live: students and parents use the generic /school-admin/academics routes (students can be
- * listed, admitted, edited and (de)activated; parents listed and created). Teachers and staff
- * use /school-admin/teachers and /school-admin/staff, which cover profiles, edits, status,
- * photos and documents.
+ * Live: students and parents use /school-admin/students and /school-admin/parents (profiles,
+ * guardians, status, photos and documents); teachers and staff use /school-admin/teachers and
+ * /school-admin/staff. New parents get a server-generated password, so no password is asked
+ * for them; teachers and staff still need one.
  */
 const LIVE_SUPPORT: Record<PeopleModule, PeopleSupport> = {
-  students: { ...LIMITED, edit: true, status: true, password: true },
-  parents: { ...LIMITED, password: true },
+  students: FULL_SUPPORT,
+  parents: FULL_SUPPORT,
   teachers: EMPLOYEES_LIVE,
   staff: EMPLOYEES_LIVE,
 };
@@ -105,13 +101,13 @@ export function peopleSupport(module: PeopleModule): PeopleSupport {
 /** Shown on live pages: what the server can't do yet for this module. */
 export const LIVE_LIMITS_NOTE: Record<PeopleModule, string> = {
   students:
-    "Connected to the school's server. It keeps the name, email, admission details, class and one guardian per student. Date of birth, gender, phone, address, more guardians, photos and documents aren't stored yet.",
+    "Connected to the school's server. A student can have up to 4 guardians and must keep at least one. Photos and documents are PDF, JPG or PNG (photos up to 2 MB, documents up to 5 MB).",
   parents:
-    "Connected to the school's server. Parents can be listed and added with name, email and phone. Editing, deactivating, address and occupation aren't available yet.",
+    "Connected to the school's server. New parents don't get a password here: they set one with “Forgot password” on the sign-in page.",
   teachers:
-    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated), and documents are filed as resume, ID proof, certificate or other.",
+    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated).",
   staff:
-    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated), and documents are filed as resume, ID proof, certificate or other.",
+    "Connected to the school's server. Employment shows the employee's status (active, on leave, resigned or terminated).",
 };
 
 export * from "@/lib/people/types";
