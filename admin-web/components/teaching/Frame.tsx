@@ -58,7 +58,7 @@ export function TeachingPage({
               {description ? <p className="muted acad-subtitle">{description}</p> : null}
             </div>
           </div>
-          {access.state === "allowed" && actions ? <div className="acad-header-actions">{actions}</div> : null}
+          {(access.state === "allowed" || access.state === "loading") && actions ? <div className="acad-header-actions">{actions}</div> : null}
         </header>
         {tabs ? (
           <nav className="acad-tabs" aria-label={title}>

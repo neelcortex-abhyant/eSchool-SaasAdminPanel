@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { adminApi } from "@/lib/adminApi";
 import { api, clearSession } from "@/lib/api";
 import { IconBell, IconCalendar, IconChevron, IconGlobe, IconLogoMark, IconMenu } from "@/lib/icons";
 import { LANGUAGE_KEY, THEME_KEY, readWorkspace, writeWorkspace } from "@/lib/workspace";
@@ -132,15 +131,16 @@ export default function TopHeader({
     let cancelled = false;
     async function loadNotices() {
       if (role === "school_admin") {
-        const result = await adminApi<{ data?: { id: number; title?: string; description?: string }[] }>("/announcements");
+        // The school's own latest announcements (eight), not the whole table.
+        const result = await api<{ items?: { id: number; title?: string; description?: string | null }[] }>("/school-admin/academics/notices?page=1&page_size=8");
         if (cancelled) return;
-        if (!result.ok || !Array.isArray(result.data.data)) {
+        if (!result.ok || !Array.isArray(result.data.items)) {
           setNotices([]);
-          setNoticeError("Notifications could not be loaded.");
+          setNoticeError(result.status === 401 ? "Sign in again to view notifications." : "Notifications could not be loaded.");
           return;
         }
         setNoticeError("");
-        setNotices(result.data.data.slice(0, 8).map((row) => ({
+        setNotices(result.data.items.map((row) => ({
           id: `announcement-${row.id}`,
           title: row.title || "Announcement",
           detail: row.description || "",

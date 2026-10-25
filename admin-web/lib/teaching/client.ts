@@ -3,7 +3,7 @@
  * "/school-admin/homework". Errors come back as AcademicApiError so pages show them the same
  * way as the academics and people pages (409 sentences, 422 field messages, 401/403).
  */
-import { api, apiUrl, getAccessToken } from "@/lib/api";
+import { api, apiUrl, getAccessToken, invalidateApiCache } from "@/lib/api";
 import { AcademicApiError, errorFromResponse } from "@/lib/academics/errors";
 import type { Page } from "@/lib/teaching/types";
 
@@ -49,6 +49,7 @@ export function upload<T = Raw>(path: string, form: FormData, fallback: string) 
 /** Multipart upload that reports progress (0–100). fetch() can't report upload progress, so this uses XHR. */
 export function uploadWithProgress<T = Raw>(path: string, form: FormData, fallback: string, onProgress: (percent: number) => void): Promise<T> {
   return new Promise((resolve, reject) => {
+    invalidateApiCache();
     const xhr = new XMLHttpRequest();
     xhr.open("POST", apiUrl(path));
     const token = getAccessToken();
@@ -71,14 +72,23 @@ export function uploadWithProgress<T = Raw>(path: string, form: FormData, fallba
   });
 }
 
-/** Every row of a paged list, for summaries and pickers (at most 1,000 rows). */
+/**
+ * Every row of a paged list, for summaries and pickers (at most 1,000 rows). The first page
+ * gives the total; the rest are requested together, a few at a time.
+ */
 export async function allPages(path: string, params: Record<string, QueryValue>, fallback: string): Promise<Raw[]> {
-  const rows: Raw[] = [];
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
+  const load = async (page: number) => {
     const data = await get<Raw>(path, { ...params, page, page_size: MAX_PAGE_SIZE }, fallback);
-    const items = Array.isArray(data.items) ? (data.items as Raw[]) : [];
-    rows.push(...items);
-    if (items.length === 0 || rows.length >= Number(data.total ?? rows.length)) break;
+    return { items: Array.isArray(data.items) ? (data.items as Raw[]) : [], total: Number(data.total ?? 0) };
+  };
+  const first = await load(1);
+  const pages = Math.min(MAX_PAGES, Math.ceil(first.total / MAX_PAGE_SIZE));
+  if (pages <= 1 || first.items.length === 0) return first.items;
+  const rest = await settleLimited(Array.from({ length: pages - 1 }, (_, index) => () => load(index + 2)), 4);
+  const rows = [...first.items];
+  for (const result of rest) {
+    if (!result.ok) throw result.error;
+    rows.push(...result.value.items);
   }
   return rows;
 }

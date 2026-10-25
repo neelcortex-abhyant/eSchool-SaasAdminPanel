@@ -46,6 +46,7 @@ export function setSession(accessToken: string): void {
 }
 
 export function clearSession(): void {
+  getCache.clear();
   window.localStorage.removeItem(TOKEN_KEY);
   document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
@@ -83,10 +84,46 @@ export function apiUrl(path: string): string {
   return `${resolveApiBase()}${suffix}`;
 }
 
+/**
+ * Short-lived cache for successful GETs, shared by every page and component. Lookups such as
+ * sessions, classes, sections, subjects and teachers are read by many dropdowns and lists at
+ * once; identical requests made at the same time share one network call, and repeats within
+ * GET_CACHE_MS reuse the answer. Any POST, PATCH, PUT or DELETE (and sign-out) clears it, so a
+ * page always reads fresh data after a change.
+ */
+const GET_CACHE_MS = 30_000;
+const getCache = new Map<string, { at: number; promise: Promise<ApiResult<unknown>> }>();
+
+export function invalidateApiCache(): void {
+  getCache.clear();
+}
+
+function copy<T>(result: ApiResult<T>): ApiResult<T> {
+  // Callers may change the objects they get back; each one gets its own copy.
+  return { ...result, data: typeof structuredClone === "function" ? structuredClone(result.data) : JSON.parse(JSON.stringify(result.data)) };
+}
+
 export async function api<T = Record<string, unknown>>(
   path: string,
   options: RequestInit = {},
 ): Promise<ApiResult<T>> {
+  const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET" || options.body || typeof window === "undefined") {
+    if (method !== "GET") invalidateApiCache();
+    return send<T>(path, options);
+  }
+  const key = `${getAccessToken() ?? ""} ${path}`;
+  const hit = getCache.get(key);
+  if (hit && Date.now() - hit.at < GET_CACHE_MS) return copy((await hit.promise) as ApiResult<T>);
+  const promise = send<T>(path, options);
+  getCache.set(key, { at: Date.now(), promise: promise as Promise<ApiResult<unknown>> });
+  const result = await promise;
+  // Only successful answers are kept; errors are retried on the next call.
+  if (!result.ok && getCache.get(key)?.promise === promise) getCache.delete(key);
+  return copy(result);
+}
+
+async function send<T>(path: string, options: RequestInit): Promise<ApiResult<T>> {
   const suffix = path.startsWith("/") ? path : `/${path}`;
   const base = resolveApiBase();
   const primary = await fetchApi<T>(`${base}${suffix}`, options);

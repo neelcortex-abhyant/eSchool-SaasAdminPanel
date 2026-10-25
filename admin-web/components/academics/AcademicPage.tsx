@@ -90,7 +90,7 @@ export function AcademicPage({
               <p className="muted acad-subtitle">{description}</p>
             </div>
           </div>
-          {access.state === "allowed" && actions ? <div className="acad-header-actions">{actions}</div> : null}
+          {(access.state === "allowed" || access.state === "loading") && actions ? <div className="acad-header-actions">{actions}</div> : null}
         </header>
 
         <nav className="acad-tabs" aria-label="Academic structure">
@@ -113,17 +113,14 @@ export function AcademicPage({
   );
 }
 
-/** Shows a skeleton while access is checked, a sign-in link or the reason access was denied, or the page. */
+/**
+ * Shows the page while access is checked (its own loaders cover the wait, and its requests run
+ * alongside the check instead of after it), then a sign-in link or the reason access was denied
+ * if the check fails. The server refuses the page's data for anyone without access either way.
+ */
 export function AccessGate({ access, children }: { access: Access; children: ReactNode }) {
   const pathname = usePathname();
-  if (access.state === "loading") {
-    return (
-      <div className="resource-card acad-card">
-        <div className="skeleton" style={{ height: 18, width: "30%", marginBottom: 16 }} />
-        <div className="skeleton" style={{ height: 180 }} />
-      </div>
-    );
-  }
+  if (access.state === "loading") return <>{children}</>;
   if (access.state === "signed-out") {
     return (
       <div className="alert alert-danger acad-error" role="alert">
