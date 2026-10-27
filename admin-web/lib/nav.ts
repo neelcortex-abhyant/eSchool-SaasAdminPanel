@@ -294,6 +294,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
     label: "Settings",
     icon: IconSettings,
     children: [
+      { href: "/school/website", label: "Website & domain" },
       {
         label: "System settings",
         children: [

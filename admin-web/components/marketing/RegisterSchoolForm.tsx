@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useState } from "react";
+import { DomainStep, EMPTY_DOMAIN, type DomainCheck, type DomainDraft } from "@/components/domains/DomainStep";
 import { api, apiErrorMessage } from "@/lib/api";
+import { domainRequestFields, saveSampleSite } from "@/lib/domains/client";
+import { customDomainProblem, defaultSlug, rootDomain, schoolSiteUrl, slugProblem } from "@/lib/domains/core";
+import { domainsMock, domainsMode } from "@/lib/domains/mode";
 import {
   EMPTY_REGISTRATION,
   registrationRequestBody,
@@ -16,7 +20,14 @@ type RegistrationResult = {
   status?: string;
   message?: string;
   detail?: unknown;
+  /** Returned once the server supports domains (see SCHOOL_DOMAINS_API_CONTRACT.md). */
+  subdomain?: string;
+  site_url?: string;
+  domain_verification?: { txt_name: string; txt_value: string; cname_name: string; cname_target: string } | null;
 };
+
+/** previewUrl: on sample data the site lives in this browser's storage, so it opens on this origin. */
+type Registered = { slug: string; siteUrl: string; previewUrl: string; customDomain: string | null; dns: RegistrationResult["domain_verification"] };
 
 export default function RegisterSchoolForm() {
   const [values, setValues] = useState(EMPTY_REGISTRATION);
@@ -24,7 +35,12 @@ export default function RegisterSchoolForm() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<Registered | null>(null);
+  const [domain, setDomain] = useState<DomainDraft>(EMPTY_DOMAIN);
+  const [domainCheck, setDomainCheck] = useState<DomainCheck>({ state: "idle", result: null, message: "" });
+  const [domainErrors, setDomainErrors] = useState<{ slug?: string; custom_domain?: string }>({});
+  // Subdomains the server said are taken, so the step can offer readable alternatives.
+  const [takenSlugs, setTakenSlugs] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
 
   function setField<K extends keyof SchoolRegistrationValues>(key: K, value: SchoolRegistrationValues[K]) {
@@ -61,7 +77,17 @@ export default function RegisterSchoolForm() {
     event.preventDefault();
     const nextErrors = validateRegistration(values);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
+    const slug = domain.slugEdited ? domain.slug : defaultSlug(values.name);
+    const nextDomainErrors: { slug?: string; custom_domain?: string } = {};
+    const slugIssue = slugProblem(slug);
+    if (slugIssue) nextDomainErrors.slug = slugIssue;
+    else if (domainCheck.state === "done" && domainCheck.result?.slug === slug && !domainCheck.result.available) nextDomainErrors.slug = domainCheck.result.problem || "This address is taken. Choose another.";
+    if (domain.type === "custom") {
+      const customIssue = customDomainProblem(domain.custom_domain);
+      if (customIssue) nextDomainErrors.custom_domain = customIssue;
+    }
+    setDomainErrors(nextDomainErrors);
+    if (Object.keys(nextErrors).length > 0 || Object.keys(nextDomainErrors).length > 0) {
       setFormError("Fix the highlighted fields.");
       return;
     }
@@ -69,9 +95,12 @@ export default function RegisterSchoolForm() {
     setFormError("");
     let result;
     try {
+      const customDomain = domain.type === "custom" ? domain.custom_domain.trim().toLowerCase() : "";
+      // The backend takes domain_type "default" with the subdomain prefix in `domain`, or "custom" with the full host.
+      const body = { ...registrationRequestBody(values), ...domainRequestFields(domain.type === "custom" ? { type: "custom", slug, custom_domain: customDomain } : { type: "default", slug }) };
       result = await api<RegistrationResult>("/schools/register", {
         method: "POST",
-        body: JSON.stringify(registrationRequestBody(values)),
+        body: JSON.stringify(body),
       });
     } catch {
       setFormError("Network error. Your entries are still here. Try again.");
@@ -88,16 +117,96 @@ export default function RegisterSchoolForm() {
       } else if (result.status === 409 && /already registered/i.test(message)) {
         setErrors((current) => ({ ...current, admin_email: message }));
       }
-      setFormError(message);
+      // "School domain already in use" is about whichever address was chosen.
+      if (result.status === 409 && /domain already in use|subdomain|address is taken/i.test(message)) {
+        if (domain.type === "custom") setDomainErrors({ custom_domain: "Another school already uses this domain." });
+        else {
+          setDomainErrors({ slug: `${slug}.${rootDomain()} is taken.` });
+          setTakenSlugs((list) => [...new Set([...list, slug])]);
+        }
+      } else if (/subdomain prefix|domain_type|^domain /i.test(message)) {
+        setDomainErrors(domain.type === "custom" ? { custom_domain: message } : { slug: message });
+      }
+      setFormError(
+        result.status >= 500 && /base domain is not configured/i.test(message)
+          ? "School addresses aren't switched on on the school's server yet (its base domain isn't set). Choose Custom domain, or try again later."
+          : message,
+      );
       return;
     }
-    setDone(true);
+    const finalSlug = result.data.subdomain || slug;
+    const customDomain = domain.type === "custom" ? domain.custom_domain.trim().toLowerCase() : null;
+    let dns = result.data.domain_verification ?? null;
+    if (domainsMock()) {
+      // Sample data: keep the school's public profile in this browser so its site opens straight away.
+      saveSampleSite({ name: values.name, slug: finalSlug, tagline: values.tagline, logo: values.logo, address: values.address, city: values.city, phone: values.support_phone, email: values.support_email, custom_domain: customDomain });
+      if (customDomain) dns = { txt_name: `_eschool-verify.${customDomain}`, txt_value: "shown in Settings → Domain after you sign in", cname_name: customDomain, cname_target: `${finalSlug}.${rootDomain()}` };
+    }
+    const here = typeof window === "undefined" ? undefined : { protocol: window.location.protocol, port: window.location.port };
+    const siteUrl = result.data.site_url || schoolSiteUrl(finalSlug, rootDomain(), here);
+    setDone({ slug: finalSlug, siteUrl, previewUrl: domainsMock() ? `/site/${finalSlug}` : siteUrl, customDomain, dns });
   }
 
   if (done) {
     return (
       <section className="panel-card register-result">
         <h2>Your school registration has been submitted successfully.</h2>
+        <div className="domain-result">
+          <p>
+            {domainsMode() === "pending" ? (
+              <>
+                <strong>Your school&apos;s address:</strong> {done.siteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </>
+            ) : (
+              <>
+                <strong>Your school website is ready:</strong>{" "}
+                <a href={done.previewUrl} target="_blank" rel="noopener noreferrer">
+                  {done.siteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                </a>
+              </>
+            )}
+          </p>
+          {domainsMock() ? <p className="field-hint">Sample data: the link opens the site saved in this browser.</p> : null}
+          {domainsMode() === "pending" ? (
+            <p className="field-hint">
+              This address is saved for your school. The public website opens there once the platform switches school websites on; after signing in you can preview it under
+              Settings → Website & domain.
+            </p>
+          ) : null}
+          {done.customDomain ? (
+            <>
+              <p>
+                To use <strong>{done.customDomain}</strong>, add these records at your domain provider, then use <em>Settings → Domain → Check now</em> after signing in. Your
+                website moves to {done.customDomain} only after the check succeeds.
+              </p>
+              {done.dns ? (
+                <div className="table-wrap">
+                  <table className="data-table domain-dns">
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Name</th>
+                        <th>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>TXT</td>
+                        <td><code>{done.dns.txt_name}</code></td>
+                        <td><code>{done.dns.txt_value}</code></td>
+                      </tr>
+                      <tr>
+                        <td>CNAME</td>
+                        <td><code>{done.dns.cname_name}</code></td>
+                        <td><code>{done.dns.cname_target}</code></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
         <p>
           This school is pending approval. A platform administrator will review it. No subscription is
           started by this registration. After the school is activated, sign in with the administrator
@@ -130,7 +239,6 @@ export default function RegisterSchoolForm() {
           <TextField label="State" required value={values.state} error={errors.state} maxLength={80} onChange={(value) => setField("state", value)} />
           <TextField label="Country" required value={values.country} error={errors.country} maxLength={80} onChange={(value) => setField("country", value)} />
           <TextField label="Postal code" required value={values.postal_code} error={errors.postal_code} maxLength={16} onChange={(value) => setField("postal_code", value)} />
-          <TextField label="School website" value={values.domain} error={errors.domain} maxLength={255} onChange={(value) => setField("domain", value)} />
           <TextField label="School tagline" value={values.tagline} error={errors.tagline} maxLength={255} onChange={(value) => setField("tagline", value)} />
           <div className="form-field field-span">
             <label htmlFor="reg-logo-file">School logo</label>
@@ -156,6 +264,17 @@ export default function RegisterSchoolForm() {
         </div>
       </fieldset>
 
+      <DomainStep
+        name={values.name}
+        city={values.city}
+        value={domain}
+        onChange={setDomain}
+        check={domainCheck}
+        onCheck={setDomainCheck}
+        errors={domainErrors}
+        taken={takenSlugs}
+      />
+
       <fieldset className="register-section">
         <legend>School administrator</legend>
         <div className="resource-fields">
@@ -180,7 +299,7 @@ export default function RegisterSchoolForm() {
           </span>
         </label>
         {errors.terms_accepted ? <p className="field-error">{errors.terms_accepted}</p> : null}
-        <p className="field-hint">Fields marked with * are required. Website, tagline, and logo are optional. Email verification and CAPTCHA are not part of this registration API.</p>
+        <p className="field-hint">Fields marked with * are required. Tagline and logo are optional. Email verification and CAPTCHA are not part of this registration API.</p>
       </fieldset>
 
       <div className="resource-actions">
