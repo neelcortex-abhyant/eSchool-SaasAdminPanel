@@ -117,12 +117,13 @@ def test_modules_revision_chain_0032_through_0038_is_linear():
         ("20261023_0036", "20261023_0035"),
         ("20261024_0037", "20261023_0036"),
         ("20261025_0038", "20261024_0037"),
+        ("20261027_0039", "20261025_0038"),
     ]
     for revision, parent in expected:
         rev = script.get_revision(revision)
         assert rev is not None, revision
         assert rev.down_revision == parent, (revision, rev.down_revision)
-    assert script.get_heads() == ["20261025_0038"]
+    assert script.get_heads() == ["20261027_0039"]
 
 
 def test_school_domain_columns_match_migration_0038():

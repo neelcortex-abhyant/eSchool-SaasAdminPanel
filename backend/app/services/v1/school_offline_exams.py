@@ -562,6 +562,131 @@ def get_schedule(db: Session, school_id: int, schedule_id: int) -> dict:
     return _schedule_item(db, _owned(db, OfflineExamSchedule, schedule_id, school_id))
 
 
+def update_schedule(db: Session, school_id: int, schedule_id: int, body: dict) -> dict:
+    """Edit a subject paper/schedule. Blocked when marks already exist for the schedule."""
+    row = _owned(db, OfflineExamSchedule, schedule_id, school_id)
+    exam = _active_exam(db, school_id, row.exam_id)
+    if exam.publish == 1:
+        raise AcademicError(409, "Unpublish the exam before editing subject papers")
+    if _marks_exist_for_schedule(db, schedule_id):
+        raise AcademicError(409, "Cannot edit a schedule that already has marks")
+
+    data = sanitize_body(body)
+    subject_id = int(data["subject_id"]) if "subject_id" in data and data["subject_id"] is not None else row.subject_id
+    class_section_id = (
+        int(data["class_section_id"])
+        if "class_section_id" in data and data["class_section_id"] is not None
+        else row.class_section_id
+    )
+    if class_section_id != exam.class_section_id:
+        raise AcademicError(422, "class_section_id must match the exam")
+    cs = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
+    _same_school(db, Subject, subject_id, school_id, "Subject")
+    _assert_subject_mapped_to_class(db, school_id, cs.class_id, subject_id)
+
+    teacher_user_id = row.teacher_user_id
+    staff_id = row.staff_id
+    if "teacher_user_id" in data:
+        if data["teacher_user_id"] is None:
+            teacher_user_id = None
+            staff_id = None
+        else:
+            staff = _staff_for_teacher_user(db, school_id, int(data["teacher_user_id"]))
+            _assert_teacher(
+                db,
+                school_id,
+                staff_id=staff.id,
+                subject_id=subject_id,
+                class_section_id=class_section_id,
+                session_year_id=exam.session_year_id,
+            )
+            staff_id = staff.id
+            teacher_user_id = int(data["teacher_user_id"])
+
+    exam_date = _parse_date(data["exam_date"], "exam_date") if "exam_date" in data else row.exam_date
+    if "start_time" in data or "end_time" in data:
+        start_time = _parse_time(data.get("start_time", row.start_time), "start_time") if "start_time" in data else row.start_time
+        end_time = _parse_time(data.get("end_time", row.end_time), "end_time") if "end_time" in data else row.end_time
+    else:
+        start_time = row.start_time
+        end_time = row.end_time
+    if (start_time is None) != (end_time is None):
+        raise AcademicError(422, "Provide both start_time and end_time, or neither")
+    if start_time and end_time and end_time <= start_time:
+        raise AcademicError(422, "end_time must be after start_time")
+
+    max_marks = float(data["max_marks"]) if "max_marks" in data else row.max_marks
+    passing_marks = float(data["passing_marks"]) if "passing_marks" in data else row.passing_marks
+    if max_marks <= 0 or passing_marks < 0 or passing_marks > max_marks:
+        raise AcademicError(422, "invalid max_marks / passing_marks")
+
+    # Unique subject paper per exam (when subject changes).
+    if subject_id != row.subject_id:
+        clash = (
+            db.query(OfflineExamSchedule)
+            .filter(
+                OfflineExamSchedule.exam_id == row.exam_id,
+                OfflineExamSchedule.subject_id == subject_id,
+                OfflineExamSchedule.class_section_id == class_section_id,
+                OfflineExamSchedule.deleted_at.is_(None),
+                OfflineExamSchedule.id != row.id,
+            )
+            .first()
+        )
+        if clash is not None:
+            raise AcademicError(409, "A schedule for this subject already exists on the exam")
+
+    _assert_no_schedule_conflict(
+        db,
+        school_id,
+        class_section_id=class_section_id,
+        exam_date=exam_date,
+        start_time=start_time,
+        end_time=end_time,
+        exclude_id=row.id,
+    )
+
+    row.subject_id = subject_id
+    row.class_section_id = class_section_id
+    row.teacher_user_id = teacher_user_id
+    row.staff_id = staff_id
+    row.exam_date = exam_date
+    row.start_time = start_time
+    row.end_time = end_time
+    row.max_marks = max_marks
+    row.passing_marks = passing_marks
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _schedule_item(db, row)
+
+
+def soft_delete_schedule(db: Session, school_id: int, schedule_id: int) -> dict:
+    """Remove a subject paper. Blocked when marks exist or exam is published."""
+    row = _owned(db, OfflineExamSchedule, schedule_id, school_id)
+    exam = _active_exam(db, school_id, row.exam_id)
+    if exam.publish == 1:
+        raise AcademicError(409, "Unpublish the exam before deleting subject papers")
+    if _marks_exist_for_schedule(db, schedule_id):
+        raise AcademicError(409, "Cannot delete a schedule that already has marks")
+    row.deleted_at = _now()
+    row.updated_at = _now()
+    _commit(db)
+    return {"id": schedule_id, "deleted": True}
+
+
+def _marks_exist_for_schedule(db: Session, schedule_id: int) -> bool:
+    return (
+        db.query(OfflineExamMark.id)
+        .filter(
+            OfflineExamMark.schedule_id == schedule_id,
+            OfflineExamMark.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+
+
 # --- Marks ---
 
 

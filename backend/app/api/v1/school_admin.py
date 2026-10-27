@@ -18,6 +18,7 @@ from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
+from app.api.v1 import school_admin_mgmt as mgmt_routes
 from app.services.v1 import person_documents as docs_svc
 from app.services.v1 import rbac, school_service
 from app.services.v1 import school_academics as academics
@@ -56,6 +57,7 @@ def require_teachers_or_staff(
 # Academic structure lives in school_admin_academics.py; inherits this router's tag.
 # Mounted first so /academics/... stays distinct from direct /classes and /sessions.
 router.include_router(academics_routes.router)
+router.include_router(mgmt_routes.router)
 
 
 class ClassWriteBody(BaseModel):
@@ -2356,6 +2358,19 @@ class OfflineScheduleCreateBody(BaseModel):
     passing_marks: float = Field(ge=0)
 
 
+class OfflineSchedulePatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject_id: int | None = Field(default=None, ge=1)
+    class_section_id: int | None = Field(default=None, ge=1)
+    teacher_user_id: int | None = Field(default=None, ge=1)
+    exam_date: date | None = None
+    start_time: str | None = Field(default=None, max_length=8)
+    end_time: str | None = Field(default=None, max_length=8)
+    max_marks: float | None = Field(default=None, gt=0)
+    passing_marks: float | None = Field(default=None, ge=0)
+
+
 class OfflineMarkBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2493,6 +2508,32 @@ def get_offline_exam_schedule(
     db: Annotated[Session, Depends(central_db)],
 ) -> dict:
     return _run(lambda: offline_svc.get_schedule(db, _school_id(auth), schedule_id))
+
+
+@router.patch("/offline-exam-schedules/{schedule_id}")
+def patch_offline_exam_schedule(
+    schedule_id: int,
+    body: OfflineSchedulePatchBody,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(
+        lambda: offline_svc.update_schedule(
+            db,
+            _school_id(auth),
+            schedule_id,
+            offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+        )
+    )
+
+
+@router.delete("/offline-exam-schedules/{schedule_id}")
+def delete_offline_exam_schedule(
+    schedule_id: int,
+    auth: Annotated[AuthContext, Depends(require_exams)],
+    db: Annotated[Session, Depends(central_db)],
+) -> dict:
+    return _run(lambda: offline_svc.soft_delete_schedule(db, _school_id(auth), schedule_id))
 
 
 @router.post("/offline-exam-schedules/{schedule_id}/marks", status_code=status.HTTP_201_CREATED)
