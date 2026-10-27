@@ -15,7 +15,7 @@ export const EXAM_TABS = [
   { href: "/school/online-exams/question-bank", label: "Question bank" },
 ];
 
-export const EXAMS_LIVE_NOTE = "Connected to the school's server. The question bank is kept in this browser until the server has one; copying bank questions into an exam saves them on the server.";
+export const EXAMS_LIVE_NOTE = "Connected to the school's server.";
 
 export const EXAM_STATUS: Record<ExamStatus, { label: string; tone: ChipTone }> = {
   draft: { label: "Draft", tone: "grey" },
@@ -413,7 +413,7 @@ export function BankPicker({ examId, nextOrder, onClose, onCopied }: { examId: n
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const all = useOptions(useCallback(() => Promise.resolve(bankQuestions()), []));
+  const all = useOptions(useCallback(() => bankQuestions(), []));
   const rows = all.options.filter((row) => !search.trim() || `${row.question_text} ${row.topic ?? ""} ${row.subject_name ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   async function submit() {

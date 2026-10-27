@@ -8,7 +8,6 @@ import { useFormErrors } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { EMPTY_PLACEMENT, PlacementFields, SubjectTeacherFields, type PlacementValue } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
-import { isLive } from "@/lib/teaching/mode";
 import { timetableService } from "@/lib/teaching/timetable";
 import { WEEK_DAYS, type TimetableEntry, type TimetableInput, type WeekDay, type WeekGrid } from "@/lib/teaching/types";
 
@@ -27,7 +26,7 @@ export const TIMETABLE_TABS = [
   { href: "/school/timetable/teachers", label: "Teacher schedules" },
 ];
 
-export const TIMETABLE_LIVE_NOTE = "Connected to the school's server. Classrooms aren't stored on the server yet, so the Room field is hidden.";
+export const TIMETABLE_LIVE_NOTE = "Connected to the school's server. The server has no classroom field yet, so the classroom is saved at the start of the period's note.";
 
 /** The day of the week for today, or Monday on Sunday. */
 export function todayWeekDay(): WeekDay {
@@ -118,7 +117,7 @@ export function TimetableForm({ seed, onClose, onSaved }: { seed: FormSeed; onCl
       />
       <TextField id="tt-start" label="Start time" type="text" required placeholder="08:30" value={start} onChange={setStart} error={errors.fieldErrors.start_time} hint="24-hour time, e.g. 08:30" />
       <TextField id="tt-end" label="End time" type="text" required placeholder="09:15" value={end} onChange={setEnd} error={errors.fieldErrors.end_time} hint="24-hour time, e.g. 09:15" />
-      {!isLive("timetable") ? <TextField id="tt-room" label="Classroom" maxLength={64} placeholder="Room 12" value={room} onChange={setRoom} /> : null}
+      <TextField id="tt-room" label="Classroom" maxLength={64} placeholder="Room 12" value={room} onChange={setRoom} />
       <TextField id="tt-note" label="Note" span maxLength={255} value={note} onChange={setNote} />
     </FormModal>
   );

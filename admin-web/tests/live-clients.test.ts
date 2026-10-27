@@ -184,3 +184,18 @@ describe("live people client", () => {
     ).rejects.toMatchObject({ status: 409, fieldErrors: { roll_number: expect.stringMatching(/Roll number/) } });
   });
 });
+
+describe("timetable classroom", () => {
+  it("keeps the classroom on the first line of the server's note and reads it back", async () => {
+    const { noteWithRoom, roomFromNote, liveTimetable } = await import("@/lib/teaching/timetable");
+    expect(noteWithRoom("12", "Bring lab coats")).toBe("Room: 12\nBring lab coats");
+    expect(noteWithRoom(" ", "Only a note")).toBe("Only a note");
+    expect(noteWithRoom(null, null)).toBeNull();
+    expect(roomFromNote("Room: Lab 2\nBring lab coats")).toEqual({ room: "Lab 2", note: "Bring lab coats" });
+    expect(roomFromNote("Room: 12")).toEqual({ room: "12", note: null });
+    expect(roomFromNote("Remember the Room: change")).toEqual({ room: null, note: "Remember the Room: change" });
+    await liveTimetable.create({ session_year_id: 1, class_section_id: 2, subject_id: 3, teacher_user_id: 4, day: "monday", start_time: "08:30", end_time: "09:15", note: null, room: "12" });
+    expect(calls[0].url).toMatch(/\/school-admin\/timetable-entries$/);
+    expect(calls[0].body).toMatchObject({ note: "Room: 12" });
+  });
+});

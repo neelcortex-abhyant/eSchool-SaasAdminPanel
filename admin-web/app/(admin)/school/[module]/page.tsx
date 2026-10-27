@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import SchoolModulePage from "@/components/school-admin/SchoolModulePage";
+import { extraPageFor } from "@/components/extras/registry";
 
 /** Old menu slugs now served by dedicated pages. */
 const MOVED: Record<string, string> = {
@@ -46,5 +47,5 @@ export default function SchoolModuleRoute() {
   }, [moved, router]);
 
   if (moved) return null;
-  return <SchoolModulePage moduleKey={params.module} />;
+  return extraPageFor(params.module) ?? <SchoolModulePage moduleKey={params.module} />;
 }

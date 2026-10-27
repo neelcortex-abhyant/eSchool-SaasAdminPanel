@@ -8,7 +8,6 @@ import { useToast } from "@/components/academics/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { DAY_LABEL, DeletePeriod, TIMETABLE_LIVE_NOTE, TIMETABLE_TABS, TimetableForm, type FormSeed } from "@/components/teaching/timetable";
-import { isLive } from "@/lib/teaching/mode";
 import { timetableService } from "@/lib/teaching/timetable";
 import { WEEK_DAYS, type TimetableEntry, type WeekDay } from "@/lib/teaching/types";
 import { IconCalendar } from "@/lib/icons";
@@ -63,7 +62,7 @@ function ListBody({ form, setForm }: { form: FormSeed | null; setForm: (seed: Fo
     { key: "class", label: "Class", render: (row) => `${row.class_name} ${row.section_name}`.trim() },
     { key: "subject", label: "Subject", render: (row) => row.subject_name },
     { key: "teacher", label: "Teacher", render: (row) => row.teacher_name },
-    ...(isLive("timetable") ? [] : [{ key: "room", label: "Classroom", render: (row: TimetableEntry) => row.room ?? "—" }]),
+    { key: "room", label: "Classroom", render: (row: TimetableEntry) => row.room ?? "—" },
   ];
 
   return (

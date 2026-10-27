@@ -11,8 +11,9 @@ import { useSubjects } from "@/components/teaching/Pickers";
 import { bankQuestions, removeBankQuestion, saveBankQuestion } from "@/lib/teaching/exams";
 import type { BankQuestion } from "@/lib/teaching/types";
 import { IconExam } from "@/lib/icons";
+import { errorMessage } from "@/lib/academics";
 
-const BANK_NOTE = "The question bank is kept in this browser until the server has a question bank. Use “Add from question bank” on an exam to copy questions into it; copied questions are saved with the exam.";
+const BANK_NOTE = "Use “Add from question bank” on an exam to copy questions into it; copied questions are saved with the exam.";
 
 export default function QuestionBankPage() {
   const [editing, setEditing] = useState<BankQuestion | "new" | null>(null);
@@ -44,7 +45,7 @@ function BankBody({ editing, setEditing }: { editing: BankQuestion | "new" | nul
   const [deleting, setDeleting] = useState<BankQuestion | null>(null);
   const subjects = useSubjects("");
   const subjectNames = [...new Set(subjects.options.map((row) => row.name))].sort();
-  const list = useOptions(useCallback(() => Promise.resolve(bankQuestions(search, subject)), [search, subject]));
+  const list = useOptions(useCallback(() => bankQuestions(search, subject), [search, subject]));
 
   function openForm(value: BankQuestion | "new") {
     setFormSubject(value === "new" ? subject : value.subject_name ?? "");
@@ -107,7 +108,7 @@ function BankBody({ editing, setEditing }: { editing: BankQuestion | "new" | nul
           }
           onClose={() => setEditing(null)}
           onSubmit={async (input) => {
-            saveBankQuestion({ ...input, subject_name: formSubject || null }, editing === "new" ? undefined : editing.id);
+            await saveBankQuestion({ ...input, subject_name: formSubject || null }, editing === "new" ? undefined : editing.id);
             setEditing(null);
             toast("success", editing === "new" ? "Question added to the bank." : "Question updated.");
             void list.reload();
@@ -122,11 +123,16 @@ function BankBody({ editing, setEditing }: { editing: BankQuestion | "new" | nul
           tone="danger"
           pending={false}
           onCancel={() => setDeleting(null)}
-          onConfirm={() => {
-            removeBankQuestion(deleting.id);
-            setDeleting(null);
-            toast("success", "Question removed from the bank.");
-            void list.reload();
+          onConfirm={async () => {
+            try {
+              await removeBankQuestion(deleting.id);
+              toast("success", "Question removed from the bank.");
+              void list.reload();
+            } catch (caught) {
+              toast("error", errorMessage(caught, "Unable to delete the question."));
+            } finally {
+              setDeleting(null);
+            }
           }}
         />
       ) : null}

@@ -275,7 +275,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       { href: "/school/student-reports", label: "Student reports" },
       { href: "/school/teacher-reports", label: "Teacher reports" },
       { href: "/school/staff-reports", label: "Staff reports" },
-      { href: "/school/offline-exams", label: "Exam reports" },
+      { href: "/school/exam-reports", label: "Exam reports" },
       { href: "/school/expense-report", label: "Expense report" },
       { href: "/school/income-report", label: "Income report" },
       { href: "/school/financial-summary-report", label: "Financial summary" },

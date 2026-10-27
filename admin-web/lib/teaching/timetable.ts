@@ -3,7 +3,8 @@
  * Live: /school-admin/timetable-entries (list, create, get, PATCH, DELETE),
  *       /school-admin/timetable/weekly, /school-admin/teachers/{id}/timetable[/daily|/weekly],
  *       /school-admin/teachers/{id}/availability. Overlaps come back as 409 sentences.
- * The live backend has no classroom field; `room` is sample data only.
+ * The live backend has no classroom field, so the room is kept on the first line of the
+ * period's note ("Room: 12") and read back from there.
  */
 import { allPages, get, hhmm, num, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
 import { isLive } from "@/lib/teaching/mode";
@@ -32,6 +33,25 @@ export interface TimetableService {
 
 const BASE = "/school-admin";
 
+const ROOM_LINE = /^Room: (.+)$/;
+
+/** The note the server stores: "Room: …" on the first line, then the admin's note. */
+export function noteWithRoom(room: string | null | undefined, note: string | null | undefined): string | null {
+  const r = room?.trim();
+  const n = note?.trim();
+  if (!r) return n || null;
+  return n ? `Room: ${r}\n${n}` : `Room: ${r}`;
+}
+
+/** Splits a stored note back into the room and the admin's note. */
+export function roomFromNote(stored: string | null): { room: string | null; note: string | null } {
+  if (!stored) return { room: null, note: null };
+  const [first, ...rest] = stored.split("\n");
+  const match = ROOM_LINE.exec(first.trim());
+  if (!match) return { room: null, note: stored };
+  return { room: match[1].trim(), note: rest.join("\n").trim() || null };
+}
+
 function entryOf(row: Raw): TimetableEntry {
   return {
     id: num(row.id ?? row.entry_id),
@@ -47,8 +67,7 @@ function entryOf(row: Raw): TimetableEntry {
     day: str(row.day, "monday") as WeekDay,
     start_time: hhmm(row.start_time),
     end_time: hhmm(row.end_time),
-    note: optStr(row.note),
-    room: null,
+    ...roomFromNote(optStr(row.note)),
   };
 }
 
@@ -70,7 +89,7 @@ function body(input: TimetableInput) {
     day: input.day,
     start_time: input.start_time,
     end_time: input.end_time,
-    note: input.note?.trim() || null,
+    note: noteWithRoom(input.room, input.note),
   };
 }
 

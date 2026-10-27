@@ -9,6 +9,7 @@
  * sentences are shown as is. Correct answers only come back on these admin routes.
  * The question bank shared across exams is sample data only.
  */
+import { academicsService, listAll } from "@/lib/academics";
 import { AcademicApiError } from "@/lib/academics/errors";
 import { allPages, get, num, optNum, optStr, pageOf, send, settleLimited, str, type Raw } from "@/lib/teaching/client";
 import { isLive } from "@/lib/teaching/mode";
@@ -376,15 +377,54 @@ export function examService(): ExamService {
   return isLive("exams") ? liveExams : mockExams;
 }
 
-// ---------- question bank (sample data in both modes) ----------
+// ---------- question bank ----------
+// Live: /school-admin/question-bank (GET ?q=, POST, PATCH/DELETE /{id}); the server files a
+// question under a subject id. Sample: kept in this browser by subject name.
 
-export function bankQuestions(q = "", subject = ""): BankQuestion[] {
+async function subjectsByName() {
+  const subjects = await listAll((page) => academicsService("subjects").listSubjects({ page, pageSize: 50 }));
+  return { byId: new Map(subjects.map((row) => [row.id, row.name])), byName: new Map(subjects.map((row) => [row.name, row.id])) };
+}
+
+function bankOf(row: Raw, names: Map<number, string>): BankQuestion {
+  const subjectId = optNum(row.subject_id);
+  const choices = Array.isArray(row.choices) ? (row.choices as Raw[]) : [];
+  return {
+    id: num(row.id),
+    question_text: str(row.question_text),
+    topic: optStr(row.topic),
+    marks: num(row.marks),
+    sort_order: 0,
+    subject_name: subjectId ? names.get(subjectId) ?? `Subject #${subjectId}` : null,
+    choices: [...choices]
+      .sort((a, b) => num(a.sort_order) - num(b.sort_order))
+      .map((choice) => ({ id: num(choice.id), choice_text: str(choice.choice_text), is_correct: choice.is_correct === true || num(choice.is_correct) === 1 })),
+  };
+}
+
+export async function bankQuestions(q = "", subject = ""): Promise<BankQuestion[]> {
+  if (isLive("exams")) {
+    const [rows, subjects] = await Promise.all([allPages("/school-admin/question-bank", { q: q.trim() || undefined }, "Unable to load the question bank."), subjectsByName()]);
+    return rows.map((row) => bankOf(row, subjects.byId)).filter((row) => !subject || row.subject_name === subject);
+  }
   return (db().bank as BankQuestion[]).filter((row) => matches(q, row.question_text, row.topic) && (!subject || row.subject_name === subject));
 }
 
-export function saveBankQuestion(input: QuestionInput & { subject_name: string | null }, id?: number): BankQuestion {
+export async function saveBankQuestion(input: QuestionInput & { subject_name: string | null }, id?: number): Promise<BankQuestion> {
   const errors = questionProblems(input);
   if (Object.keys(errors).length) invalid(errors);
+  if (isLive("exams")) {
+    const subjects = await subjectsByName();
+    const body = {
+      subject_id: input.subject_name ? subjects.byName.get(input.subject_name) ?? null : null,
+      question_text: input.question_text.trim(),
+      topic: input.topic?.trim() || null,
+      marks: input.marks,
+      choices: input.choices.filter((c) => c.choice_text.trim()).map((c) => ({ choice_text: c.choice_text.trim(), is_correct: c.is_correct })),
+    };
+    const row = id ? await send("PATCH", `/school-admin/question-bank/${id}`, body, "Unable to save the question.") : await send("POST", "/school-admin/question-bank", body, "Unable to add the question.");
+    return bankOf(row, subjects.byId);
+  }
   const bank = db().bank as BankQuestion[];
   const questionId = id ?? nextQuestionId();
   const row: BankQuestion = { ...input, id: questionId, choices: input.choices.filter((c) => c.choice_text.trim()).map((c, i) => ({ ...c, id: questionId * 10 + i })) };
@@ -395,7 +435,11 @@ export function saveBankQuestion(input: QuestionInput & { subject_name: string |
   return row;
 }
 
-export function removeBankQuestion(id: number): void {
+export async function removeBankQuestion(id: number): Promise<void> {
+  if (isLive("exams")) {
+    await send("DELETE", `/school-admin/question-bank/${id}`, undefined, "Unable to delete the question.");
+    return;
+  }
   db().bank = (db().bank as BankQuestion[]).filter((row) => row.id !== id);
   save();
 }

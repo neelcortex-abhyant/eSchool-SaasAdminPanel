@@ -57,7 +57,7 @@ function CardBody({ studentId }: { studentId: number }) {
             </option>
           ))}
         </select>
-        <button className="btn-pill btn-pill-green" type="button" onClick={() => window.print()} disabled={!card.exams.length}>
+        <button className="btn-pill btn-pill-green" type="button" onClick={() => window.print()}>
           Print or save as PDF
         </button>
       </div>

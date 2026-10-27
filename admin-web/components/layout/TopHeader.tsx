@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, clearSession } from "@/lib/api";
 import { IconBell, IconCalendar, IconChevron, IconGlobe, IconLogoMark, IconMenu } from "@/lib/icons";
 import { LANGUAGE_KEY, THEME_KEY, readWorkspace, writeWorkspace } from "@/lib/workspace";
+import { loadHeaderNotices, noticeDate, unreadCount, type HeaderNotice } from "@/lib/headerNotices";
 
 const SEEN_NOTICES_KEY = "header-notices-seen";
-
-type HeaderNotice = {
-  id: string;
-  title: string;
-  detail: string;
-};
 
 type HeaderUser = {
   first_name?: string;
@@ -65,7 +60,7 @@ export default function TopHeader({
     : [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.email || "Admin";
   const workspace = sessions.find((item) => String(item.id) === workspaceId);
   const languageLabel = (languages.find((item) => item.code === language)?.code || language || "en").toUpperCase();
-  const unseenNotices = notices.some((item) => !seenNotices.includes(item.id));
+  const unread = unreadCount(notices, seenNotices);
   const noticeHref = user?.role === "school_admin" ? "/school/announcement" : "/announcements";
   const initials = displayName
     .split(/\s+/)
@@ -125,49 +120,34 @@ export default function TopHeader({
     };
   }, [schoolHeader]);
 
-  useEffect(() => {
-    const role = user?.role;
-    if (role !== "super_admin" && role !== "school_admin") return;
-    let cancelled = false;
-    async function loadNotices() {
-      if (role === "school_admin") {
-        // The school's own latest announcements (eight), not the whole table.
-        const result = await api<{ items?: { id: number; title?: string; description?: string | null }[] }>("/school-admin/academics/notices?page=1&page_size=8");
-        if (cancelled) return;
-        if (!result.ok || !Array.isArray(result.data.items)) {
-          setNotices([]);
-          setNoticeError(result.status === 401 ? "Sign in again to view notifications." : "Notifications could not be loaded.");
-          return;
-        }
-        setNoticeError("");
-        setNotices(result.data.items.map((row) => ({
-          id: `announcement-${row.id}`,
-          title: row.title || "Announcement",
-          detail: row.description || "",
-        })));
-        return;
-      }
-      const result = await api<{ items?: { id: number; title?: string; body?: string | null }[] }>(
-        "/super-admin/notifications?status=1&page=1&page_size=8",
-      );
-      if (cancelled) return;
-      if (!result.ok) {
-        setNotices([]);
-        setNoticeError(result.status === 401 || result.status === 403 ? "Sign in again to view notifications." : "Notifications could not be loaded.");
-        return;
-      }
-      setNoticeError("");
-      setNotices((result.data.items || []).map((row) => ({
-        id: `notification-${row.id}`,
-        title: row.title || "Notification",
-        detail: row.body || "",
-      })));
+  const role = user?.role;
+  const loadNotices = useCallback(async (): Promise<HeaderNotice[]> => {
+    if (role !== "super_admin" && role !== "school_admin") return [];
+    try {
+      const result = await loadHeaderNotices(role);
+      setNotices(result.notices);
+      setNoticeError(result.error);
+      return result.notices;
+    } catch {
+      setNoticeError("Notifications could not be loaded.");
+      return [];
     }
+  }, [role]);
+
+  // On page load, then every two minutes and whenever the tab comes back into view.
+  useEffect(() => {
+    if (role !== "super_admin" && role !== "school_admin") return;
     void loadNotices();
-    return () => {
-      cancelled = true;
+    const timer = window.setInterval(() => void loadNotices(), 120_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadNotices();
     };
-  }, [user?.role]);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [role, loadNotices]);
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -187,13 +167,25 @@ export default function TopHeader({
     setWorkspaceOpen(false);
   }
 
+  function markSeen(items: HeaderNotice[]) {
+    setSeenNotices((current) => {
+      const next = Array.from(new Set([...current, ...items.map((item) => item.id)]));
+      try {
+        window.localStorage.setItem(SEEN_NOTICES_KEY, JSON.stringify(next.slice(-200)));
+      } catch {
+        // Private browsing: the count resets on reload, which is harmless.
+      }
+      return next;
+    });
+  }
+
   function openNotices() {
     const nextOpen = !noticeOpen;
     setNoticeOpen(nextOpen);
     if (!nextOpen) return;
-    const next = Array.from(new Set([...seenNotices, ...notices.map((item) => item.id)]));
-    setSeenNotices(next);
-    window.localStorage.setItem(SEEN_NOTICES_KEY, JSON.stringify(next));
+    markSeen(notices);
+    // Refresh so a just-posted announcement shows up, and count it as seen too.
+    void loadNotices().then(markSeen);
   }
 
   function chooseLanguage(code: string) {
@@ -299,18 +291,19 @@ export default function TopHeader({
         </div>
 
         <div className="language-switch" ref={noticeRef}>
-          <button type="button" className="icon-btn" aria-label="Notifications" aria-expanded={noticeOpen} onClick={openNotices}>
+          <button type="button" className="icon-btn" aria-label={unread ? `Notifications, ${unread} new` : "Notifications"} aria-expanded={noticeOpen} onClick={openNotices}>
             <IconBell width={18} height={18} />
-            {unseenNotices ? <span className="badge-dot" /> : null}
+            {unread ? <span className="badge-count">{unread > 9 ? "9+" : unread}</span> : null}
           </button>
           {noticeOpen ? (
             <div className="dropdown-panel notice-panel" role="menu">
               {noticeError ? <p className="dropdown-item">{noticeError}</p> : null}
               {!noticeError && notices.length === 0 ? <p className="dropdown-item">No notifications.</p> : null}
               {notices.map((item) => (
-                <Link key={item.id} href={noticeHref} className="dropdown-item" onClick={() => setNoticeOpen(false)}>
+                <Link key={item.id} href={item.href} className="dropdown-item notice-item" onClick={() => setNoticeOpen(false)}>
                   <strong>{item.title}</strong>
-                  {item.detail ? <small>{item.detail}</small> : null}
+                  {item.detail ? <small className="notice-detail">{item.detail}</small> : null}
+                  {item.date ? <small className="muted">{noticeDate(item.date)}</small> : null}
                 </Link>
               ))}
               <Link href={noticeHref} className="dropdown-item" onClick={() => setNoticeOpen(false)}>
