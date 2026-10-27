@@ -5,12 +5,14 @@ from __future__ import annotations
 import re
 import secrets
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.tables import School
 
 # Verified in FastAPI (mobile_auth / admin_data / school_is_ready):
@@ -20,6 +22,28 @@ STATUS_ACTIVE = 1
 STATUS_INACTIVE = 0
 INSTALLED_YES = 1
 INSTALLED_NO = 0
+
+DOMAIN_TYPE_DEFAULT = "default"
+DOMAIN_TYPE_CUSTOM = "custom"
+DOMAIN_TYPES = frozenset({DOMAIN_TYPE_DEFAULT, DOMAIN_TYPE_CUSTOM})
+
+# Subdomain label for domain_type=default (prefix only; stored domain is full host).
+_SUBDOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_HOSTNAME_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_RESERVED_SUBDOMAINS = frozenset(
+    {
+        "www",
+        "api",
+        "admin",
+        "app",
+        "mail",
+        "ftp",
+        "localhost",
+        "staging",
+        "static",
+        "cdn",
+    }
+)
 
 
 class SchoolServiceError(Exception):
@@ -41,6 +65,118 @@ def normalize_support_email(value: str | None) -> str:
         return str(_EMAIL.validate_python(text))
     except ValidationError as exc:
         raise SchoolServiceError("Invalid support email", status_code=422) from exc
+
+
+def normalize_school_website(value: str | None) -> str:
+    """Blank stays blank. Non-blank must be http(s) URL with a hostname."""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if len(text) > 512:
+        raise SchoolServiceError("school_website must be at most 512 characters", status_code=422)
+    parsed = urlparse(text)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or not parsed.hostname:
+        raise SchoolServiceError(
+            "school_website must be a valid http or https URL",
+            status_code=422,
+        )
+    if parsed.username or parsed.password:
+        raise SchoolServiceError("school_website must not include credentials", status_code=422)
+    return text
+
+
+def normalize_domain_type(value: str | None) -> str | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    cleaned = str(value).strip().lower()
+    if cleaned not in DOMAIN_TYPES:
+        raise SchoolServiceError(
+            "domain_type must be 'default' or 'custom'",
+            status_code=422,
+        )
+    return cleaned
+
+
+def _normalize_hostname(value: str) -> str:
+    host = (value or "").strip().lower().rstrip(".")
+    if "://" in host or "/" in host or "?" in host or "#" in host or "@" in host or " " in host:
+        raise SchoolServiceError("domain must be a hostname without scheme or path", status_code=422)
+    if not host or len(host) > 253:
+        raise SchoolServiceError("domain is invalid", status_code=422)
+    if host[0] == "." or ".." in host:
+        raise SchoolServiceError("domain is invalid", status_code=422)
+    labels = host.split(".")
+    if len(labels) < 2:
+        raise SchoolServiceError("domain must be a fully-qualified hostname", status_code=422)
+    for label in labels:
+        if not _HOSTNAME_LABEL_RE.match(label):
+            raise SchoolServiceError("domain contains an invalid hostname label", status_code=422)
+    return host
+
+
+def _normalize_subdomain_prefix(value: str) -> str:
+    prefix = (value or "").strip().lower().rstrip(".")
+    if not prefix:
+        raise SchoolServiceError("domain subdomain prefix is required for default domains", status_code=422)
+    if "." in prefix:
+        raise SchoolServiceError(
+            "default domain expects a subdomain prefix only (not a full hostname)",
+            status_code=422,
+        )
+    if not _SUBDOMAIN_RE.match(prefix):
+        raise SchoolServiceError(
+            "domain subdomain prefix may only contain lowercase letters, digits, and hyphens",
+            status_code=422,
+        )
+    if prefix in _RESERVED_SUBDOMAINS:
+        raise SchoolServiceError("domain subdomain prefix is reserved", status_code=422)
+    return prefix
+
+
+def resolve_school_domain(
+    *,
+    domain: str | None,
+    domain_type: str | None,
+) -> tuple[str | None, str | None, int]:
+    """Return (stored_hostname, domain_type, domain_verified).
+
+    Stored ``schools.domain`` is always a full hostname when set.
+    - domain_type=default: request ``domain`` is a subdomain prefix; constructed with
+      ``Settings.resolved_school_base_domain``; verified=1 (platform-owned).
+    - domain_type=custom: request ``domain`` is a full hostname; verified=0.
+    - domain_type omitted (legacy): store ``domain`` as-is after light normalization when
+      provided; verified=0. Does not rewrite existing clients that omit domain_type.
+    """
+    dtype = normalize_domain_type(domain_type)
+    raw = (domain or "").strip() or None
+
+    if dtype == DOMAIN_TYPE_DEFAULT:
+        if not raw:
+            raise SchoolServiceError("domain is required when domain_type is default", status_code=422)
+        prefix = _normalize_subdomain_prefix(raw)
+        base = get_settings().resolved_school_base_domain
+        if not base:
+            raise SchoolServiceError(
+                "School base domain is not configured (set SCHOOL_BASE_DOMAIN or APP_URL)",
+                status_code=500,
+            )
+        return f"{prefix}.{base}", DOMAIN_TYPE_DEFAULT, 1
+
+    if dtype == DOMAIN_TYPE_CUSTOM:
+        if not raw:
+            raise SchoolServiceError("domain is required when domain_type is custom", status_code=422)
+        return _normalize_hostname(raw), DOMAIN_TYPE_CUSTOM, 0
+
+    # Legacy / omitted domain_type: preserve prior semantics (store provided string).
+    if raw is None:
+        return None, None, 0
+    # Prefer FQDN validation when the value looks like a hostname with a dot.
+    if "." in raw and "://" not in raw and "/" not in raw:
+        return _normalize_hostname(raw), None, 0
+    cleaned = raw.lower().rstrip(".")
+    if not cleaned or len(cleaned) > 255:
+        raise SchoolServiceError("domain is invalid", status_code=422)
+    return cleaned, None, 0
 
 
 def _utcnow() -> datetime:
@@ -86,6 +222,20 @@ def _ensure_email_available(db: Session, email: str, *, exclude_id: int | None =
         raise SchoolServiceError("School email already in use", status_code=409)
 
 
+def _ensure_domain_available(db: Session, domain: str | None, *, exclude_id: int | None = None) -> None:
+    if not domain:
+        return
+    query = select(School.id).where(
+        func.lower(func.btrim(School.domain)) == domain.lower(),
+        School.domain.is_not(None),
+        func.btrim(School.domain) != "",
+    )
+    if exclude_id is not None:
+        query = query.where(School.id != exclude_id)
+    if db.scalar(query) is not None:
+        raise SchoolServiceError("School domain already in use", status_code=409)
+
+
 def _commit_school(db: Session) -> None:
     """Commit, mapping the non-blank email unique index to the same 409 as the pre-check."""
     try:
@@ -95,7 +245,9 @@ def _commit_school(db: Session) -> None:
         message = str(getattr(exc, "orig", exc)).lower()
         if "ix_schools_support_email_nonblank" in message:
             raise SchoolServiceError("School email already in use", status_code=409) from exc
-        if "ix_schools_code" in message:
+        if "ix_schools_domain_nonblank" in message:
+            raise SchoolServiceError("School domain already in use", status_code=409) from exc
+        if "ix_schools_code" in message or "schools_code_key" in message:
             raise SchoolServiceError("School code already in use", status_code=409) from exc
         raise
 
@@ -118,6 +270,8 @@ def create_school(
     logo: str = "",
     code: str | None = None,
     domain: str | None = None,
+    domain_type: str | None = None,
+    school_website: str = "",
     status: int = STATUS_ACTIVE,
     installed: int = INSTALLED_YES,
     commit: bool = True,
@@ -134,6 +288,11 @@ def create_school(
         normalized = _generate_code(db, name)
     email = normalize_support_email(support_email)
     _ensure_email_available(db, email)
+    website = normalize_school_website(school_website)
+    stored_domain, stored_type, domain_verified = resolve_school_domain(
+        domain=domain, domain_type=domain_type
+    )
+    _ensure_domain_available(db, stored_domain)
 
     school = School(
         name=name.strip(),
@@ -143,7 +302,10 @@ def create_school(
         tagline=tagline or "",
         logo=logo or "",
         code=normalized,
-        domain=domain.strip() if domain else None,
+        domain=stored_domain,
+        domain_type=stored_type,
+        domain_verified=domain_verified,
+        school_website=website,
         status=status,
         installed=installed,
         admin_id=None,
@@ -240,6 +402,10 @@ def update_school(
     logo: str | None = None,
     code: str | None = None,
     domain: str | None = None,
+    domain_type: str | None = None,
+    school_website: str | None = None,
+    domain_set: bool = False,
+    domain_type_set: bool = False,
 ) -> School:
     school = get_school(db, school_id)
     if name is not None:
@@ -260,8 +426,35 @@ def update_school(
         normalized = _normalize_code(code)
         _ensure_code_available(db, normalized, exclude_id=school.id)
         school.code = normalized
-    if domain is not None:
-        school.domain = domain.strip() or None
+    if school_website is not None:
+        school.school_website = normalize_school_website(school_website)
+
+    if domain_set or domain_type_set:
+        clearing_domain = domain_set and (domain is None or str(domain).strip() == "")
+        if clearing_domain:
+            school.domain = None
+            school.domain_type = (
+                normalize_domain_type(domain_type) if domain_type_set else None
+            )
+            school.domain_verified = 0
+        elif domain_type_set and not domain_set:
+            # Changing type alone cannot safely reinterpret a stored FQDN as a prefix.
+            raise SchoolServiceError(
+                "domain is required when changing domain_type",
+                status_code=422,
+            )
+        else:
+            # domain_set with a non-empty value; domain_type may be omitted (keep current).
+            resolve_type = domain_type if domain_type_set else school.domain_type
+            stored_domain, stored_type, domain_verified = resolve_school_domain(
+                domain=domain,
+                domain_type=resolve_type,
+            )
+            _ensure_domain_available(db, stored_domain, exclude_id=school.id)
+            school.domain = stored_domain
+            school.domain_type = stored_type
+            school.domain_verified = domain_verified
+
     school.updated_at = _utcnow()
     _commit_school(db)
     db.refresh(school)

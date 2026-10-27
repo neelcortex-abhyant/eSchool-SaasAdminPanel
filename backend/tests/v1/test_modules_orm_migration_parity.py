@@ -25,6 +25,7 @@ from app.models.tables import (
     OnlineAssessmentAttempt,
     OnlineAssessmentChoice,
     OnlineAssessmentQuestion,
+    School,
     StudyMaterial,
 )
 
@@ -105,7 +106,7 @@ def test_module6_server_defaults_match_0036():
     assert _server_default_text(OfflineExamResult, "passed") == "0"
 
 
-def test_modules_revision_chain_0032_through_0037_is_linear():
+def test_modules_revision_chain_0032_through_0038_is_linear():
     cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     expected = [
@@ -115,9 +116,46 @@ def test_modules_revision_chain_0032_through_0037_is_linear():
         ("20261023_0035", "20261023_0034"),
         ("20261023_0036", "20261023_0035"),
         ("20261024_0037", "20261023_0036"),
+        ("20261025_0038", "20261024_0037"),
     ]
     for revision, parent in expected:
         rev = script.get_revision(revision)
         assert rev is not None, revision
         assert rev.down_revision == parent, (revision, rev.down_revision)
-    assert "20261024_0037" in script.get_heads()
+    assert script.get_heads() == ["20261025_0038"]
+
+
+def test_school_domain_columns_match_migration_0038():
+    """ORM expects schools.domain_type / domain_verified / school_website (Alembic 0038).
+
+    Login loads School via assert_school_admin_login_allowed; missing DB columns → 500.
+    """
+    cols = School.__table__.c
+    assert "domain_type" in cols
+    assert cols.domain_type.type.length == 16
+    assert cols.domain_type.nullable is True
+
+    assert "domain_verified" in cols
+    assert _server_default_text(School, "domain_verified") == "0"
+    assert cols.domain_verified.nullable is False
+
+    assert "school_website" in cols
+    assert cols.school_website.type.length == 512
+    assert _server_default_text(School, "school_website") == ""
+    assert cols.school_website.nullable is False
+
+    assert "ix_schools_domain_nonblank" in _index_names(School)
+
+    cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+    script = ScriptDirectory.from_config(cfg)
+    rev = script.get_revision("20261025_0038")
+    assert rev is not None
+    assert rev.down_revision == "20261024_0037"
+    # Migration module must add the same three columns (source inspection).
+    path = Path(rev.path)
+    text = path.read_text(encoding="utf-8")
+    assert 'add_column(\n        "schools"' in text or 'add_column("schools"' in text or "schools" in text
+    assert "school_website" in text and "domain_type" in text and "domain_verified" in text
+    assert "ix_schools_domain_nonblank" in text
+    assert "op.drop_table" not in text
+    assert "DROP TABLE" not in text.upper()

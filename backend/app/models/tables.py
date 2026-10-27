@@ -88,7 +88,14 @@ class School(Base, TimestampMixin):
     code: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True, index=True)
     # Legacy MySQL physical DB name — kept for import mapping only; not used for connections.
     database_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Full application hostname (e.g. alpha.eschool-saas.wrteam.me or custom.example.com).
     domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # default | custom | NULL (legacy rows / omitted on create).
+    domain_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    # Custom domains start unverified (0). Platform default subdomains may be 1.
+    domain_verified: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Public marketing / school website URL (not the SaaS hostname).
+    school_website: Mapped[str] = mapped_column(String(512), default="", server_default="")
     installed: Mapped[int] = mapped_column(Integer, default=1)
     # Idempotent provisioning marker (shared Neon; not a physical DB create).
     provisioned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -102,6 +109,13 @@ Index(
     func.lower(func.btrim(School.support_email)),
     unique=True,
     postgresql_where=text("btrim(support_email) <> ''"),
+)
+# Non-blank domains unique case-insensitively (full hostname).
+Index(
+    "ix_schools_domain_nonblank",
+    func.lower(func.btrim(School.domain)),
+    unique=True,
+    postgresql_where=text("domain IS NOT NULL AND btrim(domain) <> ''"),
 )
 
 

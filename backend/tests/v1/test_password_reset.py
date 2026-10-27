@@ -371,3 +371,84 @@ def test_resend_invite_requires_super_admin(v1_client, outbox, school_admin):
     )
     assert other.status_code == 404
     assert outbox.messages == []
+
+
+# --- School Admin change password (/api/v1/auth/change-password) ---
+
+
+def _change(client, headers, current: str, new: str, confirm: str | None = None):
+    return client.post(
+        "/api/v1/auth/change-password",
+        headers=headers,
+        json={
+            "current_password": current,
+            "new_password": new,
+            "confirm_password": confirm if confirm is not None else new,
+        },
+    )
+
+
+def test_school_admin_change_password_success_and_login(v1_client, v1_db, school_admin):
+    login = _login(v1_client, school_admin["email"], "oldpass123")
+    assert login.status_code == 200
+    headers = _auth_header(login.json()["access_token"])
+    other = _auth_header(_login(v1_client, school_admin["email"], "oldpass123").json()["access_token"])
+
+    res = _change(v1_client, headers, "oldpass123", "brandnew99")
+    assert res.status_code == 200, res.text
+    assert res.json() == {"message": "Password changed."}
+
+    # Current session remains usable; other sessions are revoked (existing strategy).
+    assert v1_client.get("/api/v1/auth/me", headers=headers).status_code == 200
+    assert v1_client.get("/api/v1/auth/me", headers=other).status_code == 401
+    assert _login(v1_client, school_admin["email"], "oldpass123").status_code == 401
+    assert _login(v1_client, school_admin["email"], "brandnew99").status_code == 200
+
+    rows = _audit(v1_db, "auth.password_change")
+    assert rows and rows[-1].entity_id == school_admin["id"]
+    assert rows[-1].school_id == school_admin["school_id"]
+    for secret in ("oldpass123", "brandnew99"):
+        assert secret not in (rows[-1].metadata_json or "")
+
+
+def test_school_admin_change_password_rejects_wrong_current_and_unchanged(v1_client, school_admin):
+    headers = _auth_header(_login(v1_client, school_admin["email"], "oldpass123").json()["access_token"])
+
+    wrong = _change(v1_client, headers, "not-the-password", "brandnew99")
+    assert wrong.status_code == 400
+    assert wrong.json()["detail"] == "Current password is incorrect."
+
+    same = _change(v1_client, headers, "oldpass123", "oldpass123")
+    assert same.status_code == 422
+    assert same.json()["detail"] == "Choose a different password."
+
+    mismatch = _change(v1_client, headers, "oldpass123", "brandnew99", "otherpass9")
+    assert mismatch.status_code == 422
+
+    short = _change(v1_client, headers, "oldpass123", "short")
+    assert short.status_code == 422
+
+    # Password unchanged after failed attempts.
+    assert _login(v1_client, school_admin["email"], "oldpass123").status_code == 200
+
+
+def test_change_password_requires_authentication(v1_client, school_admin):
+    res = v1_client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "oldpass123",
+            "new_password": "brandnew99",
+            "confirm_password": "brandnew99",
+        },
+    )
+    assert res.status_code == 401
+
+
+def test_forgot_still_generic_when_mail_send_fails(v1_client, v1_db, outbox, school_admin):
+    outbox.accept = False
+    res = _forgot(v1_client, school_admin["email"])
+    assert res.status_code == 202
+    assert res.json() == FORGOT_MESSAGE
+    # Token was committed before send; plaintext never appears in the API body.
+    assert _tokens(v1_db)
+    assert outbox.token() not in res.text
