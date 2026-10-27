@@ -15,3 +15,18 @@ export async function studentRef(studentId: number): Promise<StudentRef & { clas
     session_year_id: student.session_year_id,
   };
 }
+
+type StudentDetails = Awaited<ReturnType<typeof studentRef>>;
+
+/** Details for several students, fetched together; students that can't be loaded are left out. */
+export async function studentRefs(ids: number[]): Promise<Map<number, StudentDetails>> {
+  const unique = [...new Set(ids.filter((id) => id > 0))];
+  const found = new Map<number, StudentDetails>();
+  for (let index = 0; index < unique.length; index += 8) {
+    const batch = await Promise.allSettled(unique.slice(index, index + 8).map((id) => studentRef(id)));
+    batch.forEach((result) => {
+      if (result.status === "fulfilled") found.set(result.value.student_id, result.value);
+    });
+  }
+  return found;
+}

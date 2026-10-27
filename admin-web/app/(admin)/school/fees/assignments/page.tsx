@@ -11,6 +11,7 @@ import { useFormErrors, useOptions } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { ConcessionForm, FEE_TABS, StudentPicker, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { isOpsLive } from "@/lib/ops/mode";
 import { Chip, TeachingPage } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
 import type { StudentRow } from "@/lib/people";
@@ -114,9 +115,11 @@ function AssignmentsBody() {
           emptyText="No concessions yet."
           actions={(row) => (
             <>
-              <button className="link-btn" type="button" onClick={() => setEditing(row)}>
-                Edit
-              </button>
+              {isOpsLive("fees") ? null : (
+                <button className="link-btn" type="button" onClick={() => setEditing(row)}>
+                  Edit
+                </button>
+              )}
               <button className="link-btn danger" type="button" onClick={() => setRemoving({ kind: "concession", row })}>
                 Remove
               </button>

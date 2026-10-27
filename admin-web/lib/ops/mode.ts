@@ -3,11 +3,9 @@
  *
  * NEXT_PUBLIC_OPS_API_MODE:
  *   "mock" (default)  every module uses sample data kept in this browser
- *   "live"            every module calls the backend routes in
- *                     backend/docs/FEES_TRANSPORT_GRADING_API_CONTRACT.md
+ *   "live"            every module calls the school-admin routes on the server (grading
+ *                     scales and report cards, fees, transport; added in backend 0039)
  *   per module        e.g. "fees:live,transport:mock"
- *
- * The backend doesn't have these routes yet, so leave this on mock until they're deployed.
  */
 export type OpsModule = "grading" | "fees" | "transport";
 export type ApiSource = "live" | "mock";

@@ -12,6 +12,7 @@ import { useToast } from "@/components/academics/Toasts";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
+import { isOpsLive } from "@/lib/ops/mode";
 import { transportService } from "@/lib/ops/transport";
 import { stopProblems } from "@/lib/ops/transport-rules";
 import type { Route, Stop } from "@/lib/ops/types";
@@ -74,9 +75,11 @@ function RouteBody({ id }: { id: number }) {
           emptyText="No stops yet. Add them in the order the vehicle reaches them in the morning."
           actions={(row) => (
             <>
-              <button className="link-btn" type="button" onClick={() => setEditing(row)}>
-                Edit
-              </button>
+              {isOpsLive("transport") ? null : (
+                <button className="link-btn" type="button" onClick={() => setEditing(row)}>
+                  Edit
+                </button>
+              )}
               <button className="link-btn danger" type="button" onClick={() => setRemoving(row)}>
                 Remove
               </button>

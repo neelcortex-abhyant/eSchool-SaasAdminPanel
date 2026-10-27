@@ -8,8 +8,9 @@ import { classLabel, sessionLabel, useClassesFor, useSessions } from "@/componen
 import { Chip, type ChipTone } from "@/components/teaching/Frame";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { peopleService, type StudentRow } from "@/lib/people";
-import { feeService } from "@/lib/ops/fees";
-import { paise, splitEvenly, structureProblems } from "@/lib/ops/fees-math";
+import { feeService, structureFormProblems } from "@/lib/ops/fees";
+import { paise, splitEvenly } from "@/lib/ops/fees-math";
+import { isOpsLive } from "@/lib/ops/mode";
 import { FEE_CATEGORIES, type ConcessionKind, type FeeStructure, type FeeType, type FeeTypeInput, type InstallmentInput, type PaymentStatus } from "@/lib/ops/types";
 
 export const FEE_TABS = [
@@ -127,6 +128,7 @@ type ItemDraft = { fee_type_id: string; amount: string };
 type InstallmentDraft = { id?: number; name: string; due_date: string; amount: string };
 
 export function StructureForm({ structure, onClose, onSaved }: { structure: FeeStructure | null; onClose: () => void; onSaved: (saved: FeeStructure, created: boolean) => void }) {
+  const live = isOpsLive("fees");
   const sessions = useSessions();
   const currentSessionId = useCurrentSessionId();
   const [sessionId, setSessionId] = useState(structure ? String(structure.session_year_id) : "");
@@ -168,7 +170,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
       late_fee_per_day: Number(lateFee) || 0,
       status: (active ? 1 : 0) as 0 | 1,
     };
-    const problems = structureProblems(input);
+    const problems = structureFormProblems(input);
     if (Object.keys(problems).length) {
       errors.setFieldErrors(problems);
       errors.setFormError(problems.installments || problems.items || "");
@@ -188,7 +190,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
   const activeTypes = types.options.filter((type) => type.status === 1 || items.some((item) => item.fee_type_id === String(type.id)));
 
   return (
-    <FormModal title={structure ? "Edit fee structure" : "Add fee structure"} description="Fees for one class in one session, collected in one or more installments." error={errors.formError} saving={saving} submitLabel="Save fee structure" wide onSubmit={() => void submit()} onClose={onClose}>
+    <FormModal title={structure ? "Edit fee structure" : "Add fee structure"} description={live ? "Fees for one class in one session. Assign the structure to each student who pays it." : "Fees for one class in one session, collected in one or more installments."} error={errors.formError} saving={saving} submitLabel="Save fee structure" wide onSubmit={() => void submit()} onClose={onClose}>
       <TextField id="fs-name" label="Name" required span maxLength={120} value={name} onChange={setName} error={fe.name} placeholder="Class 5 annual fees 2026-27" />
       <SelectField
         id="fs-session"
@@ -197,6 +199,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
         placeholder="Choose a session"
         loading={sessions.loading}
         value={effectiveSession}
+        disabled={live && Boolean(structure)}
         onChange={(value) => {
           setSessionId(value);
           setClassId("");
@@ -204,7 +207,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
         options={sessions.options.map((row) => ({ value: String(row.id), label: sessionLabel(row) }))}
         error={fe.session_year_id}
       />
-      <SelectField id="fs-class" label="Class" required placeholder={effectiveSession ? "Choose a class" : "Choose a session first"} loading={classes.loading} disabled={!effectiveSession} value={classId} onChange={setClassId} options={classes.options.map((row) => ({ value: String(row.id), label: classLabel(row) }))} error={fe.class_id} />
+      <SelectField id="fs-class" label="Class" required placeholder={effectiveSession ? "Choose a class" : "Choose a session first"} loading={classes.loading} disabled={!effectiveSession || (live && Boolean(structure))} value={classId} onChange={setClassId} options={classes.options.map((row) => ({ value: String(row.id), label: classLabel(row) }))} error={fe.class_id} />
       <fieldset className="form-field field-span ops-lines">
         <legend>Fees *</legend>
         {items.map((item, index) => (
@@ -231,6 +234,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
           <strong>Total {rupees(total)}</strong>
         </div>
       </fieldset>
+      {live ? null : (
       <fieldset className="form-field field-span ops-lines">
         <legend>Installments *</legend>
         <div className="ops-line-foot">
@@ -264,7 +268,8 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
         </div>
         {fe.installments ? <p className="field-error">{fe.installments}</p> : null}
       </fieldset>
-      <TextField id="fs-late" label="Late fee per day (₹)" type="number" min="0" value={lateFee} onChange={setLateFee} error={fe.late_fee_per_day} hint="Shown on overdue installments; 0 for none." />
+      )}
+      {live ? null : <TextField id="fs-late" label="Late fee per day (₹)" type="number" min="0" value={lateFee} onChange={setLateFee} error={fe.late_fee_per_day} hint="Shown on overdue installments; 0 for none." />}
       <StatusToggle id="fs-active" checked={active} onChange={setActive} label="Active (charged to students)" />
     </FormModal>
   );

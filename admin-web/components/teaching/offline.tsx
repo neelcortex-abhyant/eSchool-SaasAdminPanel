@@ -17,7 +17,7 @@ export const OFFLINE_TABS = [
 ];
 
 export const OFFLINE_LIVE_NOTE =
-  "Connected to the school's server. The server can't edit or remove a subject paper yet, and doesn't grade results; grades come from the school's grading scale (sample data until the server has one).";
+  "Connected to the school's server. Grades on results come from the school's default grading scale.";
 
 export function PublishChip({ exam }: { exam: Pick<OfflineExam, "publish" | "results_processed_at"> }) {
   if (exam.publish) return <Chip tone="green">Results published</Chip>;

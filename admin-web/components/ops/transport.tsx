@@ -11,9 +11,8 @@ export const TRANSPORT_TABS = [
 ];
 
 /** Staff who can drive or help, with drivers and helpers (by designation) listed first. */
-export function useTransportStaff() {
-  return useOptions(
-    useCallback(async () => {
+export function useTransportStaff(enabled = true) {
+  const load = useCallback(async () => {
       const rows = [];
       for (let page = 1; page <= 10; page += 1) {
         const data = await peopleService("staff").listEmployees("staff", { page, pageSize: 50, status: "1" });
@@ -22,6 +21,6 @@ export function useTransportStaff() {
       }
       const rank = (designation: string) => (/driver/i.test(designation) ? 0 : /helper|attendant|conductor/i.test(designation) ? 1 : 2);
       return rows.sort((a, b) => rank(a.designation) - rank(b.designation) || a.name.localeCompare(b.name));
-    }, []),
-  );
+  }, []);
+  return useOptions(enabled ? load : null);
 }

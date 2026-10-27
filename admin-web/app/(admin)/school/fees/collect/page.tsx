@@ -10,6 +10,7 @@ import { useFormErrors, useOptions } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { FEE_TABS, PaymentChip, StudentPicker, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { isOpsLive } from "@/lib/ops/mode";
 import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
 import { peopleService, type StudentRow } from "@/lib/people";
 import { feeService, paymentProblems } from "@/lib/ops/fees";
@@ -107,7 +108,7 @@ function CollectBody() {
 function DuesSummary({ dues }: { dues: StudentDues }) {
   const columns: Column<DueLine & { id: number }>[] = [
     { key: "fee", label: "Fee", render: (row) => <div><strong>{row.installment_name}</strong><div className="muted">{row.structure_name}</div></div> },
-    { key: "due", label: "Due", render: (row) => (row.overdue ? <span className="field-error">{row.due_date} · overdue</span> : row.due_date) },
+    ...(isOpsLive("fees") ? [] : [{ key: "due", label: "Due", render: (row: DueLine & { id: number }) => (row.overdue ? <span className="field-error">{row.due_date} · overdue</span> : row.due_date) }]),
     { key: "amount", label: "Amount", render: (row) => rupees(row.amount) },
     { key: "concession", label: "Concession", render: (row) => (row.concession ? `− ${rupees(row.concession)}` : "—") },
     { key: "paid", label: "Paid", render: (row) => (row.paid ? rupees(row.paid) : "—") },
@@ -120,7 +121,7 @@ function DuesSummary({ dues }: { dues: StudentDues }) {
         <Stat label="Concessions" value={rupees(dues.concession)} tone="blue" />
         <Stat label="Paid" value={rupees(dues.paid)} tone="green" />
         <Stat label="Balance" value={rupees(dues.balance)} tone={dues.balance ? "amber" : "green"} />
-        <Stat label="Overdue" value={rupees(dues.overdue)} tone={dues.overdue ? "red" : "grey"} />
+        {isOpsLive("fees") ? null : <Stat label="Overdue" value={rupees(dues.overdue)} tone={dues.overdue ? "red" : "grey"} />}
       </div>
       {dues.pending ? <div className="alert alert-info">{rupees(dues.pending)} in online payments is waiting for confirmation and isn't counted as paid yet.</div> : null}
       <section className="resource-card" aria-label="Installments">
@@ -128,7 +129,7 @@ function DuesSummary({ dues }: { dues: StudentDues }) {
           columns={columns}
           rows={dues.lines.map((line) => ({ ...line, id: line.structure_id * 10000 + line.installment_id }))}
           loading={false}
-          emptyText="No fee structure applies to this student. Add one for their class, or assign fees to them."
+          emptyText={isOpsLive("fees") ? "No fees are assigned to this student. Assign a fee structure to them first." : "No fee structure applies to this student. Add one for their class, or assign fees to them."}
         />
       </section>
     </>
@@ -218,8 +219,8 @@ function PaymentPanel({ dues, onRecorded }: { dues: StudentDues; onRecorded: () 
           void submit();
         }}
       >
-        <TextField id="pay-amount" label={`Amount (₹, up to ${rupees(dues.balance)})`} type="number" min="0" required value={amount} onChange={setAmount} error={errors.fieldErrors.amount} hint={dues.overdue ? `Overdue now: ${rupees(dues.overdue)}` : nextDue ? `Next due: ${rupees(nextDue.balance)} on ${nextDue.due_date}` : undefined} />
-        <SelectField id="pay-method" label="Paid by" required value={method} onChange={(value) => setMethod(value as PaymentMethod)} options={PAYMENT_METHODS.map((item) => ({ value: item.value, label: item.label }))} error={errors.fieldErrors.method} />
+        <TextField id="pay-amount" label={`Amount (₹, up to ${rupees(dues.balance)})`} type="number" min="0" required value={amount} onChange={setAmount} error={errors.fieldErrors.amount} hint={dues.overdue ? `Overdue now: ${rupees(dues.overdue)}` : nextDue && nextDue.due_date ? `Next due: ${rupees(nextDue.balance)} on ${nextDue.due_date}` : undefined} />
+        <SelectField id="pay-method" label="Paid by" required value={method} onChange={(value) => setMethod(value as PaymentMethod)} options={PAYMENT_METHODS.filter((item) => item.manual || !isOpsLive("fees")).map((item) => ({ value: item.value, label: item.label }))} error={errors.fieldErrors.method} />
         <TextField id="pay-reference" label={method === "cheque" ? "Cheque number" : "Transaction reference"} required={["cheque", "bank_transfer", "upi"].includes(method)} maxLength={60} value={reference} onChange={setReference} error={errors.fieldErrors.reference} />
         <TextField id="pay-date" label="Paid on" type="date" required max={today()} value={paidOn} onChange={setPaidOn} error={errors.fieldErrors.paid_on} />
         <TextField id="pay-remarks" label="Remarks" span maxLength={255} value={remarks} onChange={setRemarks} />

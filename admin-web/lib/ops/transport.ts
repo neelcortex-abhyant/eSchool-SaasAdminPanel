@@ -1,17 +1,17 @@
 /**
  * School transport: vehicles (with driver and helper), routes, stops and student assignments.
- * Live (proposed, see backend/docs/FEES_TRANSPORT_GRADING_API_CONTRACT.md):
- *   /school-admin/transport/vehicles, /transport/routes, /transport/routes/{id}/stops,
- *   /transport/stops/{id}, /transport/assignments
- * Drivers and helpers are school staff (people client); the server should refuse an assignment
- * that would put more students on a route than its vehicle has seats (409).
+ * Live: /school-admin/vehicles, /transport-routes (with their stops), /transport-stops,
+ *   /student-transport-assignments. The server keeps a vehicle's name, registration, seats and
+ *   status only, and can't edit stops or student assignments (add and remove instead). It
+ *   doesn't check seats, so this client refuses an assignment that would overfill a vehicle.
+ * Sample: drivers and helpers are school staff (people client).
  */
-import { studentRef } from "@/lib/ops/lookups";
+import { studentRef, studentRefs } from "@/lib/ops/lookups";
 import { isOpsLive } from "@/lib/ops/mode";
 import { conflict, invalid, later, missing, nextId, opsDb, opsSave } from "@/lib/ops/store";
 import { capacityProblem, sameRegistration, stopProblems, vehicleProblems } from "@/lib/ops/transport-rules";
 import type { AssignmentInput, AssignmentQuery, Page, Route, RouteInput, Stop, StopInput, TransportAssignment, Vehicle, VehicleInput } from "@/lib/ops/types";
-import { get, send } from "@/lib/teaching/client";
+import { allPages, hhmm, notAvailable, num, optNum, optStr, send, str, type Raw } from "@/lib/teaching/client";
 import { peopleService } from "@/lib/people";
 
 export interface TransportService {
@@ -29,55 +29,207 @@ export interface TransportService {
   removeAssignment(id: number): Promise<void>;
 }
 
+const T = "/school-admin";
+
+/** Students per route, from the server's student transport list. */
+async function liveRiders(): Promise<Raw[]> {
+  return allPages(`${T}/student-transport-assignments`, {}, "Unable to load transport assignments.");
+}
+
+function liveVehicle(row: Raw, riders: Raw[], routes: Raw[]): Vehicle {
+  const id = num(row.id);
+  const routeIds = new Set(routes.filter((route) => optNum(route.vehicle_id) === id).map((route) => num(route.id)));
+  return {
+    id,
+    registration_no: str(row.registration_no),
+    vehicle_type: "other",
+    // The server stores a vehicle name; the form's "model" field edits it.
+    model: optStr(row.name),
+    capacity: num(row.capacity),
+    driver_id: null,
+    driver_name: null,
+    helper_id: null,
+    helper_name: null,
+    status: num(row.status ?? 1) === 0 ? 0 : 1,
+    assigned_students: riders.filter((rider) => routeIds.has(num(rider.route_id))).length,
+  };
+}
+
+function liveStop(row: Raw): Stop {
+  return {
+    id: num(row.id),
+    route_id: num(row.route_id),
+    name: str(row.name),
+    stop_order: num(row.stop_order),
+    pickup_time: optStr(row.pickup_time) ? hhmm(row.pickup_time) : null,
+    drop_time: optStr(row.drop_time) ? hhmm(row.drop_time) : null,
+    landmark: optStr(row.landmark),
+  };
+}
+
+function liveRoute(row: Raw, vehicles: Raw[], riders: Raw[]): Route {
+  const id = num(row.id);
+  const vehicleId = optNum(row.vehicle_id);
+  const vehicle = vehicles.find((item) => num(item.id) === vehicleId);
+  const stops = (Array.isArray(row.stops) ? (row.stops as Raw[]) : []).map(liveStop).sort((a, b) => a.stop_order - b.stop_order);
+  return {
+    id,
+    name: str(row.name),
+    description: optStr(row.description),
+    vehicle_id: vehicleId,
+    vehicle_label: vehicle ? `${str(vehicle.registration_no)}${optNum(vehicle.capacity) ? ` (${num(vehicle.capacity)} seats)` : ""}` : null,
+    capacity: vehicle ? optNum(vehicle.capacity) : null,
+    assigned_students: riders.filter((rider) => num(rider.route_id) === id).length,
+    status: num(row.status ?? 1) === 0 ? 0 : 1,
+    stops,
+  };
+}
+
+async function liveAll() {
+  const [vehicles, routes, riders] = await Promise.all([
+    allPages(`${T}/vehicles`, {}, "Unable to load vehicles."),
+    allPages(`${T}/transport-routes`, {}, "Unable to load routes."),
+    liveRiders(),
+  ]);
+  return { vehicles, routes, riders };
+}
+
+function vehicleBody(input: VehicleInput) {
+  const registration = input.registration_no.trim().toUpperCase();
+  return { name: input.model?.trim() || registration, registration_no: registration, capacity: input.capacity, status: input.status };
+}
+
 export const liveTransport: TransportService = {
   async vehicles() {
-    return (await get<{ items?: Vehicle[] }>("/school-admin/transport/vehicles", { page_size: 50 }, "Unable to load vehicles.")).items ?? [];
+    const { vehicles, routes, riders } = await liveAll();
+    return vehicles.map((row) => liveVehicle(row, riders, routes)).sort((a, b) => b.status - a.status || a.registration_no.localeCompare(b.registration_no));
   },
   async saveVehicle(input, id) {
-    const problems = vehicleProblems(input);
+    const { vehicles, routes, riders } = await liveAll();
+    const current = id ? vehicles.find((row) => num(row.id) === id) : null;
+    const problems = vehicleProblems(input, current ? liveVehicle(current, riders, routes).assigned_students : 0);
     if (Object.keys(problems).length) invalid(problems);
-    return id ? send<Vehicle>("PATCH", `/school-admin/transport/vehicles/${id}`, input, "Unable to save the vehicle.") : send<Vehicle>("POST", "/school-admin/transport/vehicles", input, "Unable to add the vehicle.");
+    if (vehicles.some((row) => num(row.id) !== id && sameRegistration(str(row.registration_no), input.registration_no))) conflict("Another vehicle has this registration number.", "registration_no");
+    const row = id
+      ? await send("PATCH", `${T}/vehicles/${id}`, vehicleBody(input), "Unable to save the vehicle.")
+      : await send("POST", `${T}/vehicles`, vehicleBody(input), "Unable to add the vehicle.");
+    return liveVehicle(row, riders, routes);
   },
   async setVehicleStatus(id, status) {
-    return send<Vehicle>("PATCH", `/school-admin/transport/vehicles/${id}`, { status }, "Unable to change the vehicle.");
+    const { routes, riders } = await liveAll();
+    if (status === 0 && routes.some((route) => optNum(route.vehicle_id) === id && num(route.status ?? 1) === 1 && riders.some((rider) => num(rider.route_id) === num(route.id)))) {
+      conflict("Students ride routes that use this vehicle. Move the route to another vehicle first.");
+    }
+    return liveVehicle(await send("PATCH", `${T}/vehicles/${id}`, { status }, "Unable to change the vehicle."), riders, routes);
   },
   async routes() {
-    return (await get<{ items?: Route[] }>("/school-admin/transport/routes", { page_size: 50 }, "Unable to load routes.")).items ?? [];
+    const { vehicles, routes, riders } = await liveAll();
+    return routes.map((row) => liveRoute(row, vehicles, riders)).sort((a, b) => b.status - a.status || a.name.localeCompare(b.name, undefined, { numeric: true }));
   },
   async route(id) {
-    return get<Route>(`/school-admin/transport/routes/${id}`, {}, "Unable to load the route.");
+    const route = (await liveTransport.routes()).find((row) => row.id === id);
+    return route ?? missing("Route");
   },
   async saveRoute(input, id) {
     if (!input.name.trim()) invalid({ name: "Enter the route name." });
-    return id ? send<Route>("PATCH", `/school-admin/transport/routes/${id}`, input, "Unable to save the route.") : send<Route>("POST", "/school-admin/transport/routes", input, "Unable to add the route.");
+    const { vehicles, routes, riders } = await liveAll();
+    if (routes.some((row) => num(row.id) !== id && str(row.name).trim().toLowerCase() === input.name.trim().toLowerCase())) conflict("Another route has this name.", "name");
+    const vehicle = input.vehicle_id ? vehicles.find((row) => num(row.id) === input.vehicle_id) : null;
+    if (vehicle && num(vehicle.status ?? 1) === 0) invalid({ vehicle_id: "This vehicle is inactive." });
+    const body = { name: input.name.trim(), description: input.description?.trim() || null, vehicle_id: input.vehicle_id, status: input.status };
+    const row = id ? await send("PATCH", `${T}/transport-routes/${id}`, body, "Unable to save the route.") : await send("POST", `${T}/transport-routes`, body, "Unable to add the route.");
+    return liveRoute(row, vehicles, riders);
   },
   async setRouteStatus(id, status) {
-    return send<Route>("PATCH", `/school-admin/transport/routes/${id}`, { status }, "Unable to change the route.");
+    const { vehicles, riders } = await liveAll();
+    if (status === 0 && riders.some((rider) => num(rider.route_id) === id)) conflict("Students are assigned to this route. Move them first.");
+    return liveRoute(await send("PATCH", `${T}/transport-routes/${id}`, { status }, "Unable to change the route."), vehicles, riders);
   },
   async saveStop(routeId, input, id) {
-    const problems = stopProblems(input, []);
+    if (id) return notAvailable("The server can't edit a stop yet. Remove it and add it again.");
+    const others = (await allPages(`${T}/transport-stops`, { route_id: routeId }, "Unable to load stops.")).map(liveStop);
+    const problems = stopProblems(input, others);
     if (Object.keys(problems).length) invalid(problems);
-    return id ? send<Stop>("PATCH", `/school-admin/transport/stops/${id}`, input, "Unable to save the stop.") : send<Stop>("POST", `/school-admin/transport/routes/${routeId}/stops`, input, "Unable to add the stop.");
+    const body = { route_id: routeId, name: input.name.trim(), stop_order: input.stop_order, pickup_time: input.pickup_time || null, drop_time: input.drop_time || null, landmark: input.landmark?.trim() || null };
+    return liveStop(await send("POST", `${T}/transport-stops`, body, "Unable to add the stop."));
   },
   async removeStop(id) {
-    await send("DELETE", `/school-admin/transport/stops/${id}`, undefined, "Unable to remove the stop.");
+    if ((await liveRiders()).some((rider) => optNum(rider.stop_id) === id)) conflict("Students board at this stop. Move them to another stop first.");
+    await send("DELETE", `${T}/transport-stops/${id}`, undefined, "Unable to remove the stop.");
   },
   async assignments(query = {}) {
-    return get<Page<TransportAssignment>>("/school-admin/transport/assignments", {
-      page: query.page ?? 1,
-      page_size: Math.min(query.pageSize ?? 20, 50),
-      q: query.q?.trim(),
-      route_id: query.routeId,
-      class_section_id: query.classSectionId,
-    }, "Unable to load transport assignments.");
+    const { routes, riders } = await liveAll();
+    const students = await studentRefs(riders.map((row) => num(row.student_id)));
+    const needle = query.q?.trim().toLowerCase() ?? "";
+    const rows = riders
+      .map((row): TransportAssignment => {
+        const route = routes.find((item) => num(item.id) === num(row.route_id));
+        const stop = route && Array.isArray(route.stops) ? (route.stops as Raw[]).find((item) => num(item.id) === optNum(row.stop_id)) : undefined;
+        const student = students.get(num(row.student_id));
+        return {
+          id: num(row.id),
+          student_id: num(row.student_id),
+          student_name: student?.student_name ?? `Student #${num(row.student_id)}`,
+          admission_no: student?.admission_no ?? "",
+          class_name: student?.class_name ?? "",
+          section_name: student?.section_name ?? "",
+          route_id: num(row.route_id),
+          route_name: route ? str(route.name) : `Route #${num(row.route_id)}`,
+          stop_id: num(row.stop_id),
+          stop_name: stop ? str(stop.name) : optNum(row.stop_id) ? `Stop #${num(row.stop_id)}` : "—",
+          direction: "both",
+          start_date: str(row.created_at).slice(0, 10),
+          status: 1,
+        };
+      })
+      .filter((row) => !query.routeId || row.route_id === query.routeId)
+      .filter((row) => !query.classSectionId || students.get(row.student_id)?.class_section_id === query.classSectionId)
+      .filter((row) => !needle || row.student_name.toLowerCase().includes(needle) || row.admission_no.toLowerCase().includes(needle))
+      .sort((a, b) => a.route_name.localeCompare(b.route_name) || a.student_name.localeCompare(b.student_name));
+    const size = Math.min(query.pageSize ?? 20, 50);
+    const page = Math.max(query.page ?? 1, 1);
+    return { items: rows.slice((page - 1) * size, page * size), total: rows.length, page, page_size: size };
   },
   async saveAssignment(input, id) {
-    return id
-      ? send<TransportAssignment>("PATCH", `/school-admin/transport/assignments/${id}`, input, "Unable to save the assignment.")
-      : send<TransportAssignment>("POST", "/school-admin/transport/assignments", input, "Unable to assign transport.");
+    if (id) return notAvailable("The server can't edit student transport yet. Remove it and assign the student again.");
+    const errors: Record<string, string> = {};
+    if (!input.student_id) errors.student_id = "Choose a student.";
+    if (!input.route_id) errors.route_id = "Choose a route.";
+    if (!input.stop_id) errors.stop_id = "Choose a stop.";
+    if (Object.keys(errors).length) invalid(errors);
+    const { vehicles, routes, riders } = await liveAll();
+    const route = routes.find((row) => num(row.id) === input.route_id) ?? missing("Route");
+    if (num(route.status ?? 1) === 0) invalid({ route_id: "This route is inactive." });
+    if (riders.some((row) => num(row.student_id) === input.student_id)) conflict("This student already has transport. Remove their current assignment first.", "student_id");
+    // The server doesn't check seats, so check them here: a vehicle's seats are shared by its routes.
+    const vehicleId = optNum(route.vehicle_id);
+    const vehicle = vehicles.find((row) => num(row.id) === vehicleId);
+    if (vehicle) {
+      const routeIds = new Set(routes.filter((row) => optNum(row.vehicle_id) === vehicleId).map((row) => num(row.id)));
+      const problem = capacityProblem(optNum(vehicle.capacity), riders.filter((row) => routeIds.has(num(row.route_id))).length);
+      if (problem) conflict(problem, "route_id");
+    }
+    const row = await send("POST", `${T}/student-transport-assignments`, { student_id: input.student_id, route_id: input.route_id, stop_id: input.stop_id }, "Unable to assign transport.");
+    const student = (await studentRefs([input.student_id])).get(input.student_id);
+    const route_ = liveRoute(route, vehicles, riders);
+    return {
+      id: num(row.id),
+      student_id: input.student_id,
+      student_name: student?.student_name ?? `Student #${input.student_id}`,
+      admission_no: student?.admission_no ?? "",
+      class_name: student?.class_name ?? "",
+      section_name: student?.section_name ?? "",
+      route_id: input.route_id,
+      route_name: route_.name,
+      stop_id: input.stop_id,
+      stop_name: route_.stops.find((stop) => stop.id === input.stop_id)?.name ?? "",
+      direction: "both",
+      start_date: str(row.created_at).slice(0, 10),
+      status: 1,
+    };
   },
   async removeAssignment(id) {
-    await send("DELETE", `/school-admin/transport/assignments/${id}`, undefined, "Unable to remove the assignment.");
+    await send("DELETE", `${T}/student-transport-assignments/${id}`, undefined, "Unable to remove the assignment.");
   },
 };
 

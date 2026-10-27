@@ -7,6 +7,7 @@ import { ErrorAlert } from "@/components/academics/ErrorAlert";
 import { useDebounced, useOptions } from "@/components/academics/hooks";
 import { FEE_TABS, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { isOpsLive } from "@/lib/ops/mode";
 import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { feeService } from "@/lib/ops/fees";
@@ -57,10 +58,10 @@ function OutstandingBody() {
     { key: "due", label: "Payable", render: (row) => rupees(row.total - row.concession) },
     { key: "paid", label: "Paid", render: (row) => rupees(row.paid) },
     { key: "balance", label: "Balance", render: (row) => (row.balance ? <strong>{rupees(row.balance)}</strong> : <Chip tone="green">Cleared</Chip>) },
-    {
+    ...(isOpsLive("fees") ? [] : [{
       key: "overdue",
       label: "Overdue",
-      render: (row) => {
+      render: (row: StudentDues) => {
         const lines = row.lines.filter((line) => line.overdue);
         return lines.length ? (
           <div>
@@ -71,7 +72,7 @@ function OutstandingBody() {
           "—"
         );
       },
-    },
+    }]),
   ];
 
   return (
@@ -79,21 +80,25 @@ function OutstandingBody() {
       <div className="school-filters">
         <input type="search" aria-label="Search students" placeholder="Student name or admission no." value={searchInput} onChange={(event) => { setSearchInput(event.target.value); setPage(1); }} />
         <PlacementFilters sessionId={filter.sessionId} classId={filter.classId} sectionId={filter.sectionId} onChange={(next) => { setFilter(next); setPage(1); }} />
-        <label className="ops-filter-label">
-          Due by
-          <input type="date" aria-label="Due on or before" value={dueBefore} onChange={(event) => { setDueBefore(event.target.value); setPage(1); }} />
-        </label>
-        <label className="acad-check">
-          <input type="checkbox" checked={onlyOverdue} onChange={(event) => { setOnlyOverdue(event.target.checked); setPage(1); }} />
-          <span>Overdue only</span>
-        </label>
+        {isOpsLive("fees") ? null : (
+          <>
+            <label className="ops-filter-label">
+              Due by
+              <input type="date" aria-label="Due on or before" value={dueBefore} onChange={(event) => { setDueBefore(event.target.value); setPage(1); }} />
+            </label>
+            <label className="acad-check">
+              <input type="checkbox" checked={onlyOverdue} onChange={(event) => { setOnlyOverdue(event.target.checked); setPage(1); }} />
+              <span>Overdue only</span>
+            </label>
+          </>
+        )}
       </div>
       <ErrorAlert error={state.error} onRetry={() => void state.reload()} />
       <div className="teach-stats">
         <Stat label="Payable" value={state.loading && !rows.length ? "…" : rupees(sums.total)} />
         <Stat label={`Collected (${collectedPercent}%)`} value={rupees(sums.paid)} tone="green" />
         <Stat label="Outstanding" value={rupees(sums.balance)} tone="amber" />
-        <Stat label={`Overdue · ${sums.overdueCount} students`} value={rupees(sums.overdue)} tone="red" />
+        {isOpsLive("fees") ? null : <Stat label={`Overdue · ${sums.overdueCount} students`} value={rupees(sums.overdue)} tone="red" />}
       </div>
       <div className="resource-card">
         <DataTable

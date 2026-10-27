@@ -1,8 +1,10 @@
 /**
  * Grading scales and report cards.
- * Live (proposed, see backend/docs/FEES_TRANSPORT_GRADING_API_CONTRACT.md):
- *   /school-admin/grading-scales (GET, POST), /grading-scales/{id} (GET, PATCH, DELETE)
- *   /school-admin/report-cards/{student_id}?session_year_id= (GET), /report-cards/{student_id}/pdf
+ * Live: /school-admin/grading-scales (GET, POST), /grading-scales/{id} (GET, PATCH, DELETE).
+ *   The server calls a grade band's letter `letter` and its bands `bands`.
+ *   /school-admin/report-cards (POST {exam_id, grading_scale_id}) stores one card per student
+ *   for one exam; GET /report-cards?student_id= lists them. A session report card is put
+ *   together here from the offline exam results, using the stored grades where they exist.
  * Sample: scales live in this browser; report cards are built from the offline exam results the
  * exam client returns (live or sample) and graded with the chosen scale.
  */
@@ -10,7 +12,7 @@ import { defaultScale, gradeFor, rangeProblems } from "@/lib/ops/grading-math";
 import { isOpsLive } from "@/lib/ops/mode";
 import { invalid, later, missing, nextId, opsDb, opsSave, conflict } from "@/lib/ops/store";
 import type { GradingScale, GradingScaleInput, ReportCard, ReportExam } from "@/lib/ops/types";
-import { get, send } from "@/lib/teaching/client";
+import { allPages, num, optNum, optStr, send, str, type Raw } from "@/lib/teaching/client";
 import { offlineService } from "@/lib/teaching/offline";
 import { peopleService } from "@/lib/people";
 
@@ -19,6 +21,8 @@ export interface GradingService {
   saveScale(input: GradingScaleInput, id?: number): Promise<GradingScale>;
   removeScale(id: number): Promise<void>;
   reportCard(studentId: number, sessionYearId: number, scaleId?: number): Promise<ReportCard>;
+  /** Stores report cards for every student with a processed result in this exam (server only). */
+  generate(examId: number, scaleId?: number): Promise<{ created: number; total: number }>;
 }
 
 function check(input: GradingScaleInput) {
@@ -44,22 +48,69 @@ function body(input: GradingScaleInput) {
   };
 }
 
+const yes = (value: unknown) => value === true || value === 1 || value === "1" || value === "true";
+
+/** A scale as the server returns it (bands with `letter`, 0/1 flags) in this app's shape. */
+export function scaleOf(row: Raw): GradingScale {
+  const bands = Array.isArray(row.bands) ? (row.bands as Raw[]) : Array.isArray(row.ranges) ? (row.ranges as Raw[]) : [];
+  return {
+    id: num(row.id),
+    name: str(row.name),
+    description: optStr(row.description),
+    is_default: yes(row.is_default),
+    status: num(row.status ?? 1) === 0 ? 0 : 1,
+    ranges: bands
+      .map((band) => ({
+        id: optNum(band.id) ?? undefined,
+        grade: str(band.letter ?? band.grade),
+        min_percent: num(band.min_percent),
+        max_percent: num(band.max_percent),
+        grade_point: optNum(band.grade_point),
+        remark: optStr(band.remark),
+        is_pass: band.is_pass === undefined ? true : yes(band.is_pass),
+      }))
+      .sort((a, b) => b.min_percent - a.min_percent),
+  };
+}
+
+function serverBody(input: GradingScaleInput) {
+  const { ranges, ...rest } = body(input);
+  return { ...rest, bands: ranges.map(({ grade, ...band }, index) => ({ letter: grade, ...band, sort_order: index })) };
+}
+
 export const liveGrading: GradingService = {
   async scales() {
-    const data = await get<{ items?: GradingScale[] }>("/school-admin/grading-scales", {}, "Unable to load grading scales.");
-    return data.items ?? [];
+    return (await allPages("/school-admin/grading-scales", {}, "Unable to load grading scales.")).map(scaleOf);
   },
   async saveScale(input, id) {
     check(input);
-    return id
-      ? send<GradingScale>("PATCH", `/school-admin/grading-scales/${id}`, body(input), "Unable to save the grading scale.")
-      : send<GradingScale>("POST", "/school-admin/grading-scales", body(input), "Unable to add the grading scale.");
+    const row = id
+      ? await send("PATCH", `/school-admin/grading-scales/${id}`, serverBody(input), "Unable to save the grading scale.")
+      : await send("POST", "/school-admin/grading-scales", serverBody(input), "Unable to add the grading scale.");
+    return scaleOf(row);
   },
   async removeScale(id) {
     await send("DELETE", `/school-admin/grading-scales/${id}`, undefined, "Unable to delete the grading scale.");
   },
   async reportCard(studentId, sessionYearId, scaleId) {
-    return get<ReportCard>(`/school-admin/report-cards/${studentId}`, { session_year_id: sessionYearId, grading_scale_id: scaleId }, "Unable to load the report card.");
+    const scales = await liveGrading.scales();
+    const scale = (scaleId ? scales.find((item) => item.id === scaleId) : null) ?? defaultScale(scales);
+    const card = await buildReportCard(studentId, sessionYearId, scale ?? null);
+    if (scaleId) return card;
+    // With the default scale, show the grades the server stored when it generated the cards.
+    const stored = await allPages("/school-admin/report-cards", { student_id: studentId }, "Unable to load the report card.").catch(() => [] as Raw[]);
+    const byExam = new Map(stored.map((row) => [num(row.exam_id), row]));
+    return {
+      ...card,
+      exams: card.exams.map((exam) => {
+        const row = byExam.get(exam.exam_id);
+        return row && optStr(row.letter_grade) ? { ...exam, grade: optStr(row.letter_grade) } : exam;
+      }),
+    };
+  },
+  async generate(examId, scaleId) {
+    const data = await send("POST", "/school-admin/report-cards", { exam_id: examId, grading_scale_id: scaleId ?? null }, "Unable to generate report cards.");
+    return { created: num(data.created), total: num(data.total) };
   },
 };
 
@@ -148,6 +199,9 @@ export const mockGrading: GradingService = {
     const scales = opsDb().scales;
     const scale = (scaleId ? scales.find((item) => item.id === scaleId) : null) ?? defaultScale(scales);
     return buildReportCard(studentId, sessionYearId, scale ?? null);
+  },
+  async generate() {
+    return later({ created: 0, total: 0 });
   },
 };
 

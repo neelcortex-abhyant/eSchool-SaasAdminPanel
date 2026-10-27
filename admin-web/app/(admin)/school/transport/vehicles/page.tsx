@@ -8,6 +8,7 @@ import { FormModal } from "@/components/academics/FormModal";
 import { useDebounced, useFormErrors, useOptions } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { isOpsLive } from "@/lib/ops/mode";
 import { TRANSPORT_TABS, useTransportStaff } from "@/components/ops/transport";
 import { Chip, TeachingPage } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
@@ -57,23 +58,28 @@ function VehiclesBody({ editing, setEditing }: { editing: Vehicle | "new" | null
     }
   }
 
+  const live = isOpsLive("transport");
   const columns: Column<Vehicle>[] = [
     { key: "reg", label: "Registration", render: (row) => <div><strong>{row.registration_no}</strong><div className="muted">{row.model ?? ""}</div></div> },
-    { key: "type", label: "Type", render: (row) => VEHICLE_TYPES.find((item) => item.value === row.vehicle_type)?.label ?? row.vehicle_type },
+    ...(live ? [] : [{ key: "type", label: "Type", render: (row: Vehicle) => VEHICLE_TYPES.find((item) => item.value === row.vehicle_type)?.label ?? row.vehicle_type }]),
     {
       key: "seats",
       label: "Seats used",
       render: (row) => <Chip tone={row.assigned_students >= row.capacity ? "red" : row.assigned_students / row.capacity > 0.85 ? "amber" : "green"}>{row.assigned_students} / {row.capacity}</Chip>,
     },
-    { key: "driver", label: "Driver", render: (row) => row.driver_name ?? <span className="muted">Not assigned</span> },
-    { key: "helper", label: "Helper", render: (row) => row.helper_name ?? <span className="muted">Not assigned</span> },
+    ...(live
+      ? []
+      : [
+          { key: "driver", label: "Driver", render: (row: Vehicle) => row.driver_name ?? <span className="muted">Not assigned</span> },
+          { key: "helper", label: "Helper", render: (row: Vehicle) => row.helper_name ?? <span className="muted">Not assigned</span> },
+        ]),
     { key: "status", label: "Status", render: (row) => (row.status === 1 ? <Chip tone="green">Active</Chip> : <Chip tone="grey">Inactive</Chip>) },
   ];
 
   return (
     <>
       <div className="school-filters">
-        <input type="search" aria-label="Search vehicles" placeholder="Registration, model, driver or helper" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} />
+        <input type="search" aria-label="Search vehicles" placeholder={live ? "Registration or name" : "Registration, model, driver or helper"} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} />
         <select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value as "" | "0" | "1")}>
           <option value="">All statuses</option>
           <option value="1">Active</option>
@@ -115,7 +121,8 @@ function VehiclesBody({ editing, setEditing }: { editing: Vehicle | "new" | null
 }
 
 function VehicleForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle | null; onClose: () => void; onSaved: (created: boolean) => void }) {
-  const staff = useTransportStaff();
+  const live = isOpsLive("transport");
+  const staff = useTransportStaff(!live);
   const [reg, setReg] = useState(vehicle?.registration_no ?? "");
   const [type, setType] = useState<VehicleType>(vehicle?.vehicle_type ?? "bus");
   const [model, setModel] = useState(vehicle?.model ?? "");
@@ -149,11 +156,15 @@ function VehicleForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle | null; o
   return (
     <FormModal title={vehicle ? "Edit vehicle" : "Add vehicle"} error={errors.formError} saving={saving} submitLabel="Save vehicle" wide onSubmit={() => void submit()} onClose={onClose}>
       <TextField id="vh-reg" label="Registration number" required maxLength={20} value={reg} onChange={setReg} error={errors.fieldErrors.registration_no} placeholder="KA 01 AB 1234" />
-      <SelectField id="vh-type" label="Type" required value={type} onChange={(value) => setType(value as VehicleType)} options={VEHICLE_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
-      <TextField id="vh-model" label="Make and model" maxLength={80} value={model} onChange={setModel} />
+      {live ? null : <SelectField id="vh-type" label="Type" required value={type} onChange={(value) => setType(value as VehicleType)} options={VEHICLE_TYPES.map((item) => ({ value: item.value, label: item.label }))} />}
+      <TextField id="vh-model" label={live ? "Vehicle name" : "Make and model"} maxLength={80} value={model} onChange={setModel} hint={live ? "e.g. Bus 1. Leave empty to use the registration number." : undefined} />
       <TextField id="vh-capacity" label="Seats for students" type="number" min="1" max="100" required value={capacity} onChange={setCapacity} error={errors.fieldErrors.capacity} hint={vehicle?.assigned_students ? `${vehicle.assigned_students} students ride it now.` : undefined} />
-      <SelectField id="vh-driver" label="Driver" placeholder="Not assigned" loading={staff.loading} value={driverId} onChange={setDriverId} options={staffOptions} error={errors.fieldErrors.driver_id} hint="From the staff list; drivers are listed first." />
-      <SelectField id="vh-helper" label="Helper" placeholder="Not assigned" loading={staff.loading} value={helperId} onChange={setHelperId} options={staffOptions} error={errors.fieldErrors.helper_id} />
+      {live ? null : (
+        <>
+          <SelectField id="vh-driver" label="Driver" placeholder="Not assigned" loading={staff.loading} value={driverId} onChange={setDriverId} options={staffOptions} error={errors.fieldErrors.driver_id} hint="From the staff list; drivers are listed first." />
+          <SelectField id="vh-helper" label="Helper" placeholder="Not assigned" loading={staff.loading} value={helperId} onChange={setHelperId} options={staffOptions} error={errors.fieldErrors.helper_id} />
+        </>
+      )}
       <StatusToggle id="vh-active" checked={active} onChange={setActive} label="Active (can be used on routes)" />
     </FormModal>
   );

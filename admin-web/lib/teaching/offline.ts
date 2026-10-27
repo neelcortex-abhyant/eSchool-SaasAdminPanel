@@ -11,7 +11,7 @@
  */
 import { listAll } from "@/lib/academics";
 import { peopleService } from "@/lib/people";
-import { allPages, get, hhmm, notAvailable, num, optNum, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
+import { allPages, get, hhmm, num, optNum, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
 import { isLive } from "@/lib/teaching/mode";
 import { placementOf, sectionMap, subjectName } from "@/lib/teaching/lookups";
 import { conflict, db, delay, invalid, matches, nextId, notFound, nowIso, paginate, save } from "@/lib/teaching/store";
@@ -220,11 +220,13 @@ export const liveOffline: OfflineExamService = {
     if (Object.keys(errors).length) invalid(errors);
     return scheduleOf(await send("POST", `${BASE}/offline-exams/${examId}/schedules`, scheduleBody(input), "Unable to add the paper."));
   },
-  async updateSchedule() {
-    return notAvailable("Changing a paper isn't available on the school's server yet. Delete isn't either; ask the server team to add it.");
+  async updateSchedule(scheduleId, input) {
+    const errors = scheduleProblems(input);
+    if (Object.keys(errors).length) invalid(errors);
+    return scheduleOf(await send("PATCH", `${BASE}/offline-exam-schedules/${scheduleId}`, scheduleBody(input), "Unable to save the paper."));
   },
-  async removeSchedule() {
-    return notAvailable("Removing a paper isn't available on the school's server yet.");
+  async removeSchedule(scheduleId) {
+    await send("DELETE", `${BASE}/offline-exam-schedules/${scheduleId}`, undefined, "Unable to remove the paper.");
   },
   async schedules(query) {
     const rows = await allPages(`${BASE}/offline-exam-schedules`, {

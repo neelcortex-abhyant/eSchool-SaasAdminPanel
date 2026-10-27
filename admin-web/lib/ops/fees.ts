@@ -1,24 +1,26 @@
 /**
  * Student fees: fee types, fee structures with installments, extra assignments to students,
  * concessions/exemptions, what each student owes, payments and receipts.
- * Live (proposed, see backend/docs/FEES_TRANSPORT_GRADING_API_CONTRACT.md):
- *   /school-admin/fee-types, /fee-structures, /fee-assignments, /fee-concessions,
- *   /school-admin/students/{id}/fees, /fee-payments (POST needs an Idempotency-Key header),
- *   /fee-payments/{id}, /fee-payments/{id}/receipt, /fee-outstanding
+ * Live: /school-admin/fee-types, /fee-structures, /fee-assignments, /fee-concessions,
+ *   /fee-payments, /fees/collect (idempotency_key in the body) and /fees/outstanding.
+ *   The server has no installments, due dates or late fees: a student owes each structure
+ *   assigned to them, paid in one or more parts. It has no per-student dues or receipt route,
+ *   so those are worked out here from its lists, the same way the server does.
  * Payments: office payments (cash, cheque, transfer, UPI or card at the counter) are recorded
  * by the server as successful; online payments stay "pending" until the server confirms them.
  * This client never marks a payment successful by itself.
  */
 import { listAll } from "@/lib/academics";
 import { peopleService } from "@/lib/people";
-import { allocate, dueLines, paise, structureProblems, totals } from "@/lib/ops/fees-math";
-import { studentRef } from "@/lib/ops/lookups";
+import { allocate, concessionValue, dueLines, paise, structureProblems, totals } from "@/lib/ops/fees-math";
+import { studentRef, studentRefs } from "@/lib/ops/lookups";
 import { isOpsLive } from "@/lib/ops/mode";
 import { conflict, invalid, later, missing, nextId, opsDb, opsSave, today, type PaymentRow, type StructureRow } from "@/lib/ops/store";
 import { FEE_CATEGORIES, PAYMENT_METHODS } from "@/lib/ops/types";
 import type {
   Concession,
   ConcessionInput,
+  DueLine,
   FeeAssignment,
   FeeCategory,
   FeePayment,
@@ -30,12 +32,14 @@ import type {
   OutstandingQuery,
   Page,
   PaymentInput,
+  PaymentMethod,
   PaymentQuery,
+  PaymentStatus,
   Receipt,
   RecordStatus,
   StudentDues,
 } from "@/lib/ops/types";
-import { get, request, send } from "@/lib/teaching/client";
+import { allPages, get, notAvailable, num, optNum, optStr, send, str, type Raw } from "@/lib/teaching/client";
 import { academicsService } from "@/lib/academics";
 
 export interface FeeService {
@@ -95,101 +99,394 @@ function concessionProblems(input: ConcessionInput): Record<string, string> {
 
 // ---------- live ----------
 
+const F = "/school-admin";
+
+type ServerFees = { types: FeeType[]; structures: Raw[]; concessions: Raw[] };
+
+function liveType(row: Raw): FeeType {
+  const category = str(row.category, "other");
+  return {
+    id: num(row.id),
+    name: str(row.name),
+    category: (FEE_CATEGORIES.some((item) => item.value === category) ? category : "other") as FeeCategory,
+    description: optStr(row.description),
+    status: num(row.status ?? 1) === 0 ? 0 : 1,
+  };
+}
+
+async function liveTypes(): Promise<FeeType[]> {
+  return (await allPages(`${F}/fee-types`, {}, "Unable to load fee types.")).map(liveType);
+}
+
+async function classNames() {
+  const [sessions, classes] = await Promise.all([
+    listAll((page) => academicsService("sessions").listSessions({ page, pageSize: 50 })).catch(() => []),
+    listAll((page) => academicsService("classes").listClasses({ page, pageSize: 50 })).catch(() => []),
+  ]);
+  return {
+    session: (id: number) => sessions.find((row) => row.id === id)?.name ?? `Session #${id}`,
+    klass: (id: number | null) => (id ? classes.find((row) => row.id === id)?.name ?? `Class #${id}` : "Any class"),
+  };
+}
+
+/** The server's structure (amounts, no installments) in this app's shape. */
+function liveStructure(row: Raw, types: FeeType[], names: Awaited<ReturnType<typeof classNames>>): FeeStructure {
+  const amounts = Array.isArray(row.amounts) ? (row.amounts as Raw[]) : [];
+  const items = amounts.map((item) => {
+    const type = types.find((t) => t.id === num(item.fee_type_id));
+    return { fee_type_id: num(item.fee_type_id), fee_type_name: type?.name ?? `Fee type #${num(item.fee_type_id)}`, category: type?.category ?? ("other" as FeeCategory), amount: paise(num(item.amount)) };
+  });
+  return {
+    id: num(row.id),
+    name: str(row.name),
+    session_year_id: num(row.session_year_id),
+    session_name: names.session(num(row.session_year_id)),
+    class_id: num(row.class_id),
+    class_name: names.klass(optNum(row.class_id)),
+    items,
+    installments: [],
+    total: paise(items.reduce((sum, item) => sum + item.amount, 0)),
+    late_fee_per_day: 0,
+    status: num(row.status ?? 1) === 0 ? 0 : 1,
+  };
+}
+
+async function liveStructures(): Promise<FeeStructure[]> {
+  const [rows, types, names] = await Promise.all([allPages(`${F}/fee-structures`, {}, "Unable to load fee structures."), liveTypes(), classNames()]);
+  return rows.map((row) => liveStructure(row, types, names));
+}
+
+function structureBody(input: FeeStructureInput) {
+  return { name: input.name.trim(), session_year_id: input.session_year_id, class_id: input.class_id || null, amounts: input.items.map((item) => ({ fee_type_id: item.fee_type_id, amount: paise(item.amount) })), status: input.status };
+}
+
+/** The server has no installments, so a structure is checked without them. */
+function liveStructureProblems(input: FeeStructureInput) {
+  const total = paise(input.items.reduce((sum, item) => sum + (item.amount || 0), 0));
+  const { installments: _i, late_fee_per_day: _l, ...rest } = structureProblems({ ...input, late_fee_per_day: 0, installments: [{ name: "Full", due_date: today(), amount: total || 1 }] });
+  return rest;
+}
+
+const NO_DUE_DATE = "";
+
+/** One line per fee structure assigned to the student, worked out the way the server does. */
+async function liveDues(studentId: number): Promise<StudentDues> {
+  const [student, assignments, structures, concessions, payments] = await Promise.all([
+    studentRef(studentId),
+    allPages(`${F}/fee-assignments`, { student_id: studentId }, "Unable to load the student's fees."),
+    liveStructures(),
+    allPages(`${F}/fee-concessions`, {}, "Unable to load concessions."),
+    allPages(`${F}/fee-payments`, { student_id: studentId }, "Unable to load payments."),
+  ]);
+  const lines: DueLine[] = assignments.map((assignment) => {
+    const structure = structures.find((row) => row.id === num(assignment.structure_id));
+    const total = structure?.total ?? 0;
+    const concessionRow = concessions.find((row) => num(row.student_id) === studentId && num(row.structure_id) === num(assignment.structure_id));
+    const concession = concessionValue(total, concessionRow ? { kind: str(concessionRow.kind) === "percent" ? "percent" : "amount", value: num(concessionRow.value) } : null);
+    const paid = paise(payments.filter((row) => num(row.assignment_id) === num(assignment.id) && str(row.status, "success") === "success").reduce((sum, row) => sum + num(row.amount), 0));
+    return {
+      structure_id: num(assignment.structure_id),
+      structure_name: structure?.name ?? `Fee structure #${num(assignment.structure_id)}`,
+      installment_id: num(assignment.id),
+      installment_name: structure?.name ?? "Fees",
+      due_date: NO_DUE_DATE,
+      amount: total,
+      concession,
+      paid,
+      balance: paise(Math.max(total - concession - paid, 0)),
+      overdue: false,
+    };
+  });
+  return {
+    student_id: student.student_id,
+    student_name: student.student_name,
+    admission_no: student.admission_no,
+    class_name: student.class_name,
+    section_name: student.section_name,
+    class_section_id: student.class_section_id,
+    lines,
+    ...totals(lines),
+    pending: 0,
+  };
+}
+
+function livePayment(row: Raw, student: Awaited<ReturnType<typeof studentRef>> | undefined, structures: FeeStructure[], assignments: Raw[]): FeePayment {
+  const assignment = assignments.find((item) => num(item.id) === num(row.assignment_id));
+  const structure = structures.find((item) => item.id === num(assignment?.structure_id));
+  const method = str(row.method, "cash");
+  return {
+    id: num(row.id),
+    receipt_no: optStr(row.receipt_no),
+    student_id: num(row.student_id),
+    student_name: student?.student_name ?? `Student #${num(row.student_id)}`,
+    admission_no: student?.admission_no ?? "",
+    class_name: student?.class_name ?? "",
+    section_name: student?.section_name ?? "",
+    amount: paise(num(row.amount)),
+    method: (PAYMENT_METHODS.some((item) => item.value === method) ? method : "cash") as PaymentMethod,
+    reference: optStr(row.reference),
+    remarks: optStr(row.remarks),
+    status: (["success", "pending", "failed"].includes(str(row.status)) ? str(row.status) : "success") as PaymentStatus,
+    paid_at: optStr(row.paid_on) ? `${str(row.paid_on).slice(0, 10)}T${str(row.created_at).slice(11) || "00:00:00"}` : str(row.created_at),
+    allocations: [{ structure_id: structure?.id ?? 0, installment_id: num(row.assignment_id), installment_name: structure?.name ?? "Fees", amount: paise(num(row.amount)) }],
+    collected_by: null,
+  };
+}
+
+async function livePayments(studentId?: number): Promise<FeePayment[]> {
+  const [rows, structures, assignments] = await Promise.all([
+    allPages(`${F}/fee-payments`, { student_id: studentId }, "Unable to load payments."),
+    liveStructures(),
+    allPages(`${F}/fee-assignments`, { student_id: studentId }, "Unable to load fee assignments."),
+  ]);
+  const students = await studentRefs(rows.map((row) => num(row.student_id)));
+  return rows.map((row) => livePayment(row, students.get(num(row.student_id)), structures, assignments)).sort((a, b) => b.paid_at.localeCompare(a.paid_at) || b.id - a.id);
+}
+
+function pageSlice<T>(rows: T[], query: { page?: number; pageSize?: number }): Page<T> {
+  const size = Math.min(query.pageSize ?? 20, 50);
+  const page = Math.max(query.page ?? 1, 1);
+  return { items: rows.slice((page - 1) * size, page * size), total: rows.length, page, page_size: size };
+}
+
 export const liveFees: FeeService = {
   async types() {
-    return (await get<{ items?: FeeType[] }>("/school-admin/fee-types", { page_size: 50 }, "Unable to load fee types.")).items ?? [];
+    return (await liveTypes()).sort((a, b) => b.status - a.status || a.name.localeCompare(b.name));
   },
   async saveType(input, id) {
     const problems = typeProblems(input);
     if (Object.keys(problems).length) invalid(problems);
-    return id ? send<FeeType>("PATCH", `/school-admin/fee-types/${id}`, input, "Unable to save the fee type.") : send<FeeType>("POST", "/school-admin/fee-types", input, "Unable to add the fee type.");
+    if ((await liveTypes()).some((row) => row.id !== id && row.name.trim().toLowerCase() === input.name.trim().toLowerCase())) conflict("A fee type with this name already exists.", "name");
+    const body = { name: input.name.trim(), category: input.category, description: input.description?.trim() || null, status: input.status };
+    return liveType(id ? await send("PATCH", `${F}/fee-types/${id}`, body, "Unable to save the fee type.") : await send("POST", `${F}/fee-types`, body, "Unable to add the fee type."));
   },
   async setTypeStatus(id, status) {
-    return send<FeeType>("PATCH", `/school-admin/fee-types/${id}`, { status }, "Unable to change the fee type.");
+    return liveType(await send("PATCH", `${F}/fee-types/${id}`, { status }, "Unable to change the fee type."));
   },
   async structures(query = {}) {
-    return get<Page<FeeStructure>>("/school-admin/fee-structures", {
-      page: query.page ?? 1,
-      page_size: Math.min(query.pageSize ?? 20, 50),
-      q: query.q?.trim(),
-      session_year_id: query.sessionYearId,
-      class_id: query.classId,
-      status: query.status,
-      sort: query.sort,
-      order: query.order,
-    }, "Unable to load fee structures.");
+    const needle = query.q?.trim().toLowerCase() ?? "";
+    const sorters: Record<string, (row: FeeStructure) => string | number> = { name: (row) => row.name.toLowerCase(), class: (row) => row.class_name, total: (row) => row.total };
+    const sorter = sorters[query.sort ?? "name"];
+    const order = query.order === "desc" ? -1 : 1;
+    const rows = (await liveStructures())
+      .filter((row) => !query.sessionYearId || row.session_year_id === query.sessionYearId)
+      .filter((row) => !query.classId || row.class_id === query.classId)
+      .filter((row) => (query.status === "0" || query.status === "1" ? String(row.status) === query.status : true))
+      .filter((row) => !needle || row.name.toLowerCase().includes(needle) || row.items.some((item) => item.fee_type_name.toLowerCase().includes(needle)))
+      .sort((a, b) => {
+        const x = sorter(a);
+        const y = sorter(b);
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })) * order || a.id - b.id;
+      });
+    return pageSlice(rows, query);
   },
   async getStructure(id) {
-    return get<FeeStructure>(`/school-admin/fee-structures/${id}`, {}, "Unable to load the fee structure.");
+    const [row, types, names] = await Promise.all([get(`${F}/fee-structures/${id}`, {}, "Unable to load the fee structure."), liveTypes(), classNames()]);
+    return liveStructure(row, types, names);
   },
   async saveStructure(input, id) {
-    const problems = structureProblems(input);
+    const problems = liveStructureProblems(input);
     if (Object.keys(problems).length) invalid(problems);
-    return id ? send<FeeStructure>("PATCH", `/school-admin/fee-structures/${id}`, input, "Unable to save the fee structure.") : send<FeeStructure>("POST", "/school-admin/fee-structures", input, "Unable to add the fee structure.");
+    const [types, names] = await Promise.all([liveTypes(), classNames()]);
+    const row = id ? await send("PATCH", `${F}/fee-structures/${id}`, structureBody(input), "Unable to save the fee structure.") : await send("POST", `${F}/fee-structures`, structureBody(input), "Unable to add the fee structure.");
+    return liveStructure(row, types, names);
   },
   async setStructureStatus(id, status) {
-    return send<FeeStructure>("PATCH", `/school-admin/fee-structures/${id}`, { status }, "Unable to change the fee structure.");
+    const [row, types, names] = await Promise.all([send("PATCH", `${F}/fee-structures/${id}`, { status }, "Unable to change the fee structure."), liveTypes(), classNames()]);
+    return liveStructure(row, types, names);
   },
   async assignments(structureId) {
-    return (await get<{ items?: FeeAssignment[] }>("/school-admin/fee-assignments", { structure_id: structureId, page_size: 50 }, "Unable to load fee assignments.")).items ?? [];
+    const [rows, structures] = await Promise.all([allPages(`${F}/fee-assignments`, { structure_id: structureId }, "Unable to load fee assignments."), liveStructures()]);
+    const students = await studentRefs(rows.map((row) => num(row.student_id)));
+    return rows
+      .map((row) => {
+        const student = students.get(num(row.student_id));
+        return {
+          id: num(row.id),
+          structure_id: num(row.structure_id),
+          structure_name: structures.find((item) => item.id === num(row.structure_id))?.name ?? "",
+          student_id: num(row.student_id),
+          student_name: student?.student_name ?? `Student #${num(row.student_id)}`,
+          admission_no: student?.admission_no ?? "",
+        };
+      })
+      .sort((a, b) => a.student_name.localeCompare(b.student_name));
   },
   async assign(structureId, studentId) {
-    return send<FeeAssignment>("POST", "/school-admin/fee-assignments", { structure_id: structureId, student_id: studentId }, "Unable to assign the fees.");
+    const existing = await allPages(`${F}/fee-assignments`, { structure_id: structureId, student_id: studentId }, "Unable to load fee assignments.");
+    if (existing.length) conflict("This student already has these fees.", "student_id");
+    const row = await send("POST", `${F}/fee-assignments`, { structure_id: structureId, student_id: studentId }, "Unable to assign the fees.");
+    const [student, structure] = await Promise.all([studentRef(studentId), liveFees.getStructure(structureId)]);
+    return { id: num(row.id), structure_id: structureId, structure_name: structure.name, student_id: studentId, student_name: student.student_name, admission_no: student.admission_no };
   },
   async unassign(id) {
-    await send("DELETE", `/school-admin/fee-assignments/${id}`, undefined, "Unable to remove the assignment.");
+    if ((await allPages(`${F}/fee-payments`, {}, "Unable to load payments.")).some((row) => num(row.assignment_id) === id && str(row.status, "success") === "success")) {
+      conflict("Payments have been recorded against these fees, so the assignment can't be removed.");
+    }
+    await send("DELETE", `${F}/fee-assignments/${id}`, undefined, "Unable to remove the assignment.");
   },
   async concessions(structureId) {
-    return (await get<{ items?: Concession[] }>("/school-admin/fee-concessions", { structure_id: structureId, page_size: 50 }, "Unable to load concessions.")).items ?? [];
+    const [rows, structures] = await Promise.all([allPages(`${F}/fee-concessions`, {}, "Unable to load concessions."), liveStructures()]);
+    const mine = rows.filter((row) => !structureId || num(row.structure_id) === structureId);
+    const students = await studentRefs(mine.map((row) => num(row.student_id)));
+    return mine
+      .map((row): Concession => ({
+        id: num(row.id),
+        student_id: num(row.student_id),
+        student_name: students.get(num(row.student_id))?.student_name ?? `Student #${num(row.student_id)}`,
+        structure_id: num(row.structure_id),
+        structure_name: structures.find((item) => item.id === num(row.structure_id))?.name ?? "",
+        kind: str(row.kind) === "percent" ? "percent" : "amount",
+        value: num(row.value),
+        reason: str(row.reason),
+      }))
+      .sort((a, b) => a.student_name.localeCompare(b.student_name));
   },
   async saveConcession(input, id) {
+    if (id) return notAvailable("The server can't edit a concession yet. Remove it and add it again.");
     const problems = concessionProblems(input);
     if (Object.keys(problems).length) invalid(problems);
-    return id ? send<Concession>("PATCH", `/school-admin/fee-concessions/${id}`, input, "Unable to save the concession.") : send<Concession>("POST", "/school-admin/fee-concessions", input, "Unable to add the concession.");
+    const rows = await allPages(`${F}/fee-concessions`, {}, "Unable to load concessions.");
+    if (rows.some((row) => num(row.student_id) === input.student_id && num(row.structure_id) === input.structure_id)) {
+      conflict("This student already has a concession on this structure. Remove that one first.", "student_id");
+    }
+    const row = await send("POST", `${F}/fee-concessions`, { student_id: input.student_id, structure_id: input.structure_id, kind: input.kind, value: input.value, reason: input.reason.trim() }, "Unable to add the concession.");
+    const [student, structure] = await Promise.all([studentRef(input.student_id), liveFees.getStructure(input.structure_id)]);
+    return { id: num(row.id), student_id: input.student_id, student_name: student.student_name, structure_id: input.structure_id, structure_name: structure.name, kind: input.kind, value: input.value, reason: input.reason.trim() };
   },
   async removeConcession(id) {
-    await send("DELETE", `/school-admin/fee-concessions/${id}`, undefined, "Unable to remove the concession.");
+    await send("DELETE", `${F}/fee-concessions/${id}`, undefined, "Unable to remove the concession.");
   },
   async dues(studentId) {
-    return get<StudentDues>(`/school-admin/students/${studentId}/fees`, {}, "Unable to load the student's fees.");
+    return liveDues(studentId);
   },
   async recordPayment(input) {
-    const { idempotency_key: key, ...body } = input;
-    return request<FeePayment>(
-      "/school-admin/fee-payments",
-      { method: "POST", body: JSON.stringify(body), headers: { "Idempotency-Key": key } },
-      "Unable to record the payment.",
-    );
+    if (!PAYMENT_METHODS.find((item) => item.value === input.method)?.manual) invalid({ method: "Online payment links aren't available on the server yet." });
+    const dues = await liveDues(input.student_id);
+    const problems = paymentProblems(input, dues.balance);
+    if (Object.keys(problems).length) invalid(problems);
+    let allocations;
+    try {
+      allocations = allocate(input.amount, dues.lines);
+    } catch (caught) {
+      invalid({ amount: caught instanceof Error ? caught.message : "The amount can't be allocated." });
+    }
+    // The server records a payment against one assigned structure, so a payment that covers
+    // several is sent as one request per structure. Each has its own key, derived from the
+    // form's, so a retry can't record any part twice.
+    const saved: Raw[] = [];
+    for (const allocation of allocations) {
+      saved.push(
+        await send("POST", `${F}/fees/collect`, {
+          assignment_id: allocation.installment_id,
+          amount: allocation.amount,
+          method: input.method,
+          reference: input.reference?.trim() || null,
+          remarks: input.remarks?.trim() || null,
+          paid_on: input.paid_on,
+          idempotency_key: `${input.idempotency_key}:${allocation.installment_id}`,
+        }, "Unable to record the payment."),
+      );
+    }
+    const student = await studentRef(input.student_id);
+    const first = saved[0];
+    return {
+      id: num(first.id),
+      receipt_no: saved.map((row) => optStr(row.receipt_no)).filter(Boolean).join(", ") || null,
+      student_id: student.student_id,
+      student_name: student.student_name,
+      admission_no: student.admission_no,
+      class_name: student.class_name,
+      section_name: student.section_name,
+      amount: paise(input.amount),
+      method: input.method,
+      reference: input.reference?.trim() || null,
+      remarks: input.remarks?.trim() || null,
+      status: "success",
+      paid_at: `${input.paid_on}T${str(first.created_at).slice(11) || "00:00:00"}`,
+      allocations,
+      collected_by: null,
+    };
   },
   async payments(query = {}) {
-    return get<Page<FeePayment>>("/school-admin/fee-payments", {
-      page: query.page ?? 1,
-      page_size: Math.min(query.pageSize ?? 20, 50),
-      q: query.q?.trim(),
-      student_id: query.studentId,
-      class_section_id: query.classSectionId,
-      method: query.method,
-      status: query.status,
-      from_date: query.from,
-      to_date: query.to,
-    }, "Unable to load payments.");
+    const needle = query.q?.trim().toLowerCase() ?? "";
+    const all = await livePayments(query.studentId || undefined);
+    const sections = query.classSectionId ? await studentRefs(all.map((row) => row.student_id)) : null;
+    const rows = all
+      .filter((row) => !sections || sections.get(row.student_id)?.class_section_id === query.classSectionId)
+      .filter((row) => !query.method || row.method === query.method)
+      .filter((row) => !query.status || row.status === query.status)
+      .filter((row) => !query.from || row.paid_at.slice(0, 10) >= query.from)
+      .filter((row) => !query.to || row.paid_at.slice(0, 10) <= query.to)
+      .filter((row) => !needle || [row.student_name, row.admission_no, row.receipt_no ?? "", row.reference ?? ""].some((value) => value.toLowerCase().includes(needle)));
+    return pageSlice(rows, query);
   },
   async payment(id) {
-    return get<FeePayment>(`/school-admin/fee-payments/${id}`, {}, "Unable to load the payment.");
+    return (await livePayments()).find((row) => row.id === id) ?? missing("Payment");
   },
   async receipt(id) {
-    return get<Receipt>(`/school-admin/fee-payments/${id}/receipt`, {}, "Unable to load the receipt.");
+    const payment = await liveFees.payment(id);
+    const [dues, school, all] = await Promise.all([
+      liveDues(payment.student_id),
+      get("/school-admin/school", {}, "Unable to load the school.").catch(() => ({}) as Raw),
+      livePayments(payment.student_id),
+    ]);
+    // Balance right after this payment: today's balance plus anything paid later.
+    const paidLater = all.filter((p) => p.status === "success" && (p.paid_at > payment.paid_at || (p.paid_at === payment.paid_at && p.id > payment.id))).reduce((sum, p) => sum + p.amount, 0);
+    const structure = dues.lines.find((line) => line.installment_id === payment.allocations[0]?.installment_id);
+    return { payment, school_name: str(school.name, "School"), session_name: structure?.structure_name ?? "", balance_after: paise(dues.balance + paidLater) };
   },
   async outstanding(query = {}) {
-    return (await get<{ items?: StudentDues[] }>("/school-admin/fee-outstanding", {
-      session_year_id: query.sessionYearId,
-      class_id: query.classId,
-      class_section_id: query.classSectionId,
-      q: query.q?.trim(),
-      due_before: query.dueBefore,
-      only_overdue: query.onlyOverdue ? 1 : undefined,
-      page_size: 50,
-    }, "Unable to load outstanding fees.")).items ?? [];
+    const [rows, structures] = await Promise.all([allPages(`${F}/fees/outstanding`, {}, "Unable to load outstanding fees."), liveStructures()]);
+    const students = await studentRefs(rows.map((row) => num(row.student_id)));
+    const needle = query.q?.trim().toLowerCase() ?? "";
+    const byStudent = new Map<number, StudentDues>();
+    for (const row of rows) {
+      const student = students.get(num(row.student_id));
+      if (!student) continue;
+      const structure = structures.find((item) => item.id === num(row.structure_id));
+      const concession = paise(num(row.concession));
+      const line: DueLine = {
+        structure_id: num(row.structure_id),
+        structure_name: structure?.name ?? `Fee structure #${num(row.structure_id)}`,
+        installment_id: num(row.assignment_id),
+        installment_name: structure?.name ?? "Fees",
+        due_date: NO_DUE_DATE,
+        amount: paise(num(row.payable) + concession),
+        concession,
+        paid: paise(num(row.paid)),
+        balance: paise(num(row.balance)),
+        overdue: false,
+      };
+      const current = byStudent.get(student.student_id) ?? {
+        student_id: student.student_id,
+        student_name: student.student_name,
+        admission_no: student.admission_no,
+        class_name: student.class_name,
+        section_name: student.section_name,
+        class_section_id: student.class_section_id,
+        lines: [],
+        total: 0,
+        concession: 0,
+        paid: 0,
+        balance: 0,
+        overdue: 0,
+        pending: 0,
+      };
+      const lines = [...current.lines, line];
+      byStudent.set(student.student_id, { ...current, lines, ...totals(lines) });
+    }
+    return [...byStudent.values()]
+      .filter((row) => {
+        const student = students.get(row.student_id);
+        return (
+          (!query.sessionYearId || student?.session_year_id === query.sessionYearId) &&
+          (!query.classId || student?.class_id === query.classId) &&
+          (!query.classSectionId || row.class_section_id === query.classSectionId) &&
+          (!needle || row.student_name.toLowerCase().includes(needle) || row.admission_no.toLowerCase().includes(needle))
+        );
+      })
+      .sort((a, b) => b.balance - a.balance);
   },
 };
 
@@ -505,6 +802,11 @@ export const mockFees: FeeService = {
     );
   },
 };
+
+/** Checks for the fee structure form: without installments when the server keeps none. */
+export function structureFormProblems(input: FeeStructureInput): Record<string, string> {
+  return isOpsLive("fees") ? liveStructureProblems(input) : structureProblems(input);
+}
 
 export function feeService(): FeeService {
   return isOpsLive("fees") ? liveFees : mockFees;

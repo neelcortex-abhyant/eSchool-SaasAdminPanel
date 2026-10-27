@@ -8,8 +8,13 @@ import { useDebounced, useOptions, usePagedList } from "@/components/academics/h
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { Chip, TeachingPage } from "@/components/teaching/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
+import { useToast } from "@/components/academics/Toasts";
+import { errorMessage } from "@/lib/academics";
+import { gradingService } from "@/lib/ops/grading";
+import { isOpsLive } from "@/lib/ops/mode";
 import { peopleService, type StudentRow } from "@/lib/people";
 import { allOfflineExams } from "@/lib/teaching/offline";
+import type { OfflineExam } from "@/lib/teaching/offlineTypes";
 import { IconExam } from "@/lib/icons";
 
 const PAGE_SIZE = 20;
@@ -71,6 +76,7 @@ function ReportCardsBody() {
           <Chip tone={published ? "green" : "grey"}>{published} published</Chip>
         </div>
       ) : null}
+      {ready && isOpsLive("grading") ? <GenerateCards exams={exams.options.filter((exam) => exam.results_processed_at)} /> : null}
       <ErrorAlert error={list.error ?? exams.error} onRetry={() => void list.reload()} />
       {!ready ? (
         <div className="resource-card">
@@ -93,5 +99,40 @@ function ReportCardsBody() {
         </div>
       )}
     </>
+  );
+}
+
+/** Stores each processed exam's report cards on the server, graded with the default scale. */
+function GenerateCards({ exams }: { exams: OfflineExam[] }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<number | null>(null);
+  if (!exams.length) return null;
+  return (
+    <div className="resource-card ops-no-print">
+      <p className="muted">Save report cards on the server for an exam once its results are processed. Saving again updates them.</p>
+      <div className="page-actions">
+        {exams.map((exam) => (
+          <button
+            key={exam.id}
+            className="btn-pill btn-pill-green-soft"
+            type="button"
+            disabled={busy !== null}
+            onClick={async () => {
+              setBusy(exam.id);
+              try {
+                const result = await gradingService().generate(exam.id);
+                toast("success", `${exam.name}: ${result.total} report cards saved (${result.created} new).`);
+              } catch (caught) {
+                toast("error", errorMessage(caught, "Unable to generate report cards."));
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            {busy === exam.id ? "Saving…" : `Save cards: ${exam.name}`}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

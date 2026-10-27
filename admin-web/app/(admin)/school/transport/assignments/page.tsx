@@ -10,6 +10,7 @@ import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/compone
 import { useToast } from "@/components/academics/Toasts";
 import { StudentPicker } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { isOpsLive } from "@/lib/ops/mode";
 import { TRANSPORT_TABS } from "@/components/ops/transport";
 import { Chip, TeachingPage } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
@@ -60,8 +61,12 @@ function AssignmentsBody({ editing, setEditing }: { editing: TransportAssignment
     { key: "student", label: "Student", render: (row) => <div><strong>{row.student_name}</strong><div className="muted">{row.admission_no} · {row.class_name} {row.section_name}</div></div> },
     { key: "route", label: "Route", render: (row) => row.route_name },
     { key: "stop", label: "Stop", render: (row) => row.stop_name },
-    { key: "direction", label: "Uses", render: (row) => DIRECTION_LABEL[row.direction] },
-    { key: "from", label: "From", render: (row) => row.start_date },
+    ...(isOpsLive("transport")
+      ? [{ key: "from", label: "Added", render: (row: TransportAssignment) => row.start_date }]
+      : [
+          { key: "direction", label: "Uses", render: (row: TransportAssignment) => DIRECTION_LABEL[row.direction] },
+          { key: "from", label: "From", render: (row: TransportAssignment) => row.start_date },
+        ]),
     { key: "status", label: "Status", render: (row) => (row.status === 1 ? <Chip tone="green">Active</Chip> : <Chip tone="grey">Paused</Chip>) },
   ];
 
@@ -99,9 +104,11 @@ function AssignmentsBody({ editing, setEditing }: { editing: TransportAssignment
           emptyText={list.error ? "Transport assignments couldn't be loaded." : search || routeId ? "No students match these filters." : "No students use school transport yet."}
           actions={(row) => (
             <>
-              <button className="link-btn" type="button" onClick={() => setEditing(row)}>
-                Change
-              </button>
+              {isOpsLive("transport") ? null : (
+                <button className="link-btn" type="button" onClick={() => setEditing(row)}>
+                  Change
+                </button>
+              )}
               <button className="link-btn danger" type="button" onClick={() => setRemoving(row)}>
                 Remove
               </button>
@@ -225,9 +232,13 @@ function AssignmentForm({ routes, assignment, onClose, onSaved }: { routes: Rout
         options={(route?.stops ?? []).map((stop) => ({ value: String(stop.id), label: `${stop.stop_order}. ${stop.name}${stop.pickup_time ? ` · pickup ${stop.pickup_time}` : ""}${stop.drop_time ? ` · drop ${stop.drop_time}` : ""}` }))}
         error={errors.fieldErrors.stop_id}
       />
-      <SelectField id="ta-direction" label="Uses" required value={direction} onChange={(value) => setDirection(value as TransportDirection)} options={(Object.keys(DIRECTION_LABEL) as TransportDirection[]).map((value) => ({ value, label: DIRECTION_LABEL[value] }))} />
-      <TextField id="ta-start" label="From" type="date" required value={startDate} onChange={setStartDate} error={errors.fieldErrors.start_date} />
-      <StatusToggle id="ta-active" checked={active} onChange={setActive} label="Active (takes a seat)" />
+      {isOpsLive("transport") ? null : (
+        <>
+          <SelectField id="ta-direction" label="Uses" required value={direction} onChange={(value) => setDirection(value as TransportDirection)} options={(Object.keys(DIRECTION_LABEL) as TransportDirection[]).map((value) => ({ value, label: DIRECTION_LABEL[value] }))} />
+          <TextField id="ta-start" label="From" type="date" required value={startDate} onChange={setStartDate} error={errors.fieldErrors.start_date} />
+        </>
+      )}
+      {isOpsLive("transport") ? null : <StatusToggle id="ta-active" checked={active} onChange={setActive} label="Active (takes a seat)" />}
     </FormModal>
   );
 }
