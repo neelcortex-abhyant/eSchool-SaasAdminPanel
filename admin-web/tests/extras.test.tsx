@@ -222,3 +222,28 @@ describe("teachers: bulk upload and salary", () => {
     expect(salaryPath({ kind: "staff", user_id: 30 })).toBe("/staff/30");
   });
 });
+
+describe("settings pages (backend 0040)", () => {
+  it("reads and writes nested settings and never sends an empty secret", () => {
+    const payment = EXTRA_PAGES["payment-settings"] as import("@/lib/extras/types").SettingsConfig;
+    const values = initialValues(payment.fields, { provider: "fee_payment_gateway", configured: true, public_config: { enabled: 1, provider: "razorpay", mode: "live", key_id: "rzp_live_x", currency: "INR" } });
+    expect(values).toMatchObject({ "public_config.enabled": "1", "public_config.mode": "live", "public_config.key_id": "rzp_live_x", secret: "" });
+    expect(toBody(payment.fields, values, false)).toEqual({ public_config: { enabled: 1, provider: "razorpay", mode: "live", key_id: "rzp_live_x", currency: "INR" }, clear_secret: 0 });
+    expect(toBody(payment.fields, { ...values, secret: " new-secret " }, false)).toMatchObject({ secret: "new-secret" });
+  });
+
+  it("saves leave policy as an object and list fields as arrays", () => {
+    const leave = EXTRA_PAGES["leave-settings"] as import("@/lib/extras/types").SettingsConfig;
+    const body = toBody(leave.fields, { ...initialValues(leave.fields), "policy.staff_casual_days": "12", "policy.allow_half_day": "1", notes: "" }, false);
+    expect(body).toEqual({ policy: { staff_casual_days: 12, staff_sick_days: null, student_max_days_per_month: null, approval: "admin", allow_half_day: 1 }, notes: null });
+    const fields = (EXTRA_PAGES["additional-user-fields"] as ResourceConfig).fields;
+    expect(toBody(fields, { ...initialValues(fields), label: "Blood group", field_key: "blood_group", field_type: "select", options: "A+, B+ , O+" }, false)).toMatchObject({ options: ["A+", "B+", "O+"], entity_type: "student", required: 0 });
+    expect(initialValues(fields, { options: ["A+", "B+"] }).options).toBe("A+, B+");
+  });
+
+  it("reads third-party settings written one per line", async () => {
+    const { configLines, parseConfigLines } = await import("@/components/extras/Support");
+    expect(parseConfigLines("sender_id=SCHOOL\n\nregion = in\nbroken line")).toEqual({ sender_id: "SCHOOL", region: "in" });
+    expect(configLines({ sender_id: "SCHOOL", region: "in" })).toBe("sender_id=SCHOOL\nregion=in");
+  });
+});

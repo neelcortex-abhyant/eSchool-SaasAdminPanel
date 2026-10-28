@@ -113,7 +113,7 @@ export function FieldInput({
   student?: StudentRow | null;
   onStudent?: (student: StudentRow | null) => void;
 }) {
-  const id = `x-${field.key}`;
+  const id = `x-${field.key.replace(/\./g, "-")}`;
   const ref = field.type === "ref" ? field.ref : undefined;
   const loader = useCallback(() => (ref ? refOptions(ref) : Promise.resolve([])), [ref]);
   const options = useOptions(ref && ref !== "student" ? loader : null);
@@ -157,7 +157,13 @@ export function FieldInput({
     );
   }
   if (field.type === "textarea") {
-    return <TextAreaField id={id} label={field.label} required={field.required} value={value} onChange={onChange} maxLength={field.maxLength} error={error} hint={hint} span />;
+    return <TextAreaField id={id} label={field.label} required={field.required} value={value} onChange={onChange} maxLength={field.maxLength} rows={field.rows} error={error} hint={hint} span />;
+  }
+  if (field.type === "password") {
+    return <TextField id={id} label={field.label} type="password" autoComplete="new-password" value={value} onChange={onChange} maxLength={field.maxLength} error={error} hint={hint} span={field.span} />;
+  }
+  if (field.type === "list") {
+    return <TextField id={id} label={field.label} required={field.required} value={value} onChange={onChange} error={error} hint={hint ?? "Separate choices with commas."} span={field.span} />;
   }
   if (field.type === "checkbox") {
     return <StatusToggle id={id} checked={value === "1"} onChange={(checked) => onChange(checked ? "1" : "0")} label={field.label} />;

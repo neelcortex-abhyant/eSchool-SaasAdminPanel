@@ -5,9 +5,9 @@ import { ErrorAlert } from "@/components/academics/ErrorAlert";
 import { useFormErrors, useOptions } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { ExtrasPage, FieldInput } from "@/components/extras/Frame";
-import { Stat } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/teaching/Frame";
 import { displayValue, getOne, labelFor, replace } from "@/lib/extras/api";
-import { initialValues, problems, toBody, type Values } from "@/lib/extras/form";
+import { initialValues, problems, readPath, toBody, type Values } from "@/lib/extras/form";
 import type { ReportConfig, SettingsConfig } from "@/lib/extras/types";
 
 /** Loads a settings object, edits it and saves it with PUT. */
@@ -44,7 +44,7 @@ function SettingsBody({ config }: { config: SettingsConfig }) {
     errors.clear();
     setSaving(true);
     try {
-      await replace(config.path, toBody(config.fields, values, false));
+      await replace(config.path, { ...(config.extraBody ?? {}), ...toBody(config.fields, values, false) });
       toast("success", "Settings saved.");
       void state.reload();
     } catch (caught) {
@@ -64,6 +64,11 @@ function SettingsBody({ config }: { config: SettingsConfig }) {
       }}
     >
       {errors.formError ? <div className="alert alert-danger field-span">{errors.formError}</div> : null}
+      {config.status ? (
+        <p className="field-span">
+          {readPath(row ?? {}, config.status.key) ? <Chip tone="green">{config.status.yes}</Chip> : <Chip tone="grey">{config.status.no}</Chip>}
+        </p>
+      ) : null}
       {config.fields.map((field) => (
         <FieldInput key={field.key} field={field} value={values[field.key] ?? ""} error={errors.fieldErrors[field.key]} onChange={(value) => setValues((current) => ({ ...(current ?? {}), [field.key]: value }))} />
       ))}

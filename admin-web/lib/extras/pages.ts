@@ -3,7 +3,7 @@
  * (/school/{slug}). Fields and columns follow the server: a field the server's PATCH ignores is
  * `createOnly`, and edit/delete appear only where the server has PATCH/DELETE.
  */
-import type { ExtraConfig, FieldDef, ResourceConfig } from "@/lib/extras/types";
+import type { ExtraConfig, FieldDef, ResourceConfig, SettingsConfig } from "@/lib/extras/types";
 
 const money = (value: unknown) => (value === null || value === undefined || value === "" ? "—" : `₹${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
@@ -39,6 +39,46 @@ const nameAndDescription = (noun: string, path: string, title: string, descripti
   canEdit,
   canDelete: true,
 });
+
+const CONTACT_STATUS = [
+  { value: "new", label: "New" },
+  { value: "read", label: "Read" },
+  { value: "replied", label: "Replied" },
+  { value: "closed", label: "Closed" },
+  { value: "spam", label: "Spam" },
+];
+
+function contentPage(title: string, path: string, description: string): SettingsConfig {
+  return {
+    kind: "settings",
+    title,
+    description,
+    path,
+    fields: [
+      { key: "title", label: "Heading", type: "text", maxLength: 255, span: true },
+      { key: "body", label: "Text", type: "textarea", rows: 14, maxLength: 100000 },
+    ],
+  };
+}
+
+function whatsappPage(title: string, description: string): SettingsConfig {
+  return {
+    kind: "settings",
+    title,
+    description,
+    path: "/whatsapp-settings",
+    note: "WhatsApp and Meta WhatsApp credentials are the same settings. The access token is stored encrypted on the server and is never shown again; leave it empty to keep the saved one.",
+    status: { key: "configured", yes: "Access token saved", no: "No access token saved yet" },
+    fields: [
+      { key: "public_config.enabled", label: "Send messages on WhatsApp", type: "checkbox" },
+      { key: "public_config.phone_number_id", label: "Phone number ID", type: "text", rawId: true, maxLength: 64 },
+      { key: "public_config.business_account_id", label: "WhatsApp Business account ID", type: "text", rawId: true, maxLength: 64 },
+      { key: "public_config.display_number", label: "Sender number", type: "tel", maxLength: 32 },
+      { key: "secret", label: "Access token", type: "password", span: true },
+      { key: "clear_secret", label: "Remove the saved access token", type: "checkbox" },
+    ],
+  };
+}
 
 const sessionField: FieldDef = { key: "session_year_id", label: "Academic session", type: "ref", ref: "session", required: true, createOnly: true, defaultCurrent: true };
 
@@ -558,6 +598,140 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
     canCreate: false,
     canEdit: false,
     canDelete: false,
+  },
+
+  // ---------- Settings (backend 0040) ----------
+  "privacy-policy": contentPage("Privacy policy", "/content/privacy_policy", "How the school handles personal data. Shown in the apps and on the school website."),
+  "terms-and-conditions": contentPage("Terms and conditions", "/content/terms_condition", "The terms parents and students agree to."),
+  "refund-cancellation": contentPage("Refund and cancellation", "/content/refund_cancellation", "When fees are refunded and how cancellations work."),
+  "contact-us": contentPage("Contact us", "/content/contact_us", "Contact details shown on the Contact us page."),
+  "about-us": contentPage("About us", "/content/about_us", "The school's story, shown on the About us page."),
+  "web-content": contentPage("Website content", "/web-content", "Main text for the school website."),
+  "online-exam-terms": contentPage("Online exam terms", "/online-exam-terms", "Rules students accept before starting an online exam."),
+  "leave-settings": {
+    kind: "settings",
+    title: "Leave settings",
+    description: "How much leave staff and students get, and how it's approved.",
+    path: "/leave-settings",
+    fields: [
+      { key: "policy.staff_casual_days", label: "Staff casual leave (days per year)", type: "number" },
+      { key: "policy.staff_sick_days", label: "Staff sick leave (days per year)", type: "number" },
+      { key: "policy.student_max_days_per_month", label: "Student leave (most days per month)", type: "number" },
+      { key: "policy.approval", label: "Who approves leave", type: "select", options: [{ value: "admin", label: "School admin" }, { value: "class_teacher", label: "Class teacher" }], initial: "admin" },
+      { key: "policy.allow_half_day", label: "Allow half-day leave", type: "checkbox" },
+      { key: "notes", label: "Notes", type: "textarea", hint: "Anything else about the leave policy." },
+    ],
+  },
+  whatsapp: whatsappPage("WhatsApp", "Send school messages on WhatsApp."),
+  "meta-whatsapp-credentials": whatsappPage("Meta WhatsApp credentials", "The WhatsApp Business account the school sends messages from."),
+  "payment-settings": {
+    kind: "settings",
+    title: "Payment settings",
+    description: "The payment gateway parents use to pay fees online.",
+    path: "/payment-gateway-settings",
+    note: "The secret key is stored encrypted on the server and is never shown again. Leave it empty to keep the saved one.",
+    status: { key: "configured", yes: "Secret key saved", no: "No secret key saved yet" },
+    fields: [
+      { key: "public_config.enabled", label: "Online fee payments are on", type: "checkbox" },
+      { key: "public_config.provider", label: "Gateway", type: "select", options: [{ value: "razorpay", label: "Razorpay" }, { value: "stripe", label: "Stripe" }, { value: "paytm", label: "Paytm" }, { value: "other", label: "Other" }], initial: "razorpay" },
+      { key: "public_config.mode", label: "Mode", type: "select", options: [{ value: "test", label: "Test" }, { value: "live", label: "Live" }], initial: "test" },
+      { key: "public_config.key_id", label: "Key ID (public)", type: "text", rawId: true, maxLength: 128 },
+      { key: "public_config.currency", label: "Currency", type: "text", maxLength: 8, initial: "INR" },
+      { key: "secret", label: "Secret key", type: "password", span: true },
+      { key: "clear_secret", label: "Remove the saved secret key", type: "checkbox" },
+    ],
+  },
+  "email-template": {
+    kind: "resource",
+    title: "Email templates",
+    description: "Wording for the emails the school sends, such as fee reminders and admission confirmations.",
+    path: "/email-templates",
+    noun: "template",
+    fields: [
+      { key: "key", label: "Template key", type: "text", required: true, maxLength: 64, hint: "A short name, e.g. fee_reminder." },
+      { key: "subject", label: "Subject", type: "text", required: true, maxLength: 255 },
+      { key: "locale", label: "Language", type: "select", options: [{ value: "en", label: "English" }, { value: "hi", label: "Hindi" }], initial: "en" },
+      { key: "body_text", label: "Email text", type: "textarea", rows: 8 },
+      { key: "body_html", label: "Email HTML (optional)", type: "textarea", rows: 6 },
+    ],
+    columns: [
+      { key: "key", label: "Key" },
+      { key: "subject", label: "Subject" },
+      { key: "locale", label: "Language" },
+      { key: "updated_at", label: "Updated" },
+    ],
+    canEdit: true,
+    canDelete: true,
+  },
+  "additional-user-fields": {
+    kind: "resource",
+    title: "Additional user fields",
+    description: "Extra details to collect for students, staff or parents, such as blood group or bus pass number.",
+    path: "/user-form-fields",
+    noun: "field",
+    fields: [
+      { key: "entity_type", label: "For", type: "select", required: true, options: [{ value: "student", label: "Students" }, { value: "staff", label: "Staff" }, { value: "parent", label: "Parents" }, { value: "user", label: "All users" }], initial: "student" },
+      { key: "label", label: "Label", type: "text", required: true, maxLength: 255 },
+      { key: "field_key", label: "Field key", type: "text", required: true, maxLength: 64, hint: "A short name without spaces, e.g. blood_group." },
+      { key: "field_type", label: "Type", type: "select", required: true, options: [{ value: "text", label: "Text" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "select", label: "Choice from a list" }, { value: "boolean", label: "Yes / no" }], initial: "text" },
+      { key: "options", label: "Choices (for a list)", type: "list" },
+      { key: "sort_order", label: "Order", type: "number", initial: "0" },
+      { key: "required", label: "Required", type: "checkbox" },
+    ],
+    columns: [
+      { key: "entity_type", label: "For", format: (value) => ({ student: "Students", staff: "Staff", parent: "Parents", user: "All users" })[String(value)] ?? String(value ?? "—") },
+      { key: "label", label: "Label" },
+      { key: "field_key", label: "Key" },
+      { key: "field_type", label: "Type" },
+      { key: "required", label: "Required", format: (value) => (Number(value) === 1 ? "Yes" : "No") },
+      { key: "sort_order", label: "Order" },
+    ],
+    canEdit: true,
+    canDelete: true,
+    sort: { key: "sort_order" },
+  },
+  faqs: {
+    kind: "resource",
+    title: "FAQs",
+    description: "Questions and answers shown on the school website.",
+    path: "/faqs",
+    noun: "FAQ",
+    fields: [
+      { key: "question", label: "Question", type: "text", required: true, maxLength: 512, span: true },
+      { key: "answer", label: "Answer", type: "textarea", rows: 5 },
+      { key: "sort_order", label: "Order", type: "number", initial: "0" },
+      { key: "status", label: "Shown on the website", type: "checkbox", initial: "1" },
+    ],
+    columns: [
+      { key: "sort_order", label: "Order" },
+      { key: "question", label: "Question" },
+      { key: "status", label: "Shown", format: (value) => (Number(value) === 1 ? "Yes" : "No") },
+    ],
+    canEdit: true,
+    canDelete: true,
+    sort: { key: "sort_order" },
+  },
+  "contact-inquiry": {
+    kind: "resource",
+    title: "Contact inquiries",
+    description: "Messages sent from the school website's contact form.",
+    path: "/contact-inquiries",
+    noun: "inquiry",
+    note: "Messages arrive from the website. Change an inquiry's status as you handle it.",
+    fields: [{ key: "status", label: "Status", type: "select", required: true, options: CONTACT_STATUS }],
+    columns: [
+      { key: "created_at", label: "Received" },
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: "phone", label: "Phone" },
+      { key: "subject", label: "Subject" },
+      { key: "message", label: "Message" },
+      { key: "status", label: "Status", format: (value) => CONTACT_STATUS.find((item) => item.value === value)?.label ?? String(value ?? "—") },
+    ],
+    canCreate: false,
+    canEdit: true,
+    canDelete: false,
+    sort: { key: "created_at", desc: true },
   },
 
   // ---------- Reports ----------

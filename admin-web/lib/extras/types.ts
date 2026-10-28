@@ -1,7 +1,11 @@
 import type { RefKind } from "@/lib/extras/refs";
 import type { Raw } from "@/lib/extras/api";
 
-export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "datetime" | "email" | "tel" | "url" | "select" | "checkbox" | "ref";
+/**
+ * "password": a secret the server never sends back; left out of the request when empty.
+ * "list": comma-separated text sent as an array.
+ */
+export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "datetime" | "email" | "tel" | "url" | "select" | "checkbox" | "ref" | "password" | "list";
 
 export type FieldDef = {
   key: string;
@@ -23,6 +27,8 @@ export type FieldDef = {
   rawId?: boolean;
   /** For a session ref: pick the current session when the form opens empty. */
   defaultCurrent?: boolean;
+  /** Rows for a textarea. */
+  rows?: number;
 };
 
 export type ColumnDef = {
@@ -65,8 +71,13 @@ export type SettingsConfig = {
   title: string;
   description: string;
   path: string;
+  /** Keys may be dotted ("public_config.phone_number_id") to read and write a nested object. */
   fields: FieldDef[];
   note?: string;
+  /** A true/false value from the server shown above the form, e.g. whether a secret is saved. */
+  status?: { key: string; yes: string; no: string };
+  /** Sent with every save, e.g. {"clear_secret": false}. */
+  extraBody?: Raw;
 };
 
 /** Read-only figures from one or more GET routes. */

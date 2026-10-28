@@ -4,8 +4,25 @@ import type { Raw } from "@/lib/extras/api";
 
 export type Values = Record<string, string>;
 
+/** row["a.b"] reads row.a.b. */
+export function readPath(row: Raw, key: string): unknown {
+  return key.split(".").reduce<unknown>((value, part) => (value && typeof value === "object" ? (value as Raw)[part] : undefined), row);
+}
+
+function writePath(body: Raw, key: string, value: unknown) {
+  const parts = key.split(".");
+  let target = body;
+  for (const part of parts.slice(0, -1)) {
+    if (!target[part] || typeof target[part] !== "object") target[part] = {};
+    target = target[part] as Raw;
+  }
+  target[parts[parts.length - 1]] = value;
+}
+
 function fromServer(field: FieldDef, value: unknown): string {
+  if (field.type === "password") return "";
   if (value === null || value === undefined) return field.initial ?? "";
+  if (field.type === "list") return Array.isArray(value) ? value.map(String).join(", ") : String(value);
   if (field.type === "checkbox") return value === true || value === 1 || value === "1" || value === "true" ? "1" : "0";
   const text = String(value);
   if (field.type === "date") return text.slice(0, 10);
@@ -15,7 +32,7 @@ function fromServer(field: FieldDef, value: unknown): string {
 }
 
 export function initialValues(fields: FieldDef[], row?: Raw | null): Values {
-  return Object.fromEntries(fields.map((field) => [field.key, row ? fromServer(field, row[field.key]) : field.initial ?? (field.type === "checkbox" ? "0" : "")]));
+  return Object.fromEntries(fields.map((field) => [field.key, row ? fromServer(field, readPath(row, field.key)) : field.initial ?? (field.type === "checkbox" ? "0" : "")]));
 }
 
 export function problems(fields: FieldDef[], values: Values, editing: boolean): Record<string, string> {
@@ -41,11 +58,18 @@ export function toBody(fields: FieldDef[], values: Values, editing: boolean): Ra
   for (const field of fields) {
     if (editing && field.createOnly) continue;
     const value = (values[field.key] ?? "").trim();
-    if (field.type === "checkbox") body[field.key] = value === "1" ? 1 : 0;
-    else if (!value) body[field.key] = null;
-    else if (field.type === "number" || field.type === "ref") body[field.key] = Number(value);
-    else if (field.type === "datetime") body[field.key] = value.length === 16 ? `${value}:00` : value;
-    else body[field.key] = value;
+    let out: unknown;
+    if (field.type === "password") {
+      // An empty secret box means "keep the saved one".
+      if (!value) continue;
+      out = value;
+    } else if (field.type === "checkbox") out = value === "1" ? 1 : 0;
+    else if (field.type === "list") out = value ? value.split(",").map((item) => item.trim()).filter(Boolean) : null;
+    else if (!value) out = null;
+    else if (field.type === "number" || field.type === "ref") out = Number(value);
+    else if (field.type === "datetime") out = value.length === 16 ? `${value}:00` : value;
+    else out = value;
+    writePath(body, field.key, out);
   }
   return body;
 }
