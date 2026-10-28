@@ -2254,3 +2254,209 @@ class SchoolGalleryItem(Base, TimestampMixin):
     image_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+# School Admin Settings / CMS / Support (Alembic 20261028_0040)
+
+
+class SchoolContentPage(Base, TimestampMixin):
+    __tablename__ = "school_content_pages"
+    __table_args__ = (
+        Index(
+            "uq_school_content_pages_school_slug_active",
+            "school_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolFaq(Base, TimestampMixin):
+    __tablename__ = "school_faqs"
+    __table_args__ = (Index("ix_school_faqs_school_sort", "school_id", "sort_order"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    question: Mapped[str] = mapped_column(String(512), nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    status: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolLeaveSetting(Base, TimestampMixin):
+    __tablename__ = "school_leave_settings"
+    __table_args__ = (
+        Index(
+            "uq_school_leave_settings_school_active",
+            "school_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    policy_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolOnlineExamTerms(Base, TimestampMixin):
+    __tablename__ = "school_online_exam_terms"
+    __table_args__ = (
+        Index(
+            "uq_school_online_exam_terms_school_active",
+            "school_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolEmailTemplate(Base, TimestampMixin):
+    __tablename__ = "school_email_templates"
+    __table_args__ = (
+        Index(
+            "uq_school_email_templates_school_key_active",
+            "school_id",
+            "key",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    body_text: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    body_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    locale: Mapped[str] = mapped_column(String(16), nullable=False, default="en", server_default="en")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolIntegrationSecret(Base, TimestampMixin):
+    __tablename__ = "school_integration_secrets"
+    __table_args__ = (
+        Index(
+            "uq_school_integration_secrets_school_provider_active",
+            "school_id",
+            "provider",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    public_config_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    secret_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolFormField(Base, TimestampMixin):
+    __tablename__ = "school_form_fields"
+    __table_args__ = (
+        Index(
+            "uq_school_form_fields_entity_key_active",
+            "school_id",
+            "entity_type",
+            "field_key",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_school_form_fields_school_entity", "school_id", "entity_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    field_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    field_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    required: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    options_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ContactInquiry(Base, TimestampMixin):
+    __tablename__ = "contact_inquiries"
+    __table_args__ = (Index("ix_contact_inquiries_school_status", "school_id", "status"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="new", server_default="new")
+    source: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="school_admin", server_default="school_admin"
+    )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SupportTicket(Base, TimestampMixin):
+    __tablename__ = "support_tickets"
+    __table_args__ = (Index("ix_support_tickets_school_status", "school_id", "status"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", server_default="open")
+    priority: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="normal", server_default="normal"
+    )
+    opener_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    opener_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SupportTicketMessage(Base, TimestampMixin):
+    __tablename__ = "support_ticket_messages"
+    __table_args__ = (Index("ix_support_ticket_messages_ticket", "school_id", "ticket_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    ticket_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("support_tickets.id"), nullable=False, index=True
+    )
+    author_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    author_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class PlatformBackup(Base, TimestampMixin):
+    """Platform DB backup job metadata. Dump bytes live on disk, never in this row."""
+
+    __tablename__ = "platform_backups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_by: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", server_default="pending")
+    size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    checksum: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    storage_uri: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    confirmation_token_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)

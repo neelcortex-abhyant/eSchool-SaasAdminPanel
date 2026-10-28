@@ -16,6 +16,7 @@ from app.api.v1.super_admin import reports as reports_routes
 from app.api.v1.super_admin import school_addons as school_addons_routes
 from app.api.v1.super_admin import school_admins as school_admins_routes
 from app.api.v1.super_admin import schools as schools_routes
+from app.api.v1.super_admin import backups as backups_routes
 from app.api.v1.super_admin import settings as settings_routes
 from app.api.v1.super_admin import subscriptions as subscriptions_routes
 from app.api.v1.super_admin import invoices as invoice_routes
@@ -55,6 +56,7 @@ router.include_router(addons_routes.router)
 router.include_router(school_addons_routes.router)
 router.include_router(reports_routes.router)
 router.include_router(settings_routes.router)
+router.include_router(backups_routes.router)
 router.include_router(audit_logs_routes.router)
 router.include_router(notifications_routes.router)
 

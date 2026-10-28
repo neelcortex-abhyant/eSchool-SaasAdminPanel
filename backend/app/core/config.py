@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     document_max_image_bytes: int = 5_242_880
     document_max_file_bytes: int = 10_485_760
 
+    # Fernet key for school integration secrets at rest. Empty → encrypt ops return 503.
+    school_secrets_key: SecretStr = SecretStr("")
+    # Local directory for Super Admin backup artifacts. Empty → backup create returns 503.
+    backup_storage_path: str = ""
+    backup_retention_days: int = 30
+    # Must be true to accept restore requests (still a safe no-op; does not drop Neon).
+    allow_backup_restore: bool = False
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())
@@ -93,6 +101,23 @@ class Settings(BaseSettings):
         backend = (self.document_storage_backend or "").strip().lower()
         path = (self.document_storage_path or "").strip()
         return backend == "local" and bool(path)
+
+    @property
+    def school_secrets_configured(self) -> bool:
+        key = (self.school_secrets_key.get_secret_value() or "").strip()
+        if not key:
+            return False
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(key.encode("utf-8"))
+        except Exception:
+            return False
+        return True
+
+    @property
+    def backup_storage_configured(self) -> bool:
+        return bool((self.backup_storage_path or "").strip())
 
     @property
     def resolved_school_base_domain(self) -> str:
