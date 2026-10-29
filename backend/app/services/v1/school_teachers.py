@@ -34,6 +34,7 @@ from app.services.v1.school_academics import (
     _user_name,
     list_teacher_assignments,
 )
+from app.services.v1.school_people import owner_documents
 
 TEACHER_ROLE_NAME = "Teacher"
 EMPLOYMENT_STATUSES = frozenset({"active", "on_leave", "resigned", "terminated"})
@@ -416,6 +417,9 @@ def get_teacher(db: Session, school_id: int, teacher_id: int) -> dict:
         db, school_id, page=1, page_size=50, teacher_id=user.id
     )
     item["assignments"] = assignments["items"]
+    item["documents"] = owner_documents(
+        db, school_id, owner_kind="teacher", route_owner_id=user.id, user_id=user.id
+    )
     return item
 
 

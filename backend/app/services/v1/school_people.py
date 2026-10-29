@@ -407,6 +407,15 @@ def _guardian_items(db: Session, student_id: int) -> list[dict]:
 def _student_documents(
     db: Session, school_id: int, *, student_id: int, user_id: int
 ) -> list[dict]:
+    return owner_documents(
+        db, school_id, owner_kind="student", route_owner_id=student_id, user_id=user_id
+    )
+
+
+def owner_documents(
+    db: Session, school_id: int, *, owner_kind: str, route_owner_id: int, user_id: int
+) -> list[dict]:
+    """Active non-photo documents for a profile payload (People contract `documents`)."""
     rows = (
         db.query(PersonDocument)
         .filter(
@@ -419,7 +428,7 @@ def _student_documents(
         .all()
     )
     return [
-        document_public_item(row, owner_kind="student", route_owner_id=student_id)
+        document_public_item(row, owner_kind=owner_kind, route_owner_id=route_owner_id)
         for row in rows
     ]
 

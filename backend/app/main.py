@@ -49,6 +49,12 @@ async def lifespan(_app: FastAPI):
                 db.close()
         except Exception:
             logger.exception("v1_super_admin_bootstrap_failed")
+    from app.services.v1.document_storage import storage_config_error
+
+    storage_problem = storage_config_error()
+    if storage_problem:
+        # Uploads will return 503 until this is fixed; say so at boot, not on first upload.
+        logger.warning("document_storage_unavailable reason=%s", storage_problem)
     yield
 
 

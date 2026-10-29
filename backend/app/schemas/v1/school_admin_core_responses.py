@@ -152,6 +152,8 @@ class TeacherOut(_Out):
     department: str | None = None
     designation: str | None = None
     assignment_count: int | None = None
+    # Profile (GET /{id}) only: active non-photo documents, same shape as PersonDocumentOut.
+    documents: list[Any] | None = None
 
 
 class StaffOut(TeacherOut):

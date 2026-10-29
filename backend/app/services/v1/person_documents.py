@@ -186,31 +186,34 @@ def upload_document(
             raise AcademicError(422, "A record may have at most 10 documents")
 
     storage.put(key, data)
-    row = PersonDocument(
-        school_id=school_id,
-        owner_user_id=user.id,
-        category=cat,
-        title=clean_title or safe_name,
-        storage_key=key,
-        content_type=content_type,
-        size_bytes=len(data),
-        original_filename=safe_name,
-        created_at=_now(),
-        updated_at=_now(),
-    )
-    db.add(row)
+    try:
+        row = PersonDocument(
+            school_id=school_id,
+            owner_user_id=user.id,
+            category=cat,
+            title=clean_title or safe_name,
+            storage_key=key,
+            content_type=content_type,
+            size_bytes=len(data),
+            original_filename=safe_name,
+            created_at=_now(),
+            updated_at=_now(),
+        )
+        db.add(row)
+        for old in prior:
+            old.deleted_at = _now()
+            old.updated_at = _now()
+        if cat == "profile_photo":
+            user.image = _photo_api_path(kind, route_id)
+            user.updated_at = _now()
+        _commit(db)
+    except Exception:
+        # Metadata was not saved: roll back and remove the file so it is not orphaned.
+        db.rollback()
+        store.discard(storage, key)
+        raise
     for old in prior:
-        old.deleted_at = _now()
-        old.updated_at = _now()
-    if cat == "profile_photo":
-        user.image = _photo_api_path(kind, route_id)
-        user.updated_at = _now()
-    _commit(db)
-    for old in prior:
-        try:
-            storage.delete(old.storage_key)
-        except AcademicError:
-            pass
+        store.discard(storage, old.storage_key)
     db.refresh(row)
     return document_public_item(row, owner_kind=kind, route_owner_id=route_id)
 
