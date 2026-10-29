@@ -1,0 +1,4 @@
+# Local dev server logs and backup copies; never commit these.
+*.log
+*.bak
+.env.local.*

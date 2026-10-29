@@ -1,0 +1,48 @@
+/**
+ * Live or sample data for the operations modules whose backend routes aren't deployed yet
+ * (see backend/docs/OPERATIONS_MODULES_API_CONTRACT.md).
+ *
+ * NEXT_PUBLIC_OPERATIONS_API_MODE:
+ *   unset (default)   tracking uses the server's trip routes; the rest use sample data
+ *   "mock"            every feature below uses sample data kept in this browser
+ *   "live"            every feature calls the contract routes
+ *   per feature       e.g. "tracking:live,messaging:mock"
+ *
+ * Features that already have backend routes (staff attendance, leave, announcements,
+ * notifications, certificates, ID cards, vehicles, routes) always use the server; only the
+ * parts the server lacks are listed here.
+ */
+export type OperationsFeature = "tracking" | "payroll" | "messaging" | "notices";
+export type ApiSource = "live" | "mock";
+
+export const OPERATIONS_FEATURES: OperationsFeature[] = ["tracking", "payroll", "messaging", "notices"];
+
+export function parseOperationsMode(raw: string | undefined): Record<OperationsFeature, ApiSource> {
+  const value = (raw || "").trim().toLowerCase();
+  const all = (source: ApiSource) => Object.fromEntries(OPERATIONS_FEATURES.map((f) => [f, source])) as Record<OperationsFeature, ApiSource>;
+  if (value === "live") return all("live");
+  if (value === "mock") return all("mock");
+  // Trips and boarding records are on the server (backend 0041), so tracking uses it unless told otherwise.
+  const sources: Record<OperationsFeature, ApiSource> = { ...all("mock"), tracking: "live" };
+  for (const part of value.split(",")) {
+    const [feature, source] = part.split(":").map((s) => s.trim());
+    if ((OPERATIONS_FEATURES as string[]).includes(feature) && (source === "live" || source === "mock")) sources[feature as OperationsFeature] = source;
+  }
+  return sources;
+}
+
+const SOURCES = parseOperationsMode(process.env.NEXT_PUBLIC_OPERATIONS_API_MODE);
+
+/** Shown on the tracking pages when trips come from the server. */
+export const TRACKING_LIVE_NOTE = "Trips and boarding records are on the school's server. Bus positions on the map are simulated until the server shares drivers' GPS locations with admins.";
+
+export function isOperationsLive(feature: OperationsFeature): boolean {
+  return SOURCES[feature] === "live";
+}
+
+export const OPERATIONS_SAMPLE_NOTE: Record<OperationsFeature, string> = {
+  tracking: "Live bus locations, trips and boarding records aren't on the school's server yet, so this page shows sample data built from your real vehicles and routes.",
+  payroll: "Salary components, payroll processing and payslips aren't on the school's server yet, so this page uses sample data saved only in this browser.",
+  messaging: "Teacher–parent messages aren't on the school's server yet, so this inbox shows sample conversations saved only in this browser.",
+  notices: "Announcements and notifications are saved on the school's server. The server doesn't keep the audience, publish date, drafts or delivery status yet, so those are kept in this browser until it does.",
+};
