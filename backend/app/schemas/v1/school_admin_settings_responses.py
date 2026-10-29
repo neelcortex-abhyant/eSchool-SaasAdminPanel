@@ -14,6 +14,9 @@ __all__ = [
     "ContentPageOut",
     "FaqOut",
     "LeaveSettingsOut",
+    "LeaveTypeOut",
+    "LeaveTypeListOut",
+    "LeaveBalanceListOut",
     "EmailTemplateOut",
     "IntegrationSettingsOut",
     "StudyMaterialOut",
@@ -67,6 +70,45 @@ class LeaveSettingsOut(_Out):
     policy: Any = None
     notes: str | None = None
     updated_at: str | None = None
+
+
+class LeaveTypeOut(_Out):
+    id: int
+    code: str
+    name: str
+    description: str | None = None
+    is_paid: bool = True
+    days_per_year: int | None = None
+    applies_to: str = "all"
+    is_active: bool = True
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class LeaveTypeListOut(_Out):
+    items: list[LeaveTypeOut | dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
+class LeaveBalanceOut(_Out):
+    leave_type_id: int | None = None
+    leave_type: str | None = None
+    code: str | None = None
+    allowed: int | None = None
+    used: int = 0
+    pending: int = 0
+    remaining: int | None = None
+    year: int | None = None
+    user_id: int | None = None
+
+
+class LeaveBalanceListOut(_Out):
+    items: list[LeaveBalanceOut | dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+    year: int | None = None
+    user_id: int | None = None
 
 
 class EmailTemplateOut(_Out):

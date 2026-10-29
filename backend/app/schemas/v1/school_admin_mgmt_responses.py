@@ -56,9 +56,20 @@ __all__ = [
     "PayrollSettingsOut",
     "PayrollRunOut",
     "PayrollRunListOut",
+    "SalaryStructureOut",
+    "SalaryStructureListOut",
+    "SalaryAssignmentOut",
+    "SalaryAssignmentListOut",
+    "PayrollPreviewOut",
+    "PayrollProcessOut",
+    "PayslipOut",
+    "PayslipListOut",
+    "PayrollSummaryOut",
     "CertificateTemplateOut",
     "CertificateTemplateListOut",
     "CertificateIssueOut",
+    "CertificateIssueListOut",
+    "CertificateVerifyOut",
     "IdCardSettingsOut",
     "StudentIdCardOut",
     "StaffIdCardOut",
@@ -474,6 +485,125 @@ class PayrollRunListOut(_Out):
     page_size: int
 
 
+class SalaryStructureLineOut(_Out):
+    name: str
+    amount: float = 0
+    kind: str | None = None
+
+
+class SalaryStructureOut(_Out):
+    id: int
+    name: str
+    basic: float = 0
+    allowances: list[SalaryStructureLineOut | dict[str, Any]] = Field(default_factory=list)
+    deductions: list[SalaryStructureLineOut | dict[str, Any]] = Field(default_factory=list)
+    gross: float = 0
+    net: float = 0
+    assigned: int = 0
+    is_active: bool = True
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SalaryStructureListOut(_Out):
+    items: list[SalaryStructureOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class SalaryAssignmentOut(_Out):
+    id: int
+    staff_id: int
+    staff_name: str | None = None
+    structure_id: int
+    structure_name: str | None = None
+    effective_from: str | None = None
+    created_at: str | None = None
+
+
+class SalaryAssignmentListOut(_Out):
+    items: list[SalaryAssignmentOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class PayrollPreviewLineOut(_Out):
+    staff_id: int
+    name: str | None = None
+    department: str | None = None
+    structure_name: str | None = None
+    basic: float = 0
+    allowances: float = 0
+    deductions: float = 0
+    attendance_adjustment: float = 0
+    working_days: int | None = None
+    paid_days: int | None = None
+    gross: float | None = None
+    net: float = 0
+    eligible: bool = True
+    problem: str | None = None
+
+
+class PayrollPreviewOut(_Out):
+    month: str
+    items: list[PayrollPreviewLineOut | dict[str, Any]] = Field(default_factory=list)
+    total_net: float = 0
+    already_processed: bool = False
+
+
+class PayrollProcessOut(_Out):
+    processed: int = 0
+    failed: int = 0
+    run_id: int | None = None
+    month: str | None = None
+    total_net: float | None = None
+    idempotent_replay: bool | None = None
+
+
+class PayslipOut(_Out):
+    id: int
+    month: str | None = None
+    staff_id: int
+    name: str | None = None
+    employee_code: str | None = None
+    department: str | None = None
+    designation: str | None = None
+    basic: float = 0
+    allowances: list[Any] = Field(default_factory=list)
+    deductions: list[Any] = Field(default_factory=list)
+    attendance_adjustment: float = 0
+    working_days: int | None = None
+    paid_days: int | None = None
+    gross: float = 0
+    net: float = 0
+    status: str | None = None
+    processed_at: str | None = None
+    failure_reason: str | None = None
+    payslip_ref: str | None = None
+    run_id: int | None = None
+
+
+class PayslipListOut(_Out):
+    items: list[PayslipOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class PayrollSummaryMonthOut(_Out):
+    month: str
+    processed: int = 0
+    pending: int = 0
+    failed: int = 0
+    total_net: float = 0
+
+
+class PayrollSummaryOut(_Out):
+    items: list[PayrollSummaryMonthOut | dict[str, Any]] = Field(default_factory=list)
+
+
 # ---- Certificates / ID cards ----
 
 
@@ -499,13 +629,35 @@ class CertificateIssueOut(_Out):
     id: int
     school_id: int
     template_id: int
-    student_id: int
+    student_id: int | None = None
+    staff_id: int | None = None
     certificate_no: str
     issued_at: str | None = None
     data_json: str | None = None
+    status: str | None = "issued"
+    verification_token: str | None = None
+    qr_verify_url: str | None = None
+    verify_url: str | None = None
+    revoked_at: str | None = None
     deleted_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+
+
+class CertificateIssueListOut(_Out):
+    items: list[CertificateIssueOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class CertificateVerifyOut(_Out):
+    valid: bool
+    status: str
+    certificate_no: str | None = None
+    issued_at: str | None = None
+    revoked_at: str | None = None
+    subject_type: str | None = None
 
 
 class IdCardSettingsOut(_Out):
@@ -530,6 +682,8 @@ class StudentIdCardOut(_Out):
     last_name: str = ""
     image: str | None = None
     settings: IdCardSettingsOut | dict[str, Any]
+    qr_verify_url: str | None = None
+    qr_code_url: str | None = None
 
 
 class StaffIdCardOut(_Out):
@@ -542,6 +696,8 @@ class StaffIdCardOut(_Out):
     last_name: str = ""
     image: str | None = None
     settings: IdCardSettingsOut | dict[str, Any]
+    qr_verify_url: str | None = None
+    qr_code_url: str | None = None
 
 
 # ---- Diary / notifications / CMS ----
@@ -590,6 +746,12 @@ class NotificationOut(_Out):
     status: int
     school_id: int | None = None
     created_by: str | None = None
+    audience: list[str] | list[Any] | None = None
+    delivery: str | None = "queued"
+    recipients: int | None = None
+    delivered: int | None = None
+    failed: int | None = None
+    failure_reason: str | None = None
     deleted_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -608,6 +770,11 @@ class AnnouncementOut(_Out):
     description: str | None = None
     session_year_id: int
     school_id: int
+    status: str | None = "published"
+    audience: list[str] | list[Any] | None = None
+    publish_at: str | None = None
+    published_at: str | None = None
+    deleted_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 

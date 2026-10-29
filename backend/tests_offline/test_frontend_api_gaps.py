@@ -23,7 +23,10 @@ def test_migration_0042_revises_0041():
     rev = script.get_revision("20261029_0042")
     assert rev is not None
     assert rev.down_revision == "20261029_0041"
-    assert script.get_heads() == ["20261029_0042"]
+    assert script.get_heads() == ["20261029_0043"]
+    rev43 = script.get_revision("20261029_0043")
+    assert rev43 is not None
+    assert rev43.down_revision == "20261029_0042"
 
 
 def test_timetable_room_column_and_salary_component_model():

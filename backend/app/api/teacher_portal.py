@@ -655,3 +655,115 @@ def teacher_list_attempts(
             db, school.id, user, assessment_id, page=page, page_size=page_size
         )
     )
+
+
+# ---- Teacher–parent messaging ----
+
+
+class TeacherConversationCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: int = Field(ge=1)
+    parent_user_id: int | None = Field(default=None, ge=1)
+    subject: str | None = Field(default=None, max_length=255)
+
+
+class TeacherMessageCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=2000)
+
+
+@router.get("/teacher/conversations")
+def teacher_list_conversations(
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+    q: str | None = Query(default=None),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.list_conversations(
+            db, school.id, role="teacher", user_id=user.id, q=q, page=page, page_size=page_size
+        )
+    )
+
+
+@router.post("/teacher/conversations", status_code=201)
+def teacher_create_conversation(
+    body: TeacherConversationCreateBody,
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.create_conversation(
+            db,
+            school.id,
+            body.model_dump(exclude_unset=True),
+            role="teacher",
+            user_id=user.id,
+        )
+    )
+
+
+@router.get("/teacher/conversations/{conversation_id}/messages")
+def teacher_list_messages(
+    conversation_id: int,
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=50),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.list_messages(
+            db,
+            school.id,
+            conversation_id,
+            role="teacher",
+            user_id=user.id,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.post("/teacher/conversations/{conversation_id}/messages", status_code=201)
+def teacher_send_message(
+    conversation_id: int,
+    body: TeacherMessageCreateBody,
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.send_message(
+            db,
+            school.id,
+            conversation_id,
+            body.model_dump(),
+            role="teacher",
+            user_id=user.id,
+        )
+    )
+
+
+@router.post("/teacher/conversations/{conversation_id}/read")
+def teacher_mark_read(
+    conversation_id: int,
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.mark_conversation_read(
+            db, school.id, conversation_id, role="teacher", user_id=user.id
+        )
+    )

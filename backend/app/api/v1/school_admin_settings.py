@@ -68,6 +68,31 @@ class LeaveSettingsBody(BaseModel):
     notes: str | None = None
 
 
+class LeaveTypeCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=128)
+    description: str | None = None
+    is_paid: bool = True
+    days_per_year: int | None = Field(default=None, ge=0)
+    applies_to: str | None = Field(default="all", max_length=64)
+    is_active: bool = True
+    key: str | None = Field(default=None, max_length=64, description="Alias for code")
+
+
+class LeaveTypePatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str | None = Field(default=None, min_length=1, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    is_paid: bool | None = None
+    days_per_year: int | None = Field(default=None, ge=0)
+    applies_to: str | None = Field(default=None, max_length=64)
+    is_active: bool | None = None
+
+
 class OnlineExamTermsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -271,6 +296,80 @@ def put_leave_settings(
 ):
     return _run(
         lambda: cms.put_leave_settings(db, _school_id(auth), body.model_dump(exclude_unset=True))
+    )
+
+
+@router.get("/leave-types", responses=settings_out.json_response(settings_out.LeaveTypeListOut))
+def list_leave_types(
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    active_only: bool = Query(False),
+):
+    return _run(
+        lambda: cms.list_leave_types(
+            db, _school_id(auth), page=page, page_size=page_size, active_only=active_only
+        )
+    )
+
+
+@router.post(
+    "/leave-types",
+    status_code=status.HTTP_201_CREATED,
+    responses=settings_out.json_response(settings_out.LeaveTypeOut, status_code=201),
+)
+def create_leave_type(
+    body: LeaveTypeCreateBody,
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: cms.create_leave_type(db, _school_id(auth), body.model_dump(exclude_unset=True))
+    )
+
+
+@router.get("/leave-types/{row_id}", responses=settings_out.json_response(settings_out.LeaveTypeOut))
+def get_leave_type(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: cms.get_leave_type(db, _school_id(auth), row_id))
+
+
+@router.patch("/leave-types/{row_id}", responses=settings_out.json_response(settings_out.LeaveTypeOut))
+def patch_leave_type(
+    row_id: int,
+    body: LeaveTypePatchBody,
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: cms.update_leave_type(
+            db, _school_id(auth), row_id, body.model_dump(exclude_unset=True)
+        )
+    )
+
+
+@router.delete("/leave-types/{row_id}", responses=settings_out.json_response(settings_out.OkIdOut))
+def delete_leave_type(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: cms.soft_delete_leave_type(db, _school_id(auth), row_id))
+
+
+@router.get("/leave-balances", responses=settings_out.json_response(settings_out.LeaveBalanceListOut))
+def list_leave_balances(
+    auth: Annotated[AuthContext, Depends(require_settings)],
+    db: Annotated[Session, Depends(central_db)],
+    user_id: int | None = Query(default=None, ge=1),
+    year: int | None = Query(default=None, ge=2000, le=2100),
+):
+    return _run(
+        lambda: cms.list_leave_balances(db, _school_id(auth), user_id=user_id, year=year)
     )
 
 

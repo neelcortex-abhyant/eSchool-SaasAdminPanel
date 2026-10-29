@@ -32,7 +32,7 @@ def test_migration_0041_revises_0040():
     rev = script.get_revision("20261029_0041")
     assert rev is not None
     assert rev.down_revision == "20261028_0040"
-    assert script.get_heads() == ["20261029_0042"]
+    assert script.get_heads() == ["20261029_0043"]
 
 
 def test_erp_models_have_expected_columns():

@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.models.tables import (
     ContactInquiry,
+    Leave,
+    LeaveType,
     School,
     SchoolContentPage,
     SchoolEmailTemplate,
@@ -353,9 +355,254 @@ def put_leave_settings(db: Session, school_id: int, body: dict) -> dict:
         if "notes" in data:
             row.notes = None if notes is None else str(notes)
         row.updated_at = now
+    if "policy" in data and isinstance(policy, dict):
+        _maybe_seed_leave_types_from_policy(db, school_id, policy)
     _commit(db)
     db.refresh(row)
     return _leave_item(row)
+
+
+# ---- Leave types (first-class) ----
+
+
+def _leave_type_item(row: LeaveType) -> dict:
+    return {
+        "id": row.id,
+        "code": row.code,
+        "name": row.name,
+        "description": row.description,
+        "is_paid": bool(row.is_paid),
+        "days_per_year": row.days_per_year,
+        "applies_to": row.applies_to or "all",
+        "is_active": bool(row.is_active),
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
+def _maybe_seed_leave_types_from_policy(db: Session, school_id: int, policy: dict) -> None:
+    """Best-effort migrate policy.types[] into leave_types rows; never delete policy JSON."""
+    types = policy.get("types")
+    if not isinstance(types, list):
+        return
+    now = _now()
+    for raw in types:
+        if not isinstance(raw, dict):
+            continue
+        code = str(raw.get("key") or raw.get("code") or "").strip()
+        name = str(raw.get("name") or code).strip()
+        if not code or not name:
+            continue
+        existing = db.scalar(
+            select(LeaveType).where(
+                LeaveType.school_id == school_id,
+                LeaveType.code == code,
+                LeaveType.deleted_at.is_(None),
+            )
+        )
+        if existing is not None:
+            continue
+        days = raw.get("days_per_year")
+        db.add(
+            LeaveType(
+                school_id=school_id,
+                code=code[:64],
+                name=name[:128],
+                description=raw.get("description"),
+                is_paid=1 if raw.get("is_paid", True) else 0,
+                days_per_year=int(days) if days is not None else None,
+                applies_to=str(raw.get("applies_to") or "all")[:64],
+                is_active=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+
+def list_leave_types(
+    db: Session,
+    school_id: int,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    active_only: bool = False,
+) -> dict:
+    page, page_size = _page(page, page_size)
+    query = db.query(LeaveType).filter(
+        LeaveType.school_id == school_id,
+        LeaveType.deleted_at.is_(None),
+    )
+    if active_only:
+        query = query.filter(LeaveType.is_active == 1)
+    total = query.count()
+    rows = query.order_by(LeaveType.name.asc()).offset((page - 1) * page_size).limit(page_size).all()
+    return _envelope([_leave_type_item(r) for r in rows], total, page, page_size)
+
+
+def get_leave_type(db: Session, school_id: int, row_id: int) -> dict:
+    return _leave_type_item(_owned(db, LeaveType, row_id, school_id))
+
+
+def create_leave_type(db: Session, school_id: int, body: dict) -> dict:
+    data = sanitize_body(body)
+    code = str(data.get("code") or data.get("key") or "").strip()
+    name = str(data.get("name") or "").strip()
+    if not code or not name:
+        raise AcademicError(422, "code and name are required")
+    dup = db.scalar(
+        select(LeaveType).where(
+            LeaveType.school_id == school_id,
+            LeaveType.code == code,
+            LeaveType.deleted_at.is_(None),
+        )
+    )
+    if dup is not None:
+        raise AcademicError(409, "Leave type code already exists")
+    now = _now()
+    days = data.get("days_per_year")
+    row = LeaveType(
+        school_id=school_id,
+        code=code[:64],
+        name=name[:128],
+        description=data.get("description"),
+        is_paid=1 if data.get("is_paid", True) else 0,
+        days_per_year=int(days) if days is not None else None,
+        applies_to=str(data.get("applies_to") or "all")[:64],
+        is_active=1 if data.get("is_active", True) else 0,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    _commit(db)
+    db.refresh(row)
+    return _leave_type_item(row)
+
+
+def update_leave_type(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, LeaveType, row_id, school_id)
+    data = sanitize_body(body)
+    if "code" in data and data["code"] is not None:
+        code = str(data["code"]).strip()
+        if not code:
+            raise AcademicError(422, "code is required")
+        dup = db.scalar(
+            select(LeaveType).where(
+                LeaveType.school_id == school_id,
+                LeaveType.code == code,
+                LeaveType.deleted_at.is_(None),
+                LeaveType.id != row.id,
+            )
+        )
+        if dup is not None:
+            raise AcademicError(409, "Leave type code already exists")
+        row.code = code[:64]
+    if "name" in data and data["name"] is not None:
+        name = str(data["name"]).strip()
+        if not name:
+            raise AcademicError(422, "name is required")
+        row.name = name[:128]
+    if "description" in data:
+        row.description = data["description"]
+    if "is_paid" in data and data["is_paid"] is not None:
+        row.is_paid = 1 if data["is_paid"] else 0
+    if "days_per_year" in data:
+        row.days_per_year = int(data["days_per_year"]) if data["days_per_year"] is not None else None
+    if "applies_to" in data and data["applies_to"] is not None:
+        row.applies_to = str(data["applies_to"])[:64]
+    if "is_active" in data and data["is_active"] is not None:
+        row.is_active = 1 if data["is_active"] else 0
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _leave_type_item(row)
+
+
+def soft_delete_leave_type(db: Session, school_id: int, row_id: int) -> dict:
+    row = _owned(db, LeaveType, row_id, school_id)
+    row.deleted_at = _now()
+    row.is_active = 0
+    row.updated_at = row.deleted_at
+    _commit(db)
+    return {"ok": True, "id": row_id}
+
+
+def list_leave_balances(
+    db: Session,
+    school_id: int,
+    *,
+    user_id: int | None = None,
+    year: int | None = None,
+) -> dict:
+    """Simple derived balances: days_per_year − approved leave days in calendar year.
+
+    No accrual engine. Pending leaves counted separately. Documented limitation.
+    """
+    from datetime import date as date_cls
+
+    yr = int(year or date_cls.today().year)
+    start = date_cls(yr, 1, 1)
+    end = date_cls(yr, 12, 31)
+    types = (
+        db.query(LeaveType)
+        .filter(
+            LeaveType.school_id == school_id,
+            LeaveType.deleted_at.is_(None),
+            LeaveType.is_active == 1,
+        )
+        .order_by(LeaveType.name.asc())
+        .all()
+    )
+    leave_q = db.query(Leave).filter(
+        Leave.school_id == school_id,
+        Leave.from_date <= end,
+        Leave.to_date >= start,
+    )
+    if user_id is not None:
+        leave_q = leave_q.filter(Leave.user_id == int(user_id))
+    leaves = leave_q.all()
+
+    def _overlap_days(row: Leave) -> int:
+        a = max(row.from_date, start)
+        b = min(row.to_date, end)
+        if b < a:
+            return 0
+        return (b - a).days + 1
+
+    items = []
+    for lt in types:
+        used = 0
+        pending = 0
+        for lv in leaves:
+            if lv.leave_type_id is not None and lv.leave_type_id != lt.id:
+                continue
+            if lv.leave_type_id is None:
+                # Match legacy "TypeName: reason" prefix when no FK.
+                prefix = f"{lt.name}:"
+                if not (lv.reason or "").startswith(prefix) and not (lv.reason or "").startswith(
+                    f"{lt.code}:"
+                ):
+                    continue
+            days = _overlap_days(lv)
+            if int(lv.status or 0) == 1:
+                used += days
+            elif int(lv.status or 0) == 0:
+                pending += days
+        allowed = lt.days_per_year
+        remaining = None if allowed is None else max(0, int(allowed) - used)
+        items.append(
+            {
+                "leave_type_id": lt.id,
+                "leave_type": lt.name,
+                "code": lt.code,
+                "allowed": allowed,
+                "used": used,
+                "pending": pending,
+                "remaining": remaining,
+                "year": yr,
+                "user_id": user_id,
+            }
+        )
+    return {"items": items, "total": len(items), "year": yr, "user_id": user_id}
 
 
 # ---- Online exam terms ----

@@ -81,6 +81,7 @@ from app.services.v1.school_academics import (
     _owned,
     _page,
     _same_school,
+    _user_name,
 )
 
 _WRITE_BLOCKLIST = frozenset(
@@ -2457,28 +2458,225 @@ def soft_delete_certificate_template(db: Session, school_id: int, row_id: int) -
     return _soft_delete(db, _owned(db, CertificateTemplate, row_id, school_id))
 
 
+def _new_verification_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _certificate_verify_path(token: str) -> str:
+    return f"/api/v1/public/certificates/verify/{token}"
+
+
+def _certificate_item(row: CertificateIssue) -> dict:
+    data = _row_dict(row)
+    token = getattr(row, "verification_token", None)
+    data["status"] = getattr(row, "status", None) or "issued"
+    data["staff_id"] = getattr(row, "staff_id", None)
+    data["student_id"] = getattr(row, "student_id", None)
+    data["verification_token"] = token
+    data["qr_verify_url"] = _certificate_verify_path(token) if token else None
+    data["verify_url"] = data["qr_verify_url"]
+    return data
+
+
 def issue_certificate(db: Session, school_id: int, body: dict) -> dict:
+    """Issue a certificate to a student or staff (mutually exclusive subject)."""
     template_id = int(body.get("template_id") or 0)
-    student_id = int(body.get("student_id") or 0)
-    if not template_id or not student_id:
-        raise AcademicError(422, "template_id and student_id are required")
+    raw_student = body.get("student_id")
+    raw_staff = body.get("staff_id")
+    student_id = int(raw_student) if raw_student is not None else None
+    staff_id = int(raw_staff) if raw_staff is not None else None
+    if not template_id:
+        raise AcademicError(422, "template_id is required")
+    if (student_id is None and staff_id is None) or (student_id is not None and staff_id is not None):
+        raise AcademicError(422, "Provide exactly one of student_id or staff_id")
     _owned(db, CertificateTemplate, template_id, school_id)
-    student = _owned(db, Student, student_id, school_id)
-    cert_no = str(body.get("certificate_no") or f"CERT-{school_id}-{student_id}-{int(_now().timestamp())}")
+    student = _owned(db, Student, student_id, school_id) if student_id is not None else None
+    staff = _same_school(db, Staff, staff_id, school_id, "Staff") if staff_id is not None else None
+    subject_key = student.id if student else staff.id  # type: ignore[union-attr]
+    prefix = "SCERT" if staff else "CERT"
+    cert_no = str(
+        body.get("certificate_no") or f"{prefix}-{school_id}-{subject_key}-{int(_now().timestamp())}"
+    )
+    token = _new_verification_token()
+    now = _now()
     row = CertificateIssue(
         school_id=school_id,
         template_id=template_id,
-        student_id=student.id,
+        student_id=student.id if student else None,
+        staff_id=staff.id if staff else None,
         certificate_no=cert_no,
-        issued_at=_now(),
+        issued_at=now,
         data_json=json.dumps(body.get("data") or {}) if body.get("data") is not None else None,
-        created_at=_now(),
-        updated_at=_now(),
+        verification_token=token,
+        status="issued",
+        created_at=now,
+        updated_at=now,
     )
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return _row_dict(row)
+    return _certificate_item(row)
+
+
+def issue_staff_certificate(db: Session, school_id: int, body: dict) -> dict:
+    data = dict(body)
+    if not data.get("staff_id"):
+        raise AcademicError(422, "staff_id is required")
+    data.pop("student_id", None)
+    return issue_certificate(db, school_id, data)
+
+
+def list_certificates(
+    db: Session,
+    school_id: int,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    student_id: int | None = None,
+    staff_id: int | None = None,
+    status_filter: str | None = None,
+) -> dict:
+    page, page_size = _page(page, page_size)
+    query = db.query(CertificateIssue).filter(
+        CertificateIssue.school_id == school_id,
+        CertificateIssue.deleted_at.is_(None),
+    )
+    if student_id is not None:
+        query = query.filter(CertificateIssue.student_id == int(student_id))
+    if staff_id is not None:
+        query = query.filter(CertificateIssue.staff_id == int(staff_id))
+    if status_filter:
+        query = query.filter(CertificateIssue.status == status_filter)
+    total = query.count()
+    rows = (
+        query.order_by(CertificateIssue.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return _envelope([_certificate_item(r) for r in rows], total, page, page_size)
+
+
+def get_certificate(db: Session, school_id: int, row_id: int) -> dict:
+    return _certificate_item(_owned(db, CertificateIssue, row_id, school_id))
+
+
+def revoke_certificate(db: Session, school_id: int, row_id: int) -> dict:
+    row = _owned(db, CertificateIssue, row_id, school_id)
+    if getattr(row, "status", None) == "revoked":
+        return _certificate_item(row)
+    row.status = "revoked"
+    row.revoked_at = _now()
+    row.updated_at = row.revoked_at
+    _commit(db)
+    db.refresh(row)
+    return _certificate_item(row)
+
+
+def render_certificate_pdf(db: Session, school_id: int, row_id: int) -> bytes:
+    from fpdf import FPDF
+
+    row = _owned(db, CertificateIssue, row_id, school_id)
+    template = _owned(db, CertificateTemplate, row.template_id, school_id)
+    subject_line = ""
+    if row.student_id:
+        student = db.get(Student, row.student_id)
+        user = db.get(User, student.user_id) if student else None
+        subject_line = f"Student: {_user_name(user) if user else row.student_id}"
+    elif row.staff_id:
+        staff = db.get(Staff, row.staff_id)
+        user = db.get(User, staff.user_id) if staff else None
+        subject_line = f"Staff: {_user_name(user) if user else row.staff_id}"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "Certificate", ln=True, align="C")
+    pdf.set_font("Helvetica", size=12)
+    pdf.ln(4)
+    pdf.multi_cell(0, 8, f"Template: {template.name}")
+    pdf.multi_cell(0, 8, f"Certificate No: {row.certificate_no}")
+    pdf.multi_cell(0, 8, subject_line)
+    pdf.multi_cell(0, 8, f"Status: {getattr(row, 'status', 'issued')}")
+    if template.body_text:
+        pdf.ln(4)
+        pdf.multi_cell(0, 8, str(template.body_text)[:2000])
+    token = getattr(row, "verification_token", None)
+    if token:
+        pdf.ln(4)
+        pdf.set_font("Helvetica", size=9)
+        pdf.multi_cell(0, 6, f"Verify: {_certificate_verify_path(token)}")
+    return bytes(pdf.output())
+
+
+def verify_certificate_public(db: Session, token: str) -> dict:
+    """Minimal public validity check — no PII beyond certificate number and status."""
+    key = (token or "").strip()
+    if not key:
+        raise AcademicError(404, "Certificate not found")
+    row = (
+        db.query(CertificateIssue)
+        .filter(
+            CertificateIssue.verification_token == key,
+            CertificateIssue.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if row is None:
+        raise AcademicError(404, "Certificate not found")
+    status_val = getattr(row, "status", None) or "issued"
+    return {
+        "valid": status_val == "issued",
+        "status": status_val,
+        "certificate_no": row.certificate_no,
+        "issued_at": row.issued_at.isoformat() if row.issued_at else None,
+        "revoked_at": row.revoked_at.isoformat() if getattr(row, "revoked_at", None) else None,
+        "subject_type": "staff" if row.staff_id else "student",
+    }
+
+
+def _ensure_staff_id_card_token(db: Session, school_id: int, staff_id: int) -> str | None:
+    """Return an existing issued staff certificate token, or mint a lightweight ID-card token cert."""
+    existing = (
+        db.query(CertificateIssue)
+        .filter(
+            CertificateIssue.school_id == school_id,
+            CertificateIssue.staff_id == staff_id,
+            CertificateIssue.deleted_at.is_(None),
+            CertificateIssue.status == "issued",
+            CertificateIssue.verification_token.isnot(None),
+        )
+        .order_by(CertificateIssue.id.desc())
+        .first()
+    )
+    if existing and existing.verification_token:
+        return existing.verification_token
+    # Mint a dedicated ID-card verification record using first template if any.
+    template = (
+        db.query(CertificateTemplate)
+        .filter(CertificateTemplate.school_id == school_id, CertificateTemplate.deleted_at.is_(None))
+        .order_by(CertificateTemplate.id.asc())
+        .first()
+    )
+    if template is None:
+        return None
+    token = _new_verification_token()
+    now = _now()
+    row = CertificateIssue(
+        school_id=school_id,
+        template_id=template.id,
+        student_id=None,
+        staff_id=staff_id,
+        certificate_no=f"IDCARD-{school_id}-{staff_id}-{int(now.timestamp())}",
+        issued_at=now,
+        data_json=json.dumps({"purpose": "id_card"}),
+        verification_token=token,
+        status="issued",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    _commit(db)
+    return token
 
 
 def get_id_card_settings(db: Session, school_id: int) -> dict:
@@ -2527,6 +2725,23 @@ def student_id_card_payload(db: Session, school_id: int, student_id: int) -> dic
     student = _owned(db, Student, student_id, school_id)
     user = db.get(User, student.user_id)
     settings = get_id_card_settings(db, school_id)
+    token_row = (
+        db.query(CertificateIssue)
+        .filter(
+            CertificateIssue.school_id == school_id,
+            CertificateIssue.student_id == student_id,
+            CertificateIssue.deleted_at.is_(None),
+            CertificateIssue.status == "issued",
+            CertificateIssue.verification_token.isnot(None),
+        )
+        .order_by(CertificateIssue.id.desc())
+        .first()
+    )
+    qr_url = (
+        _certificate_verify_path(token_row.verification_token)
+        if token_row and token_row.verification_token
+        else None
+    )
     return {
         "type": "student",
         "student_id": student.id,
@@ -2538,6 +2753,8 @@ def student_id_card_payload(db: Session, school_id: int, student_id: int) -> dic
         "last_name": user.last_name if user else "",
         "image": user.image if user else None,
         "settings": settings,
+        "qr_verify_url": qr_url,
+        "qr_code_url": qr_url,
     }
 
 
@@ -2545,6 +2762,8 @@ def staff_id_card_payload(db: Session, school_id: int, staff_id: int) -> dict:
     staff = _same_school(db, Staff, staff_id, school_id, "Staff")
     user = db.get(User, staff.user_id)
     settings = get_id_card_settings(db, school_id)
+    token = _ensure_staff_id_card_token(db, school_id, staff_id)
+    qr_url = _certificate_verify_path(token) if token else None
     return {
         "type": "staff",
         "staff_id": staff.id,
@@ -2555,6 +2774,8 @@ def staff_id_card_payload(db: Session, school_id: int, staff_id: int) -> dict:
         "last_name": user.last_name if user else "",
         "image": user.image if user else None,
         "settings": settings,
+        "qr_verify_url": qr_url,
+        "qr_code_url": qr_url,
     }
 
 
@@ -2708,41 +2929,163 @@ def soft_delete_student_diary(db: Session, school_id: int, row_id: int) -> dict:
     return _soft_delete(db, _owned(db, StudentDiaryEntry, row_id, school_id))
 
 
-def list_notifications(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
+_ANNOUNCEMENT_STATUSES = frozenset({"draft", "scheduled", "published", "archived"})
+_AUDIENCE_VALUES = frozenset({"all", "students", "parents", "teachers", "staff"})
+
+
+def _normalize_audience(raw) -> list[str]:
+    if raw is None:
+        return ["all"]
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not raw:
+        raise AcademicError(422, "audience must be a non-empty list")
+    out: list[str] = []
+    for item in raw:
+        key = str(item).strip().lower()
+        if key not in _AUDIENCE_VALUES:
+            raise AcademicError(422, f"Invalid audience value: {item}")
+        if key not in out:
+            out.append(key)
+    return out
+
+
+def _parse_audience_json(raw: str | None) -> list[str]:
+    if not raw:
+        return ["all"]
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return ["all"]
+    if isinstance(data, list):
+        return [str(x) for x in data]
+    return ["all"]
+
+
+def _notification_item(row: Notification) -> dict:
+    data = _row_dict(row)
+    data["audience"] = _parse_audience_json(getattr(row, "audience_json", None))
+    data["delivery"] = getattr(row, "delivery", None) or "queued"
+    data["recipients"] = getattr(row, "recipients", None)
+    data["delivered"] = getattr(row, "delivered", None) or 0
+    data["failed"] = getattr(row, "failed", None) or 0
+    data["failure_reason"] = getattr(row, "failure_reason", None)
+    return data
+
+
+def list_notifications(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    q: str | None = None,
+    delivery: str | None = None,
+) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(Notification).filter(
         Notification.school_id == school_id, Notification.deleted_at.is_(None)
     )
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        query = query.filter(Notification.title.ilike(like))
+    if delivery:
+        query = query.filter(Notification.delivery == delivery)
     total = query.count()
     rows = query.order_by(Notification.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    return _envelope([_row_dict(r) for r in rows], total, page, page_size)
+    return _envelope([_notification_item(r) for r in rows], total, page, page_size)
 
 
 def create_notification(db: Session, school_id: int, body: dict, *, created_by: str | None = None) -> dict:
     title = str(body.get("title") or "").strip()
     if not title:
         raise AcademicError(422, "title is required")
+    audience = _normalize_audience(body.get("audience"))
     row = Notification(
         title=title,
         body=body.get("body"),
         status=int(body.get("status", 1)),
         school_id=school_id,
         created_by=created_by,
+        audience_json=json.dumps(audience),
+        delivery="queued",
+        recipients=0,
+        delivered=0,
+        failed=0,
         created_at=_now(),
         updated_at=_now(),
     )
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return _row_dict(row)
+    return _notification_item(row)
 
 
-def list_announcements(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
+def _lazy_publish_announcement(db: Session, row: Announcement) -> None:
+    """Flip scheduled → published when publish_at has passed (no cron)."""
+    if getattr(row, "status", None) != "scheduled":
+        return
+    publish_at = getattr(row, "publish_at", None)
+    if publish_at is None:
+        return
+    now = _now()
+    if publish_at <= now:
+        row.status = "published"
+        row.published_at = row.published_at or now
+        row.updated_at = now
+
+
+def _announcement_item(row: Announcement) -> dict:
+    data = _row_dict(row)
+    data["audience"] = _parse_audience_json(getattr(row, "audience_json", None))
+    data["status"] = getattr(row, "status", None) or "published"
+    data["publish_at"] = data.get("publish_at")
+    data["published_at"] = data.get("published_at")
+    return data
+
+
+def list_announcements(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    status_filter: str | None = None,
+    q: str | None = None,
+) -> dict:
     page, page_size = _page(page, page_size)
-    query = db.query(Announcement).filter(Announcement.school_id == school_id)
+    query = db.query(Announcement).filter(
+        Announcement.school_id == school_id,
+        Announcement.deleted_at.is_(None),
+    )
+    if status_filter:
+        query = query.filter(Announcement.status == status_filter)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        query = query.filter(Announcement.title.ilike(like))
     total = query.count()
     rows = query.order_by(Announcement.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    return _envelope([_row_dict(r) for r in rows], total, page, page_size)
+    dirty = False
+    for row in rows:
+        before = row.status
+        _lazy_publish_announcement(db, row)
+        if row.status != before:
+            dirty = True
+    if dirty:
+        _commit(db)
+    return _envelope([_announcement_item(r) for r in rows], total, page, page_size)
+
+
+def get_announcement(db: Session, school_id: int, row_id: int) -> dict:
+    row = _owned(db, Announcement, row_id, school_id)
+    if getattr(row, "deleted_at", None) is not None:
+        raise AcademicError(404, "Announcement not found")
+    before = row.status
+    _lazy_publish_announcement(db, row)
+    if row.status != before:
+        _commit(db)
+        db.refresh(row)
+    return _announcement_item(row)
 
 
 def create_announcement(db: Session, school_id: int, body: dict) -> dict:
@@ -2751,18 +3094,79 @@ def create_announcement(db: Session, school_id: int, body: dict) -> dict:
     if not title or not session_year_id:
         raise AcademicError(422, "title and session_year_id are required")
     _same_school(db, SessionYear, session_year_id, school_id, "Session year")
+    audience = _normalize_audience(body.get("audience"))
+    publish_at = _parse_datetime(body.get("publish_at"), "publish_at") if body.get("publish_at") else None
+    status_val = str(body.get("status") or "").strip().lower() or None
+    now = _now()
+    if status_val is None:
+        if publish_at and publish_at > now:
+            status_val = "scheduled"
+        else:
+            status_val = "published"
+    if status_val not in _ANNOUNCEMENT_STATUSES:
+        raise AcademicError(422, "Invalid announcement status")
+    if status_val == "scheduled" and publish_at is None:
+        raise AcademicError(422, "publish_at is required when status is scheduled")
+    published_at = now if status_val == "published" else None
+    if status_val == "scheduled" and publish_at and publish_at <= now:
+        status_val = "published"
+        published_at = now
     row = Announcement(
         title=title,
         description=body.get("description") or body.get("body"),
         session_year_id=session_year_id,
         school_id=school_id,
-        created_at=_now(),
-        updated_at=_now(),
+        status=status_val,
+        audience_json=json.dumps(audience),
+        publish_at=publish_at,
+        published_at=published_at,
+        created_at=now,
+        updated_at=now,
     )
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return _row_dict(row)
+    return _announcement_item(row)
+
+
+def update_announcement(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, Announcement, row_id, school_id)
+    if getattr(row, "deleted_at", None) is not None:
+        raise AcademicError(404, "Announcement not found")
+    data = sanitize_body(body)
+    if "title" in data and data["title"] is not None:
+        title = str(data["title"]).strip()
+        if not title:
+            raise AcademicError(422, "title is required")
+        row.title = title
+    if "description" in data or "body" in data:
+        row.description = data.get("description") if "description" in data else data.get("body")
+    if "session_year_id" in data and data["session_year_id"] is not None:
+        _same_school(db, SessionYear, int(data["session_year_id"]), school_id, "Session year")
+        row.session_year_id = int(data["session_year_id"])
+    if "audience" in data:
+        row.audience_json = json.dumps(_normalize_audience(data["audience"]))
+    if "publish_at" in data:
+        row.publish_at = (
+            _parse_datetime(data["publish_at"], "publish_at") if data["publish_at"] else None
+        )
+    if "status" in data and data["status"] is not None:
+        status_val = str(data["status"]).strip().lower()
+        if status_val not in _ANNOUNCEMENT_STATUSES:
+            raise AcademicError(422, "Invalid announcement status")
+        row.status = status_val
+        if status_val == "published" and row.published_at is None:
+            row.published_at = _now()
+    _lazy_publish_announcement(db, row)
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _announcement_item(row)
+
+
+def soft_delete_announcement(db: Session, school_id: int, row_id: int) -> dict:
+    row = _owned(db, Announcement, row_id, school_id)
+    return _soft_delete(db, row)
 
 
 def list_sliders(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:

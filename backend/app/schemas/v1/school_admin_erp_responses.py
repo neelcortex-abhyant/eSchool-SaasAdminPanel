@@ -441,6 +441,13 @@ class StudentTransportAssignmentListOut(_Out):
 # ---- M5 trips / GPS / attendance ----
 
 
+class TransportTripLatestGpsOut(_Out):
+    lat: float
+    lng: float
+    recorded_at: str | None = None
+    freshness: str = "missing"
+
+
 class TransportTripOut(_Out):
     id: int
     school_id: int
@@ -452,6 +459,13 @@ class TransportTripOut(_Out):
     ended_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    route_name: str | None = None
+    registration_no: str | None = None
+    driver_name: str | None = None
+    latest_gps: TransportTripLatestGpsOut | None = None
+    freshness: str | None = None
+    server_time: str | None = None
+    poll_seconds: int | None = None
 
 
 class TransportTripListOut(_Out):
@@ -459,6 +473,31 @@ class TransportTripListOut(_Out):
     total: int
     page: int
     page_size: int
+
+
+class VehicleLocationOut(_Out):
+    vehicle_id: int
+    registration_no: str | None = None
+    vehicle_name: str | None = None
+    route_id: int | None = None
+    route_name: str | None = None
+    driver_staff_id: int | None = None
+    driver_name: str | None = None
+    trip_id: int | None = None
+    trip_status: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    recorded_at: str | None = None
+    freshness: str = "missing"
+
+
+class VehicleLocationsOut(_Out):
+    items: list[VehicleLocationOut]
+    total: int = 0
+    server_time: str | None = None
+    poll_seconds: int = 15
+    stale_after_seconds: int = 300
+    offline_after_seconds: int = 1800
 
 
 class TransportTripReportItemOut(TransportTripOut):

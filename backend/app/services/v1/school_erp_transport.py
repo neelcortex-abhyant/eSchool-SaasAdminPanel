@@ -24,6 +24,126 @@ from app.services.v1.school_offline_exams import _guardian_children
 
 TRIP_STATUSES = frozenset({"scheduled", "in_progress", "completed", "cancelled"})
 EVENT_TYPES = frozenset({"board", "drop"})
+# Ops contract: admin-web treats >5m as stale, >30m as offline.
+GPS_STALE_SECONDS = 5 * 60
+GPS_OFFLINE_SECONDS = 30 * 60
+DEFAULT_POLL_SECONDS = 15
+
+
+def gps_freshness(recorded_at: datetime | None, *, now: datetime | None = None) -> str:
+    """Classify GPS age: live | stale | offline | missing."""
+    if recorded_at is None:
+        return "missing"
+    ref = now or _now()
+    age = (ref - recorded_at).total_seconds()
+    if age <= GPS_STALE_SECONDS:
+        return "live"
+    if age <= GPS_OFFLINE_SECONDS:
+        return "stale"
+    return "offline"
+
+
+def _latest_gps_for_trip(db: Session, school_id: int, trip_id: int) -> TransportGpsPoint | None:
+    return (
+        db.query(TransportGpsPoint)
+        .filter(
+            TransportGpsPoint.school_id == school_id,
+            TransportGpsPoint.trip_id == trip_id,
+        )
+        .order_by(TransportGpsPoint.recorded_at.desc(), TransportGpsPoint.id.desc())
+        .first()
+    )
+
+
+def _driver_name(db: Session, staff_id: int | None) -> str | None:
+    if staff_id is None:
+        return None
+    staff = db.get(Staff, staff_id)
+    if staff is None:
+        return None
+    user = db.get(User, staff.user_id)
+    if user is None:
+        return None
+    return f"{user.first_name or ''} {user.last_name or ''}".strip() or None
+
+
+def get_trip(db: Session, school_id: int, trip_id: int) -> dict:
+    trip = _owned(db, TransportTrip, trip_id, school_id)
+    data = _trip_dict(trip)
+    route = db.get(TransportRoute, trip.route_id)
+    vehicle = db.get(TransportVehicle, trip.vehicle_id)
+    data["route_name"] = route.name if route else None
+    data["registration_no"] = vehicle.registration_no if vehicle else None
+    data["driver_name"] = _driver_name(db, trip.driver_staff_id)
+    point = _latest_gps_for_trip(db, school_id, trip.id)
+    now = _now()
+    if point is None:
+        data["latest_gps"] = None
+        data["freshness"] = "missing"
+    else:
+        data["latest_gps"] = {
+            "lat": point.lat,
+            "lng": point.lng,
+            "recorded_at": point.recorded_at.isoformat() if point.recorded_at else None,
+            "freshness": gps_freshness(point.recorded_at, now=now),
+        }
+        data["freshness"] = data["latest_gps"]["freshness"]
+    data["server_time"] = now.isoformat()
+    data["poll_seconds"] = DEFAULT_POLL_SECONDS
+    return data
+
+
+def list_vehicle_locations(db: Session, school_id: int) -> dict:
+    """Latest GPS per vehicle for in-progress trips (School Admin map poll)."""
+    now = _now()
+    trips = (
+        db.query(TransportTrip)
+        .filter(
+            TransportTrip.school_id == school_id,
+            TransportTrip.deleted_at.is_(None),
+            TransportTrip.status == "in_progress",
+        )
+        .order_by(TransportTrip.id.desc())
+        .all()
+    )
+    # One trip per vehicle (newest wins).
+    by_vehicle: dict[int, TransportTrip] = {}
+    for trip in trips:
+        if trip.vehicle_id not in by_vehicle:
+            by_vehicle[trip.vehicle_id] = trip
+
+    items: list[dict] = []
+    for vehicle_id, trip in by_vehicle.items():
+        vehicle = db.get(TransportVehicle, vehicle_id)
+        route = db.get(TransportRoute, trip.route_id)
+        point = _latest_gps_for_trip(db, school_id, trip.id)
+        freshness = gps_freshness(point.recorded_at if point else None, now=now)
+        items.append(
+            {
+                "vehicle_id": vehicle_id,
+                "registration_no": vehicle.registration_no if vehicle else None,
+                "vehicle_name": vehicle.name if vehicle else None,
+                "route_id": trip.route_id,
+                "route_name": route.name if route else None,
+                "driver_staff_id": trip.driver_staff_id,
+                "driver_name": _driver_name(db, trip.driver_staff_id),
+                "trip_id": trip.id,
+                "trip_status": trip.status,
+                "latitude": point.lat if point else None,
+                "longitude": point.lng if point else None,
+                "recorded_at": point.recorded_at.isoformat() if point and point.recorded_at else None,
+                "freshness": freshness,
+            }
+        )
+    items.sort(key=lambda row: row["vehicle_id"])
+    return {
+        "items": items,
+        "total": len(items),
+        "server_time": now.isoformat(),
+        "poll_seconds": DEFAULT_POLL_SECONDS,
+        "stale_after_seconds": GPS_STALE_SECONDS,
+        "offline_after_seconds": GPS_OFFLINE_SECONDS,
+    }
 
 
 def _staff_same_school(db: Session, school_id: int, staff_id: int | None) -> Staff | None:

@@ -19,6 +19,7 @@ from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
 from app.api.v1 import school_admin_erp as erp_routes
+from app.api.v1 import school_admin_messaging as messaging_routes
 from app.api.v1 import school_admin_mgmt as mgmt_routes
 from app.api.v1 import school_admin_settings as settings_routes
 from app.services.v1 import person_documents as docs_svc
@@ -64,6 +65,7 @@ router.include_router(academics_routes.router)
 router.include_router(mgmt_routes.router)
 router.include_router(erp_routes.router)
 router.include_router(settings_routes.router)
+router.include_router(messaging_routes.router)
 
 
 class ClassWriteBody(BaseModel):

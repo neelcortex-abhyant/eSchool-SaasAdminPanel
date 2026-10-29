@@ -22,6 +22,7 @@ from app.schemas.v1.school_admin_erp_responses import (
     TransportTripListOut,
     TransportTripOut,
     TransportTripReportOut,
+    VehicleLocationsOut,
     json_response,
 )
 from app.services.v1 import rbac
@@ -159,6 +160,15 @@ def fees_collection_report(
     )
 
 
+@router.get("/transport/vehicle-locations", responses=json_response(VehicleLocationsOut))
+def transport_vehicle_locations(
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    """Latest GPS per in-progress vehicle for School Admin map polling."""
+    return _run(lambda: erp_transport.list_vehicle_locations(db, _school_id(auth)))
+
+
 @router.get("/transport-trips", responses=json_response(TransportTripListOut))
 def list_transport_trips(
     auth: Annotated[AuthContext, Depends(require_school)],
@@ -178,6 +188,15 @@ def list_transport_trips(
             route_id=route_id,
         )
     )
+
+
+@router.get("/transport-trips/{trip_id}", responses=json_response(TransportTripOut))
+def get_transport_trip(
+    trip_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: erp_transport.get_trip(db, _school_id(auth), trip_id))
 
 
 @router.post(

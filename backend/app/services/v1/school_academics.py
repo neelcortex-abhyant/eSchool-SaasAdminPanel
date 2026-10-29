@@ -20,6 +20,7 @@ from app.models.tables import (
     Expense,
     Fee,
     Leave,
+    LeaveType,
     Medium,
     ModelHasRole,
     Role,
@@ -1550,19 +1551,40 @@ def create_fee(db: Session, school_id: int, body: dict) -> dict:
 
 
 def create_announcement(db: Session, school_id: int, body: dict) -> dict:
+    """Academics/notices create — supports optional audience/status when provided."""
+    import json as _json
+
     _same_school(db, SessionYear, int(body["session_year_id"]), school_id, "Session year")
+    now = _now()
+    status_val = str(body.get("status") or "published").strip().lower()
+    if status_val not in {"draft", "scheduled", "published", "archived"}:
+        status_val = "published"
+    audience = body.get("audience") or ["all"]
+    if isinstance(audience, str):
+        audience = [audience]
     row = Announcement(
         title=body["title"].strip(),
         description=body.get("description"),
         session_year_id=int(body["session_year_id"]),
         school_id=school_id,
-        created_at=_now(),
-        updated_at=_now(),
+        status=status_val,
+        audience_json=_json.dumps(list(audience)),
+        published_at=now if status_val == "published" else None,
+        created_at=now,
+        updated_at=now,
     )
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "name": row.title, "title": row.title, "description": row.description, "session_year_id": row.session_year_id}
+    return {
+        "id": row.id,
+        "name": row.title,
+        "title": row.title,
+        "description": row.description,
+        "session_year_id": row.session_year_id,
+        "status": row.status,
+        "audience": audience,
+    }
 
 
 def _student_id_for_user(db: Session, school_id: int, user_id: int) -> int | None:
@@ -1578,7 +1600,51 @@ def _student_id_for_user(db: Session, school_id: int, user_id: int) -> int | Non
     return student.id if student else None
 
 
+def _resolve_leave_type_id(db: Session, school_id: int, body: dict) -> int | None:
+    """Resolve leave_type_id or leave_type/code to a school-owned LeaveType.id."""
+    if body.get("leave_type_id") is not None:
+        lt = _owned(db, LeaveType, int(body["leave_type_id"]), school_id)
+        if not lt.is_active:
+            raise AcademicError(422, "Leave type is inactive")
+        return lt.id
+    code = body.get("leave_type") or body.get("leave_type_code")
+    if code is None or str(code).strip() == "":
+        return None
+    key = str(code).strip()
+    lt = (
+        db.query(LeaveType)
+        .filter(
+            LeaveType.school_id == school_id,
+            LeaveType.deleted_at.is_(None),
+            LeaveType.code == key,
+        )
+        .first()
+    )
+    if lt is None:
+        lt = (
+            db.query(LeaveType)
+            .filter(
+                LeaveType.school_id == school_id,
+                LeaveType.deleted_at.is_(None),
+                LeaveType.name == key,
+            )
+            .first()
+        )
+    if lt is None:
+        raise AcademicError(404, "Leave type not found")
+    if not lt.is_active:
+        raise AcademicError(422, "Leave type is inactive")
+    return lt.id
+
+
 def _leave_dict(db: Session, school_id: int, row: Leave) -> dict:
+    leave_type = None
+    leave_type_code = None
+    if getattr(row, "leave_type_id", None):
+        lt = db.get(LeaveType, row.leave_type_id)
+        if lt is not None and lt.school_id == school_id and lt.deleted_at is None:
+            leave_type = lt.name
+            leave_type_code = lt.code
     return {
         "id": row.id,
         "name": row.reason,
@@ -1589,15 +1655,19 @@ def _leave_dict(db: Session, school_id: int, row: Leave) -> dict:
         "to_date": row.to_date.isoformat(),
         "status": row.status,
         "session_year_id": row.session_year_id,
+        "leave_type_id": getattr(row, "leave_type_id", None),
+        "leave_type": leave_type,
+        "leave_type_code": leave_type_code,
     }
 
 
 def create_leave(db: Session, school_id: int, body: dict) -> dict:
     """Create leave for a school user.
 
-    Accepts ``user_id`` (v1_users.id) and/or ``student_id`` (students.id).
+    Accepts ``user_id`` (users.id) and/or ``student_id`` (students.id).
     When only ``student_id`` is sent, resolves to that student's ``user_id``.
     Never treats student_id as user_id.
+    Optional ``leave_type_id`` or ``leave_type`` / ``leave_type_code``.
     """
     raw_user_id = body.get("user_id")
     raw_student_id = body.get("student_id")
@@ -1623,6 +1693,7 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
     _same_school(db, SessionYear, int(body["session_year_id"]), school_id, "Session year")
     if body["to_date"] < body["from_date"]:
         raise AcademicError(422, "Leave end date must be on or after the start date")
+    leave_type_id = _resolve_leave_type_id(db, school_id, body)
     row = Leave(
         user_id=user.id,
         reason=str(body["reason"]).strip(),
@@ -1631,6 +1702,7 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
         status=int(body.get("status") or 0),
         session_year_id=int(body["session_year_id"]),
         school_id=school_id,
+        leave_type_id=leave_type_id,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -1671,6 +1743,13 @@ def update_leave(db: Session, school_id: int, row_id: int, body: dict) -> dict:
     if "session_year_id" in data and data["session_year_id"] is not None:
         _same_school(db, SessionYear, int(data["session_year_id"]), school_id, "Session year")
         row.session_year_id = int(data["session_year_id"])
+    if any(k in data for k in ("leave_type_id", "leave_type", "leave_type_code")):
+        if data.get("leave_type_id") is None and not data.get("leave_type") and not data.get(
+            "leave_type_code"
+        ):
+            row.leave_type_id = None
+        else:
+            row.leave_type_id = _resolve_leave_type_id(db, school_id, data)
 
     if row.to_date < row.from_date:
         raise AcademicError(422, "Leave end date must be on or after the start date")
