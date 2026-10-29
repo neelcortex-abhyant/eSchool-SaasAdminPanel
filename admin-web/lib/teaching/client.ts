@@ -38,7 +38,7 @@ export function get<T = Raw>(path: string, params: Record<string, QueryValue>, f
   return request<T>(`${path}${query(params)}`, { method: "GET" }, fallback);
 }
 
-export function send<T = Raw>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, fallback: string) {
+export function send<T = Raw>(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, body: unknown, fallback: string) {
   return request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, fallback);
 }
 

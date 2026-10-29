@@ -108,7 +108,7 @@ function CollectBody() {
 function DuesSummary({ dues }: { dues: StudentDues }) {
   const columns: Column<DueLine & { id: number }>[] = [
     { key: "fee", label: "Fee", render: (row) => <div><strong>{row.installment_name}</strong><div className="muted">{row.structure_name}</div></div> },
-    ...(isOpsLive("fees") ? [] : [{ key: "due", label: "Due", render: (row: DueLine & { id: number }) => (row.overdue ? <span className="field-error">{row.due_date} · overdue</span> : row.due_date) }]),
+    { key: "due", label: "Due", render: (row: DueLine & { id: number }) => (row.overdue ? <span className="field-error">{row.due_date} · overdue</span> : row.due_date || "—") },
     { key: "amount", label: "Amount", render: (row) => rupees(row.amount) },
     { key: "concession", label: "Concession", render: (row) => (row.concession ? `− ${rupees(row.concession)}` : "—") },
     { key: "paid", label: "Paid", render: (row) => (row.paid ? rupees(row.paid) : "—") },
@@ -121,7 +121,7 @@ function DuesSummary({ dues }: { dues: StudentDues }) {
         <Stat label="Concessions" value={rupees(dues.concession)} tone="blue" />
         <Stat label="Paid" value={rupees(dues.paid)} tone="green" />
         <Stat label="Balance" value={rupees(dues.balance)} tone={dues.balance ? "amber" : "green"} />
-        {isOpsLive("fees") ? null : <Stat label="Overdue" value={rupees(dues.overdue)} tone={dues.overdue ? "red" : "grey"} />}
+        <Stat label="Overdue" value={rupees(dues.overdue)} tone={dues.overdue ? "red" : "grey"} />
       </div>
       {dues.pending ? <div className="alert alert-info">{rupees(dues.pending)} in online payments is waiting for confirmation and isn't counted as paid yet.</div> : null}
       <section className="resource-card" aria-label="Installments">

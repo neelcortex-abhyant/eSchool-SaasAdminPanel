@@ -1,8 +1,9 @@
 /**
  * NEXT_PUBLIC_DOMAINS_API_MODE:
  *   unset (default)  Registration saves the subdomain/custom domain through the backend's live
- *                    domain fields; public school websites show "being set up" because the backend
- *                    has no public lookup route yet; admins can preview their site after signing in.
+ *                    domain fields, and public school websites use the backend's public lookup
+ *                    (GET /public/schools/by-host). Availability checks and custom-domain
+ *                    verification routes aren't on the backend yet, so those stay off.
  *   "live"           Also uses the public lookup and domain routes in
  *                    backend/docs/SCHOOL_DOMAINS_API_CONTRACT.md.
  *   "mock"           Sample schools (lib/domains/mock-sites.json) and browser-only registrations.

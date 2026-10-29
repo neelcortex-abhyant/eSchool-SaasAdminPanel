@@ -3,8 +3,8 @@
  * Live: /school-admin/timetable-entries (list, create, get, PATCH, DELETE),
  *       /school-admin/timetable/weekly, /school-admin/teachers/{id}/timetable[/daily|/weekly],
  *       /school-admin/teachers/{id}/availability. Overlaps come back as 409 sentences.
- * The live backend has no classroom field, so the room is kept on the first line of the
- * period's note ("Room: 12") and read back from there.
+ * The room uses the backend's `room` field. Periods saved before the backend had one kept the
+ * room on the first line of the note ("Room: 12"); those are still read back.
  */
 import { allPages, get, hhmm, num, optStr, pageOf, send, str, type Raw } from "@/lib/teaching/client";
 import { isLive } from "@/lib/teaching/mode";
@@ -43,6 +43,12 @@ export function noteWithRoom(room: string | null | undefined, note: string | nul
   return n ? `Room: ${r}\n${n}` : `Room: ${r}`;
 }
 
+/** The server's room, or one kept in an older note. */
+export function withRoom(room: string | null, note: string | null): { room: string | null; note: string | null } {
+  if (room) return { room, note };
+  return roomFromNote(note);
+}
+
 /** Splits a stored note back into the room and the admin's note. */
 export function roomFromNote(stored: string | null): { room: string | null; note: string | null } {
   if (!stored) return { room: null, note: null };
@@ -67,7 +73,7 @@ function entryOf(row: Raw): TimetableEntry {
     day: str(row.day, "monday") as WeekDay,
     start_time: hhmm(row.start_time),
     end_time: hhmm(row.end_time),
-    ...roomFromNote(optStr(row.note)),
+    ...withRoom(optStr(row.room), optStr(row.note)),
   };
 }
 
@@ -89,7 +95,8 @@ function body(input: TimetableInput) {
     day: input.day,
     start_time: input.start_time,
     end_time: input.end_time,
-    note: noteWithRoom(input.room, input.note),
+    room: input.room?.trim() || null,
+    note: input.note?.trim() || null,
   };
 }
 

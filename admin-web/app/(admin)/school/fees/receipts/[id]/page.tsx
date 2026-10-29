@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
 import { useOptions } from "@/components/academics/hooks";
 import { PaymentChip, rupees } from "@/components/ops/fees";
@@ -10,6 +10,7 @@ import { TeachingPage } from "@/components/teaching/Frame";
 import { feeService } from "@/lib/ops/fees";
 import { PAYMENT_METHODS } from "@/lib/ops/types";
 import { IconFees } from "@/lib/icons";
+import { apiBlobUrl } from "@/lib/api";
 
 export default function ReceiptPage() {
   const params = useParams<{ id: string }>();
@@ -31,9 +32,11 @@ function ReceiptBody({ id }: { id: number }) {
     <>
       <div className="school-filters ops-no-print">
         <button className="btn-pill btn-pill-green" type="button" onClick={() => window.print()}>
-          Print or save as PDF
+          Print
         </button>
+        {receipt.pdf_path ? <ReceiptPdfButton path={receipt.pdf_path} name={payment.receipt_no ?? `receipt-${payment.id}`} /> : null}
       </div>
+      {payment.status === "cancelled" ? <div className="alert alert-danger">This payment was cancelled{payment.cancel_reason ? `: ${payment.cancel_reason}` : ""}. The amount is owed again.</div> : null}
       <article className="resource-card ops-report ops-receipt" aria-labelledby="receipt-title">
         <header className="ops-report-head">
           <div>
@@ -82,6 +85,42 @@ function ReceiptBody({ id }: { id: number }) {
         {payment.remarks ? <p className="muted">Remarks: {payment.remarks}</p> : null}
         <p className="muted ops-report-foot">{payment.collected_by ? `Received by ${payment.collected_by}. ` : ""}This is a computer-generated receipt.</p>
       </article>
+    </>
+  );
+}
+
+/** Downloads the server's PDF of the receipt (it needs the signed-in user's token, so it's fetched rather than linked). */
+function ReceiptPdfButton({ path, name }: { path: string; name: string }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  return (
+    <>
+      <button
+        className="btn-pill btn-pill-green-soft"
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setProblem("");
+          try {
+            const url = await apiBlobUrl(path);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${name}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch {
+            setProblem("The PDF couldn't be downloaded. Try Print instead.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Downloading…" : "Download PDF"}
+      </button>
+      {problem ? <span className="field-error">{problem}</span> : null}
     </>
   );
 }

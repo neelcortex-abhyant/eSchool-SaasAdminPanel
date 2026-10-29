@@ -20,6 +20,7 @@ export const FEE_TABS = [
   { href: "/school/fees/structures", label: "Fee structures" },
   { href: "/school/fees/assignments", label: "Assignments & concessions" },
   { href: "/school/fees/types", label: "Fee types" },
+  { href: "/school/fees/collection", label: "Collection report" },
 ];
 
 export function rupees(value: number): string {
@@ -30,6 +31,7 @@ export const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: ChipTo
   success: { label: "Paid", tone: "green" },
   pending: { label: "Pending confirmation", tone: "amber" },
   failed: { label: "Failed", tone: "red" },
+  cancelled: { label: "Cancelled", tone: "grey" },
 };
 
 export function PaymentChip({ status }: { status: PaymentStatus }) {
@@ -190,7 +192,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
   const activeTypes = types.options.filter((type) => type.status === 1 || items.some((item) => item.fee_type_id === String(type.id)));
 
   return (
-    <FormModal title={structure ? "Edit fee structure" : "Add fee structure"} description={live ? "Fees for one class in one session. Assign the structure to each student who pays it." : "Fees for one class in one session, collected in one or more installments."} error={errors.formError} saving={saving} submitLabel="Save fee structure" wide onSubmit={() => void submit()} onClose={onClose}>
+    <FormModal title={structure ? "Edit fee structure" : "Add fee structure"} description={live ? "Fees for one class in one session, collected in one or more installments. Assign the structure to each student who pays it." : "Fees for one class in one session, collected in one or more installments."} error={errors.formError} saving={saving} submitLabel="Save fee structure" wide onSubmit={() => void submit()} onClose={onClose}>
       <TextField id="fs-name" label="Name" required span maxLength={120} value={name} onChange={setName} error={fe.name} placeholder="Class 5 annual fees 2026-27" />
       <SelectField
         id="fs-session"
@@ -234,7 +236,6 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
           <strong>Total {rupees(total)}</strong>
         </div>
       </fieldset>
-      {live ? null : (
       <fieldset className="form-field field-span ops-lines">
         <legend>Installments *</legend>
         <div className="ops-line-foot">
@@ -268,7 +269,6 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
         </div>
         {fe.installments ? <p className="field-error">{fe.installments}</p> : null}
       </fieldset>
-      )}
       {live ? null : <TextField id="fs-late" label="Late fee per day (₹)" type="number" min="0" value={lateFee} onChange={setLateFee} error={fe.late_fee_per_day} hint="Shown on overdue installments; 0 for none." />}
       <StatusToggle id="fs-active" checked={active} onChange={setActive} label="Active (charged to students)" />
     </FormModal>

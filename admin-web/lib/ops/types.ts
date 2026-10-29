@@ -58,6 +58,8 @@ export type ReportExam = {
   percentage: number;
   grade: string | null;
   passed: boolean;
+  /** The report card the server stored for this exam, which has a PDF. */
+  report_id?: number | null;
 };
 
 export type ReportCard = {
@@ -185,7 +187,7 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string; manual: boo
 ];
 
 /** success: recorded and counted. pending: waiting for the gateway/back office to confirm. */
-export type PaymentStatus = "success" | "pending" | "failed";
+export type PaymentStatus = "success" | "pending" | "failed" | "cancelled";
 
 export type Allocation = { structure_id: number; installment_id: number; installment_name: string; amount: number };
 
@@ -205,6 +207,8 @@ export type FeePayment = {
   paid_at: string;
   allocations: Allocation[];
   collected_by: string | null;
+  /** Why the payment was cancelled, when it was. */
+  cancel_reason?: string | null;
 };
 
 export type PaymentInput = {
@@ -277,6 +281,17 @@ export type Receipt = {
   session_name: string;
   /** Balance left after this payment, across all the student's fees. */
   balance_after: number;
+  /** The server's PDF of the receipt, when it makes one. */
+  pdf_path?: string | null;
+};
+
+export type CollectionReport = {
+  from: string;
+  to: string;
+  payment_count: number;
+  total_collected: number;
+  by_method: Record<string, number>;
+  items: { id: number; receipt_no: string | null; student_id: number; student_name: string; amount: number; method: string; paid_on: string }[];
 };
 
 // ---------- Transport ----------

@@ -105,6 +105,8 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
         children: [
           { href: "/school/teachers", label: "Manage teachers" },
           { href: "/school/salary-structure", label: "Salary structure" },
+          { href: "/school/monthly-salary", label: "Monthly salary (server)" },
+          { href: "/school/salary-components", label: "Salary components" },
           { href: "/school/bulk-upload-teachers", label: "Bulk upload teachers" },
         ],
       },
@@ -177,6 +179,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       },
       { href: "/school/notification", label: "Notification" },
       { href: "/school/announcement", label: "Announcement" },
+      { href: "/school/messages", label: "Teacher–parent messages" },
       { href: "/school/sliders", label: "Sliders" },
       { href: "/school/gallery", label: "Gallery" },
     ],
@@ -221,6 +224,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
           { href: "/school/fees/structures", label: "Fee structures" },
           { href: "/school/fees/assignments", label: "Assignments & concessions" },
           { href: "/school/fees/types", label: "Fee types" },
+          { href: "/school/fees/collection", label: "Collection report" },
           { href: "/school/manage-fees", label: "Fee amounts (server)" },
         ],
       },
@@ -242,7 +246,10 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       {
         label: "Payroll",
         children: [
-          { href: "/school/payroll", label: "Payroll" },
+          { href: "/school/payroll", label: "Process payroll" },
+          { href: "/school/payslips", label: "Payslips" },
+          { href: "/school/payroll-reports", label: "Payroll reports" },
+          { href: "/school/payroll-runs", label: "Payroll runs (server)" },
           { href: "/school/payroll-settings", label: "Payroll settings" },
         ],
       },
@@ -255,6 +262,10 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       { href: "/school/transport/vehicles", label: "Vehicles" },
       { href: "/school/transport/routes", label: "Routes & stops" },
       { href: "/school/transport/assignments", label: "Student transport" },
+      { href: "/school/transport/tracking", label: "Live bus tracking" },
+      { href: "/school/transport/trips", label: "Trips" },
+      { href: "/school/transport/boarding", label: "Transport attendance" },
+      { href: "/school/transport/reports", label: "Transport reports" },
     ],
   },
   {
@@ -266,6 +277,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
       { href: "/school/id-card-settings", label: "ID card settings" },
       { href: "/school/student-id-card", label: "Student ID card" },
       { href: "/school/staff-id-card", label: "Staff ID card" },
+      { href: "/school/bulk-id-cards", label: "Bulk ID cards" },
     ],
   },
   {

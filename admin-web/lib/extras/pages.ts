@@ -194,25 +194,6 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
   },
 
   // ---------- Leave (the academics routes: /academics/leaves) ----------
-  "staff-leave": {
-    kind: "resource",
-    title: "Staff leave",
-    description: "Leave for teachers and staff, and whether it's approved.",
-    path: "/academics/leaves",
-    noun: "leave",
-    fields: [
-      { key: "user_id", label: "Teacher or staff member", type: "ref", ref: "staff-user", required: true, createOnly: true },
-      { key: "reason", label: "Reason", type: "text", required: true, maxLength: 255 },
-      { key: "from_date", label: "From", type: "date", required: true },
-      { key: "to_date", label: "To", type: "date", required: true },
-      sessionField,
-      { key: "status", label: "Status", type: "select", options: LEAVE_STATUS, initial: "0", required: true },
-    ],
-    columns: leaveColumns.map(({ format, ...column }) => (format ? { ...column, format } : column)),
-    canEdit: false,
-    canDelete: true,
-    sort: { key: "from_date", desc: true },
-  },
   "student-leave": {
     kind: "resource",
     title: "Student leave",
@@ -330,48 +311,6 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
   },
 
   // ---------- Communication and website ----------
-  notification: {
-    kind: "resource",
-    title: "Notifications",
-    description: "Messages sent to the school's users.",
-    path: "/notifications",
-    noun: "notification",
-    note: "The server keeps notifications once sent: they can't be edited or deleted here.",
-    fields: [
-      { key: "title", label: "Title", type: "text", required: true, maxLength: 255 },
-      { key: "body", label: "Message", type: "textarea" },
-    ],
-    columns: [
-      { key: "title", label: "Title" },
-      { key: "body", label: "Message" },
-      { key: "created_at", label: "Sent" },
-    ],
-    canEdit: false,
-    canDelete: false,
-    sort: { key: "created_at", desc: true },
-  },
-  announcement: {
-    kind: "resource",
-    title: "Announcements",
-    description: "Announcements for an academic session.",
-    path: "/announcements",
-    noun: "announcement",
-    note: "The server keeps announcements once posted: they can't be edited or deleted here.",
-    fields: [
-      { key: "title", label: "Title", type: "text", required: true, maxLength: 255 },
-      sessionField,
-      { key: "description", label: "Details", type: "textarea" },
-    ],
-    columns: [
-      { key: "title", label: "Title" },
-      { key: "session_year_id", label: "Session", ref: "session" },
-      { key: "description", label: "Details" },
-      { key: "created_at", label: "Posted" },
-    ],
-    canEdit: false,
-    canDelete: false,
-    sort: { key: "created_at", desc: true },
-  },
   sliders: {
     kind: "resource",
     title: "Sliders",
@@ -608,20 +547,6 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
   "about-us": contentPage("About us", "/content/about_us", "The school's story, shown on the About us page."),
   "web-content": contentPage("Website content", "/web-content", "Main text for the school website."),
   "online-exam-terms": contentPage("Online exam terms", "/online-exam-terms", "Rules students accept before starting an online exam."),
-  "leave-settings": {
-    kind: "settings",
-    title: "Leave settings",
-    description: "How much leave staff and students get, and how it's approved.",
-    path: "/leave-settings",
-    fields: [
-      { key: "policy.staff_casual_days", label: "Staff casual leave (days per year)", type: "number" },
-      { key: "policy.staff_sick_days", label: "Staff sick leave (days per year)", type: "number" },
-      { key: "policy.student_max_days_per_month", label: "Student leave (most days per month)", type: "number" },
-      { key: "policy.approval", label: "Who approves leave", type: "select", options: [{ value: "admin", label: "School admin" }, { value: "class_teacher", label: "Class teacher" }], initial: "admin" },
-      { key: "policy.allow_half_day", label: "Allow half-day leave", type: "checkbox" },
-      { key: "notes", label: "Notes", type: "textarea", hint: "Anything else about the leave policy." },
-    ],
-  },
   whatsapp: whatsappPage("WhatsApp", "Send school messages on WhatsApp."),
   "meta-whatsapp-credentials": whatsappPage("Meta WhatsApp credentials", "The WhatsApp Business account the school sends messages from."),
   "payment-settings": {
@@ -732,6 +657,34 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
     canEdit: true,
     canDelete: false,
     sort: { key: "created_at", desc: true },
+  },
+
+  // ---------- Payroll (backend 0041) ----------
+  "salary-components": {
+    kind: "resource",
+    title: "Salary components",
+    description: "The school's list of earnings and deductions, such as HRA, travel allowance or PF, used in salary structures.",
+    path: "/salary-components",
+    noun: "component",
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true, maxLength: 120 },
+      { key: "code", label: "Short code", type: "text", maxLength: 64, hint: "Optional, e.g. HRA." },
+      { key: "kind", label: "Type", type: "select", required: true, options: [{ value: "earning", label: "Earning (allowance)" }, { value: "deduction", label: "Deduction" }], initial: "earning" },
+      { key: "calc_type", label: "Worked out as", type: "select", required: true, options: [{ value: "fixed", label: "A fixed amount (₹)" }, { value: "percent", label: "A percentage of basic pay" }], initial: "fixed" },
+      { key: "default_value", label: "Default amount or %", type: "number", required: true, initial: "0" },
+      { key: "sort_order", label: "Order", type: "number", initial: "0" },
+      { key: "is_active", label: "In use", type: "checkbox", initial: "1" },
+    ],
+    columns: [
+      { key: "name", label: "Component" },
+      { key: "code", label: "Code" },
+      { key: "kind", label: "Type", format: (value) => (value === "deduction" ? "Deduction" : "Earning") },
+      { key: "default_value", label: "Default", format: (value, row) => (row.calc_type === "percent" ? `${Number(value)}% of basic` : money(value)) },
+      { key: "is_active", label: "In use", format: (value) => (Number(value) === 1 ? "Yes" : "No") },
+    ],
+    canEdit: true,
+    canDelete: true,
+    sort: { key: "sort_order" },
   },
 
   // ---------- Reports ----------

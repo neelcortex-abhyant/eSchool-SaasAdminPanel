@@ -5,8 +5,13 @@ import { ResourcePage } from "@/components/extras/ResourcePage";
 import { ReportPage, SettingsPage } from "@/components/extras/SettingsPage";
 import { MarkStaffAttendance, StaffAttendanceRegister, StaffAttendanceReports, TodaysStaffAttendance } from "@/components/extras/StaffAttendance";
 import { AssignElectives, ImportStaff, ImportStudents, ImportTeachers, PromoteStudents, ResetStudentPassword, TransferStudent } from "@/components/extras/StudentTools";
-import { CertificateAssign, IdCardSettingsPage, PayrollPage, RolePermission, SalaryStructurePage, StaffIdCard, StudentIdCard } from "@/components/extras/Tools";
+import { IdCardSettingsPage, PayrollPage, RolePermission, SalaryStructurePage, StaffIdCard, StudentIdCard } from "@/components/extras/Tools";
 import { SupportPage, ThirdPartyPage } from "@/components/extras/Support";
+import { LeaveConfigPage, StaffLeavePage } from "@/components/operations/Leave";
+import { AnnouncementsPage, NotificationsPage } from "@/components/operations/Notices";
+import { MessagesPage } from "@/components/operations/Messages";
+import { BulkIdCardsPage, CertificatesPage } from "@/components/operations/Documents";
+import { PayrollProcessPage, PayrollReportsPage, PayslipsPage, SalaryStructuresPage } from "@/components/operations/Payroll";
 import { EXTRA_PAGES } from "@/lib/extras/pages";
 import { IconBell, IconBook, IconCalendar, IconChart, IconClasses, IconFees, IconGlobe, IconPackage, IconSettings, IconStaff, IconUsers } from "@/lib/icons";
 
@@ -22,16 +27,26 @@ const CUSTOM: Record<string, ComponentType> = {
   "assign-elective-subject": AssignElectives,
   "add-bulk-data": ImportStudents,
   "bulk-upload-staffs": ImportStaff,
-  "certificate-assign": CertificateAssign,
+  "certificate-assign": CertificatesPage,
+  "bulk-id-cards": BulkIdCardsPage,
   "student-id-card": StudentIdCard,
   "staff-id-card": StaffIdCard,
   "id-card-settings": IdCardSettingsPage,
   "role-permission": RolePermission,
-  payroll: PayrollPage,
-  "salary-structure": SalaryStructurePage,
+  payroll: PayrollProcessPage,
+  "payroll-runs": PayrollPage,
+  payslips: PayslipsPage,
+  "payroll-reports": PayrollReportsPage,
+  "salary-structure": SalaryStructuresPage,
+  "monthly-salary": SalaryStructurePage,
   "bulk-upload-teachers": ImportTeachers,
   support: SupportPage,
   "third-party-api": ThirdPartyPage,
+  "staff-leave": StaffLeavePage,
+  "leave-settings": LeaveConfigPage,
+  announcement: AnnouncementsPage,
+  notification: NotificationsPage,
+  messages: MessagesPage,
 };
 
 const ICONS: Record<string, ReactNode> = {

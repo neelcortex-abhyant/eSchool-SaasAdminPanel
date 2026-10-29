@@ -51,8 +51,7 @@ export function cleanSite(raw: Record<string, unknown>): SchoolSite | null {
 export async function siteByHost(host: string): Promise<SchoolSite | null> {
   const wanted = normalizeDomain(host);
   const mode = domainsMode();
-  // No public lookup route on the backend yet: nothing to show (the page says it's being set up).
-  if (mode === "pending") return null;
+  // The public lookup is live on the backend (from 0042) in both "pending" and "live" modes.
   if (mode === "mock") {
     const root = rootDomain();
     const site = SAMPLE_SITES.find((item) => schoolHost(item.slug, root) === wanted || (item.custom_domain === wanted && item.domain_status === "verified"));

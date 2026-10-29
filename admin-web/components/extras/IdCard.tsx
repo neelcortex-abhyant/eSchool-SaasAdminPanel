@@ -15,6 +15,8 @@ export type CardData = {
   image: string | null;
   front: string | null;
   back: string | null;
+  /** A QR code or barcode image from the server, when it makes one. */
+  code?: string | null;
 };
 
 /** The school's name, logo, address and phone for the card header and back, from /school-admin/school. */
@@ -34,7 +36,7 @@ export function useCardSchool(): CardSchool {
 /** Only web or site-relative image addresses are shown. */
 export function safeImage(value: string | null | undefined): string | null {
   if (!value) return null;
-  return /^https?:\/\//i.test(value) || value.startsWith("/") ? value : null;
+  return /^https?:\/\//i.test(value) || value.startsWith("/") || /^data:image\/(png|jpeg|gif|svg\+xml);base64,/i.test(value) ? value : null;
 }
 
 export function initials(name: string): string {
@@ -74,6 +76,7 @@ export function IdCardView({ card, school }: { card: CardData; school: CardSchoo
             </dl>
           </div>
         </div>
+        {safeImage(card.code) ? <img className="idc-code" src={safeImage(card.code) as string} alt="QR code" /> : null}
         {card.front ? <p className="idc-note">{card.front}</p> : null}
       </article>
       <article className="idc idc-back" aria-label={`${label} ID card, back`}>

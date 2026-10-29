@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LocalSiteFallback } from "@/components/domains/LocalSiteFallback";
-import { SchoolLanding, SchoolNotFound, SiteBeingSetUp } from "@/components/domains/SchoolLanding";
+import { SchoolLanding, SchoolNotFound } from "@/components/domains/SchoolLanding";
 import { rootDomain, schoolHost, slugProblem } from "@/lib/domains/core";
 import { domainsMode } from "@/lib/domains/mode";
 import { loginUrlFor, requestContext, schoolJsonLd, siteMetadata, siteUrlFor } from "@/lib/domains/page";
@@ -17,7 +17,6 @@ async function load(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const { current } = await requestContext();
-  if (domainsMode() === "pending") return { title: "Website being set up", robots: { index: false, follow: false } };
   const site = await load(slug).catch(() => null);
   return siteMetadata(site, site ? siteUrlFor(site, current) : "", schoolHost(slug));
 }
@@ -41,9 +40,6 @@ export default async function SchoolSitePage({ params }: Props) {
   }
   const app = appOrigin(current);
   if (!site) {
-    const loginUrl = `${app}/login?school=${encodeURIComponent(slug)}`;
-    // The backend can't look schools up publicly yet: a neutral page, never sample data.
-    if (domainsMode() === "pending" && !slugProblem(slug)) return <SiteBeingSetUp host={schoolHost(slug, rootDomain())} loginUrl={loginUrl} />;
     // Sample data: a school registered in this browser is only stored in the browser.
     if (domainsMode() === "mock" && !slugProblem(slug)) return <LocalSiteFallback slug={slug} host={schoolHost(slug, rootDomain())} loginUrl={`${app}/login?school=${encodeURIComponent(slug)}`} appUrl={app} />;
     return <SchoolNotFound host={schoolHost(slug, rootDomain())} />;

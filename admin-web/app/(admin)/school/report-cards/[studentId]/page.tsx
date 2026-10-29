@@ -10,6 +10,7 @@ import { dayLabel } from "@/components/teaching/offline";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { gradingService } from "@/lib/ops/grading";
 import { IconExam } from "@/lib/icons";
+import { apiBlobUrl } from "@/lib/api";
 
 export default function ReportCardPage() {
   const params = useParams<{ studentId: string }>();
@@ -89,6 +90,7 @@ function CardBody({ studentId }: { studentId: number }) {
             <section key={exam.exam_id} className="ops-report-exam" aria-label={exam.exam_name}>
               <h3>
                 {exam.exam_name} <span className="muted">{exam.exam_date ? dayLabel(exam.exam_date) : ""}</span> {exam.published ? null : <Chip tone="amber">Not published</Chip>}
+                {exam.report_id ? <PdfButton reportId={exam.report_id} name={`${card.student_name}-${exam.exam_name}`} /> : null}
               </h3>
               <div className="table-wrap">
                 <table className="data-table">
@@ -126,5 +128,38 @@ function CardBody({ studentId }: { studentId: number }) {
         <p className="muted ops-report-foot">Generated {new Date().toLocaleDateString()} · Marks come from processed offline exam results.</p>
       </article>
     </>
+  );
+}
+
+/** The server's PDF of one exam's report card (fetched with the signed-in user's token). */
+function PdfButton({ reportId, name }: { reportId: number; name: string }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <button
+      className="link-btn ops-no-print"
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        setFailed(false);
+        try {
+          const url = await apiBlobUrl(`/school-admin/report-cards/${reportId}/pdf`);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${name.replace(/[^A-Za-z0-9-]+/g, "-")}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch {
+          setFailed(true);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Downloading…" : failed ? "PDF unavailable, try again" : "Download PDF"}
+    </button>
   );
 }

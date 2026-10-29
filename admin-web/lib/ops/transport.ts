@@ -1,8 +1,9 @@
 /**
  * School transport: vehicles (with driver and helper), routes, stops and student assignments.
  * Live: /school-admin/vehicles, /transport-routes (with their stops), /transport-stops,
- *   /student-transport-assignments. The server keeps a vehicle's name, registration, seats and
- *   status only, and can't edit stops or student assignments (add and remove instead). It
+ *   /student-transport-assignments. The server keeps a vehicle's name, registration, seats,
+ *   status, driver and helper (staff record ids), and can't edit stops or student assignments
+ *   (add and remove instead). It
  *   doesn't check seats, so this client refuses an assignment that would overfill a vehicle.
  * Sample: drivers and helpers are school staff (people client).
  */
@@ -12,6 +13,7 @@ import { conflict, invalid, later, missing, nextId, opsDb, opsSave } from "@/lib
 import { capacityProblem, sameRegistration, stopProblems, vehicleProblems } from "@/lib/ops/transport-rules";
 import type { AssignmentInput, AssignmentQuery, Page, Route, RouteInput, Stop, StopInput, TransportAssignment, Vehicle, VehicleInput } from "@/lib/ops/types";
 import { allPages, hhmm, notAvailable, num, optNum, optStr, send, str, type Raw } from "@/lib/teaching/client";
+import { staffDirectory, type StaffRef } from "@/lib/extras/api";
 import { peopleService } from "@/lib/people";
 
 export interface TransportService {
@@ -36,7 +38,7 @@ async function liveRiders(): Promise<Raw[]> {
   return allPages(`${T}/student-transport-assignments`, {}, "Unable to load transport assignments.");
 }
 
-function liveVehicle(row: Raw, riders: Raw[], routes: Raw[]): Vehicle {
+function liveVehicle(row: Raw, riders: Raw[], routes: Raw[], people: StaffRef[] = []): Vehicle {
   const id = num(row.id);
   const routeIds = new Set(routes.filter((route) => optNum(route.vehicle_id) === id).map((route) => num(route.id)));
   return {
@@ -46,10 +48,10 @@ function liveVehicle(row: Raw, riders: Raw[], routes: Raw[]): Vehicle {
     // The server stores a vehicle name; the form's "model" field edits it.
     model: optStr(row.name),
     capacity: num(row.capacity),
-    driver_id: null,
-    driver_name: null,
-    helper_id: null,
-    helper_name: null,
+    driver_id: optNum(row.driver_staff_id),
+    driver_name: people.find((person) => person.staff_id === optNum(row.driver_staff_id))?.name ?? null,
+    helper_id: optNum(row.helper_staff_id),
+    helper_name: people.find((person) => person.staff_id === optNum(row.helper_staff_id))?.name ?? null,
     status: num(row.status ?? 1) === 0 ? 0 : 1,
     assigned_students: riders.filter((rider) => routeIds.has(num(rider.route_id))).length,
   };
@@ -86,26 +88,28 @@ function liveRoute(row: Raw, vehicles: Raw[], riders: Raw[]): Route {
 }
 
 async function liveAll() {
-  const [vehicles, routes, riders] = await Promise.all([
+  const [vehicles, routes, riders, people] = await Promise.all([
     allPages(`${T}/vehicles`, {}, "Unable to load vehicles."),
     allPages(`${T}/transport-routes`, {}, "Unable to load routes."),
     liveRiders(),
+    staffDirectory().catch(() => [] as StaffRef[]),
   ]);
-  return { vehicles, routes, riders };
+  return { vehicles, routes, riders, people };
 }
 
 function vehicleBody(input: VehicleInput) {
   const registration = input.registration_no.trim().toUpperCase();
-  return { name: input.model?.trim() || registration, registration_no: registration, capacity: input.capacity, status: input.status };
+  // Driver and helper are staff record ids (see useTransportStaff).
+  return { name: input.model?.trim() || registration, registration_no: registration, capacity: input.capacity, status: input.status, driver_staff_id: input.driver_id, helper_staff_id: input.helper_id };
 }
 
 export const liveTransport: TransportService = {
   async vehicles() {
-    const { vehicles, routes, riders } = await liveAll();
-    return vehicles.map((row) => liveVehicle(row, riders, routes)).sort((a, b) => b.status - a.status || a.registration_no.localeCompare(b.registration_no));
+    const { vehicles, routes, riders, people } = await liveAll();
+    return vehicles.map((row) => liveVehicle(row, riders, routes, people)).sort((a, b) => b.status - a.status || a.registration_no.localeCompare(b.registration_no));
   },
   async saveVehicle(input, id) {
-    const { vehicles, routes, riders } = await liveAll();
+    const { vehicles, routes, riders, people } = await liveAll();
     const current = id ? vehicles.find((row) => num(row.id) === id) : null;
     const problems = vehicleProblems(input, current ? liveVehicle(current, riders, routes).assigned_students : 0);
     if (Object.keys(problems).length) invalid(problems);
@@ -113,7 +117,7 @@ export const liveTransport: TransportService = {
     const row = id
       ? await send("PATCH", `${T}/vehicles/${id}`, vehicleBody(input), "Unable to save the vehicle.")
       : await send("POST", `${T}/vehicles`, vehicleBody(input), "Unable to add the vehicle.");
-    return liveVehicle(row, riders, routes);
+    return liveVehicle(row, riders, routes, people);
   },
   async setVehicleStatus(id, status) {
     const { routes, riders } = await liveAll();

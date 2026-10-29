@@ -6036,3 +6036,498 @@ button.acad-tab {
   white-space: pre-wrap;
   color: var(--color-text);
 }
+
+/* Live bus tracking */
+.bus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.bus-map-card {
+  padding: 0 !important;
+}
+
+.bus-map {
+  height: 520px;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  z-index: 0;
+}
+
+.bus-list {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 8px !important;
+}
+
+.bus-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bus-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bus-row:hover,
+.bus-row.is-selected {
+  background: var(--color-primary-soft);
+  border-color: var(--color-border);
+}
+
+.bus-row-head,
+.bus-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bus-row-meta {
+  font-size: 12px;
+}
+
+.bus-pin-wrap,
+.bus-school-pin {
+  background: none;
+  border: 0;
+}
+
+.bus-school-pin {
+  font-size: 22px;
+}
+
+.bus-pin {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--pin);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  font-size: 17px;
+}
+
+.bus-pin.is-stale {
+  border-style: dashed;
+}
+
+.bus-pin.is-offline {
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+
+.bus-pin.is-selected {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.45);
+}
+
+@media (max-width: 900px) {
+  .bus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .bus-map {
+    height: 360px;
+  }
+
+  .bus-list {
+    max-height: none;
+  }
+}
+
+/* Teacher–parent messages */
+.msg-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.msg-list {
+  padding: 0 !important;
+  max-height: 640px;
+  overflow-y: auto;
+}
+
+.msg-list-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 1;
+}
+
+.msg-list-head input[type="search"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.msg-toggles {
+  display: flex;
+  gap: 16px;
+}
+
+.msg-list ul {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.msg-row:hover,
+.msg-row.is-selected {
+  background: var(--color-primary-soft);
+  border-color: var(--color-border);
+}
+
+.msg-row.is-unread strong {
+  font-weight: 800;
+}
+
+.msg-row-head,
+.msg-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.msg-snippet {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.msg-unread {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.msg-thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+
+.msg-thread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.msg-thread-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.msg-back {
+  display: none;
+}
+
+.msg-messages {
+  flex: 1;
+  max-height: 420px;
+}
+
+.ticket-thread li.is-hidden {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.msg-attachment {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.msg-compose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.msg-compose textarea {
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.msg-compose .field-error {
+  flex-basis: 100%;
+}
+
+@media (max-width: 900px) {
+  .msg-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .msg-layout.has-open .msg-list,
+  .msg-layout:not(.has-open) .msg-empty {
+    display: none;
+  }
+
+  .msg-back {
+    display: inline-block;
+    flex-basis: 100%;
+  }
+}
+
+/* Payroll */
+.payroll-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+}
+
+.payroll-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 16px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.payslip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.payslip-head h2 {
+  margin: 0;
+}
+
+.payslip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.payslip-net {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-success-soft);
+  font-size: 16px;
+}
+
+.payslip-modal {
+  width: min(760px, 100%);
+}
+
+.notice-audience {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.notice-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 520px;
+}
+
+@media (max-width: 700px) {
+  .payslip-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .payslip-modal {
+    position: static;
+    width: 100%;
+    max-height: none;
+    box-shadow: none;
+  }
+
+  .modal-backdrop:has(.payslip-modal) {
+    position: static;
+    background: none;
+    backdrop-filter: none;
+  }
+}
+
+@media print {
+  body:has(.payslip-modal) .school-filters,
+  body:has(.payslip-modal) .teach-stats,
+  body:has(.payslip-modal) .resource-card,
+  body:has(.payslip-modal) .acad-page > p,
+  body:has(.bulk-print-sheet) .school-filters,
+  body:has(.bulk-print-sheet) .teach-stats,
+  body:has(.bulk-print-sheet) .resource-card:not(.bulk-print-sheet) {
+    display: none !important;
+  }
+}
+
+.idc-front {
+  position: relative;
+}
+
+.idc-code {
+  position: absolute;
+  right: 10px;
+  bottom: 30px;
+  width: 52px;
+  height: 52px;
+  background: #fff;
+  object-fit: contain;
+}
+
+/* Certificates and bulk ID cards */
+.cert-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.cert-page {
+  padding: 28px 32px;
+  border: 6px double var(--color-border-strong);
+  border-radius: 6px;
+  background: #fffdf7;
+  text-align: center;
+}
+
+.cert-page + .cert-page {
+  margin-top: 16px;
+}
+
+.cert-school {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary-ink);
+}
+
+.cert-page h2 {
+  margin: 8px 0 4px;
+  font-size: 24px;
+}
+
+.cert-text {
+  margin: 20px 0;
+  line-height: 1.7;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.cert-sign {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 36px;
+  font-size: 13px;
+}
+
+.bulk-progress {
+  width: 100%;
+  height: 10px;
+  margin: 8px 0;
+  accent-color: var(--color-primary-hover);
+}
+
+.bulk-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .cert-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .cert-page {
+    break-after: page;
+    border-color: #999;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bulk-cards {
+    gap: 4mm;
+  }
+
+  .bulk-cards .idc-pair {
+    break-inside: avoid;
+  }
+
+  body:has(.cert-preview.extras-print) .cert-layout > .resource-card:not(.cert-preview) {
+    display: none !important;
+  }
+}

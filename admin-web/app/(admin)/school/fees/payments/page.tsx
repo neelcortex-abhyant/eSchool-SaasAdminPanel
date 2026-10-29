@@ -5,7 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
 import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, usePagedList } from "@/components/academics/hooks";
+import { TextAreaField } from "@/components/academics/Fields";
+import { FormModal } from "@/components/academics/FormModal";
+import { useDebounced, useFormErrors, usePagedList } from "@/components/academics/hooks";
+import { useToast } from "@/components/academics/Toasts";
+import { useSubmitOnce } from "@/lib/ops/submit";
 import { FEE_TABS, PAYMENT_STATUS, PaymentChip, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { TeachingPage } from "@/components/teaching/Frame";
@@ -34,6 +38,8 @@ export default function FeePaymentsPage() {
 }
 
 function PaymentsBody() {
+  const toast = useToast();
+  const [cancelling, setCancelling] = useState<FeePayment | null>(null);
   const params = useSearchParams();
   const studentId = Number(params.get("student")) || "";
   const [filter, setFilter] = usePlacementFilter();
@@ -97,9 +103,16 @@ function PaymentsBody() {
           emptyText={list.error ? "Payments couldn't be loaded." : "No payments match these filters."}
           actions={(row) =>
             row.status === "success" ? (
-              <Link className="link-btn" href={`/school/fees/receipts/${row.id}`}>
-                Receipt
-              </Link>
+              <>
+                <Link className="link-btn" href={`/school/fees/receipts/${row.id}`}>
+                  Receipt
+                </Link>
+                <button className="link-btn danger" type="button" onClick={() => setCancelling(row)}>
+                  Cancel
+                </button>
+              </>
+            ) : row.status === "cancelled" ? (
+              <span className="muted">Cancelled{row.cancel_reason ? `: ${row.cancel_reason}` : ""}</span>
             ) : (
               <span className="muted">No receipt yet</span>
             )
@@ -107,6 +120,50 @@ function PaymentsBody() {
         />
         <Pagination page={page} pageSize={PAGE_SIZE} total={list.data?.total ?? 0} onPage={setPage} />
       </div>
+      {cancelling ? (
+        <CancelPayment
+          payment={cancelling}
+          onClose={() => setCancelling(null)}
+          onDone={() => {
+            setCancelling(null);
+            toast("success", "Payment cancelled. The amount is owed again.");
+            void list.reload();
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+function CancelPayment({ payment, onClose, onDone }: { payment: FeePayment; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const submit = useSubmitOnce();
+  const errors = useFormErrors();
+  return (
+    <FormModal
+      title="Cancel this payment?"
+      description={`${payment.receipt_no ?? "Payment"} · ${payment.student_name} · ${rupees(payment.amount)}. The receipt stays on record marked cancelled, and the amount is owed again.`}
+      error={errors.formError}
+      saving={submit.busy}
+      submitLabel="Cancel payment"
+      onSubmit={() =>
+        void submit.run(async () => {
+          if (!reason.trim()) {
+            errors.setFieldErrors({ reason: "Say why the payment is being cancelled." });
+            return;
+          }
+          errors.clear();
+          try {
+            await feeService().cancelPayment(payment.id, reason);
+            onDone();
+          } catch (caught) {
+            errors.fromError(caught, "Unable to cancel the payment.");
+          }
+        })
+      }
+      onClose={onClose}
+    >
+      <TextAreaField id="cp-reason" label="Reason" required maxLength={512} value={reason} onChange={setReason} error={errors.fieldErrors.reason} hint="For example “Cheque bounced” or “Recorded twice”." span />
+    </FormModal>
   );
 }

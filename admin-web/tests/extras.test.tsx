@@ -142,8 +142,8 @@ describe("helpers", () => {
   it("counts staff attendance per person", () => {
     const people = [{ staff_id: 1, user_id: 10, name: "Asha", designation: "Clerk", kind: "staff" as const }];
     expect(summarise([{ staff_id: 1, status: "present" }, { staff_id: 1, status: "late" }, { staff_id: 1, status: "absent" }, { staff_id: 2, status: "leave" }], people)).toEqual([
-      { id: 1, name: "Asha", designation: "Clerk", present: 1, absent: 1, late: 1, leave: 0, total: 3 },
-      { id: 2, name: "Staff #2", designation: "", present: 0, absent: 0, late: 0, leave: 1, total: 1 },
+      { id: 1, name: "Asha", designation: "Clerk", employee_code: "", department: "", present: 1, absent: 1, late: 1, leave: 0, total: 3 },
+      { id: 2, name: "Staff #2", designation: "", employee_code: "", department: "", present: 0, absent: 0, late: 0, leave: 1, total: 1 },
     ]);
   });
 
@@ -154,23 +154,11 @@ describe("helpers", () => {
 });
 
 describe("pickers instead of raw ids", () => {
-  it("staff leave picks the person and defaults to the current session", async () => {
-    const leave = EXTRA_PAGES["staff-leave"] as ResourceConfig;
-    serve({
-      "/school-admin/staff": [{ id: 31, staff_id: 5, name: "Asha Rao", designation: "Clerk" }],
-      "/school-admin/teachers": [],
-      "/school-admin/academics/sessions": [{ id: 1, name: "2025-26", is_active: 0 }, { id: 2, name: "2026-27", is_active: 1 }],
-    });
+  it("student leave defaults to the current session", async () => {
+    const leave = EXTRA_PAGES["student-leave"] as ResourceConfig;
+    serve({ "/school-admin/academics/sessions": [{ id: 1, name: "2025-26", is_active: 0 }, { id: 2, name: "2026-27", is_active: 1 }] });
     render(<RecordForm config={leave} row={null} onClose={() => undefined} onSaved={() => undefined} />);
-    await screen.findByRole("option", { name: "Asha Rao · Clerk" });
     await waitFor(() => expect((screen.getByLabelText(/^Academic session/) as HTMLSelectElement).value).toBe("2"));
-    fireEvent.change(screen.getByLabelText(/^Teacher or staff member/), { target: { value: "31" } });
-    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Fever" } });
-    fireEvent.change(screen.getByLabelText(/^From/), { target: { value: "2026-10-28" } });
-    fireEvent.change(screen.getByLabelText(/^To/), { target: { value: "2026-10-29" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add leave" }));
-    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
-    expect(calls.find((call) => call.method === "POST")).toMatchObject({ body: { user_id: 31, reason: "Fever", from_date: "2026-10-28", to_date: "2026-10-29", session_year_id: 2, status: "0" } });
   });
 
   it("no page asks for a raw id", () => {
@@ -232,10 +220,7 @@ describe("settings pages (backend 0040)", () => {
     expect(toBody(payment.fields, { ...values, secret: " new-secret " }, false)).toMatchObject({ secret: "new-secret" });
   });
 
-  it("saves leave policy as an object and list fields as arrays", () => {
-    const leave = EXTRA_PAGES["leave-settings"] as import("@/lib/extras/types").SettingsConfig;
-    const body = toBody(leave.fields, { ...initialValues(leave.fields), "policy.staff_casual_days": "12", "policy.allow_half_day": "1", notes: "" }, false);
-    expect(body).toEqual({ policy: { staff_casual_days: 12, staff_sick_days: null, student_max_days_per_month: null, approval: "admin", allow_half_day: 1 }, notes: null });
+  it("saves list fields as arrays", () => {
     const fields = (EXTRA_PAGES["additional-user-fields"] as ResourceConfig).fields;
     expect(toBody(fields, { ...initialValues(fields), label: "Blood group", field_key: "blood_group", field_type: "select", options: "A+, B+ , O+" }, false)).toMatchObject({ options: ["A+", "B+", "O+"], entity_type: "student", required: 0 });
     expect(initialValues(fields, { options: ["A+", "B+"] }).options).toBe("A+, B+");

@@ -35,7 +35,7 @@ export async function remove(path: string): Promise<void> {
   await send("DELETE", `${SA}${path}`, undefined, "Unable to delete.");
 }
 
-export type StaffRef = { staff_id: number; user_id: number; name: string; designation: string; kind: "teacher" | "staff"; salary?: number };
+export type StaffRef = { staff_id: number; user_id: number; name: string; designation: string; kind: "teacher" | "staff"; salary?: number; employee_code?: string; department?: string };
 
 /**
  * Teachers and other staff keyed by their staff record id, which attendance, tasks, payroll and
@@ -50,7 +50,7 @@ export async function staffDirectory(): Promise<StaffRef[]> {
     const staffId = optNum(row.staff_id);
     if (!staffId) return null;
     const name = str(row.name) || `${str(row.first_name)} ${str(row.last_name)}`.trim();
-    return { staff_id: staffId, user_id: num(row.id), name: name || `Staff #${staffId}`, designation: str(row.designation) || (kind === "teacher" ? "Teacher" : ""), kind, salary: num(row.salary ?? 0) };
+    return { staff_id: staffId, user_id: num(row.id), name: name || `Staff #${staffId}`, designation: str(row.designation) || (kind === "teacher" ? "Teacher" : ""), kind, salary: num(row.salary ?? 0), employee_code: str(row.employee_id ?? row.employee_code), department: str(row.department) };
   };
   const rows = [...teachers.map((row) => ref(row, "teacher")), ...staff.map((row) => ref(row, "staff"))].filter((row): row is StaffRef => row !== null);
   const seen = new Set<number>();

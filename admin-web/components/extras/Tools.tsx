@@ -124,7 +124,7 @@ function CertificateBody() {
 
 // ---------- ID cards ----------
 
-type Card = { kind: CardKind; title: string; lines: [string, string][]; image: string | null; front: string | null; back: string | null };
+type Card = { kind: CardKind; title: string; lines: [string, string][]; image: string | null; front: string | null; back: string | null; code?: string | null };
 
 /** A printable card: the kind's own lines, and its front/back text with {placeholders} filled in. */
 export function cardOf(kind: CardKind, data: Raw, lines: [string, string][], placeholders: Record<string, string>): Card {
@@ -138,6 +138,7 @@ export function cardOf(kind: CardKind, data: Raw, lines: [string, string][], pla
     image: optStr(data.image),
     front: text.front ? fillTemplate(text.front, values) : null,
     back: text.back ? fillTemplate(text.back, values) : null,
+    code: optStr(data.qr_code_url) ?? optStr(data.qr_code) ?? optStr(data.barcode_url) ?? null,
   };
 }
 

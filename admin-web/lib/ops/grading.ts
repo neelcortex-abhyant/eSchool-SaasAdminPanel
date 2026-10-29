@@ -96,15 +96,15 @@ export const liveGrading: GradingService = {
     const scales = await liveGrading.scales();
     const scale = (scaleId ? scales.find((item) => item.id === scaleId) : null) ?? defaultScale(scales);
     const card = await buildReportCard(studentId, sessionYearId, scale ?? null);
-    if (scaleId) return card;
-    // With the default scale, show the grades the server stored when it generated the cards.
+    // The server's stored cards give each exam a PDF; with the default scale their grades are shown too.
     const stored = await allPages("/school-admin/report-cards", { student_id: studentId }, "Unable to load the report card.").catch(() => [] as Raw[]);
     const byExam = new Map(stored.map((row) => [num(row.exam_id), row]));
     return {
       ...card,
       exams: card.exams.map((exam) => {
         const row = byExam.get(exam.exam_id);
-        return row && optStr(row.letter_grade) ? { ...exam, grade: optStr(row.letter_grade) } : exam;
+        if (!row) return exam;
+        return { ...exam, grade: scaleId ? exam.grade : optStr(row.letter_grade) ?? exam.grade, report_id: num(row.id) || null };
       }),
     };
   },

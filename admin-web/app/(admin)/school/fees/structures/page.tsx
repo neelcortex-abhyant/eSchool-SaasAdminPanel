@@ -25,7 +25,7 @@ export default function FeeStructuresPage() {
     <TeachingPage
       module="fees"
       title="Fee structures"
-      description={isOpsLive("fees") ? "Fees per class and session. Assign a structure to each student who pays it." : "Fees per class and session, with installments. Students in the class are charged automatically."}
+      description={isOpsLive("fees") ? "Fees per class and session, with installments. Assign a structure to each student who pays it." : "Fees per class and session, with installments. Students in the class are charged automatically."}
       icon={<IconFees width={18} height={18} />}
       tabs={FEE_TABS}
       liveNote={OPS_LIVE_NOTE.fees}
@@ -84,19 +84,15 @@ function StructuresBody({ editing, setEditing }: { editing: FeeStructure | "new"
     { key: "class", label: "Class", render: (row) => row.class_name },
     { key: "session", label: "Session", render: (row) => row.session_name },
     { key: "amount", label: "Amount", render: (row) => <strong>{rupees(row.total)}</strong> },
-    ...(isOpsLive("fees")
-      ? []
-      : [
-          {
-            key: "installments",
-            label: "Installments",
-            render: (row: FeeStructure) => (
-              <span className="muted">
-                {row.installments.length === 1 ? `One payment, due ${row.installments[0].due_date}` : `${row.installments.length} · first due ${row.installments[0]?.due_date ?? "—"}`}
-              </span>
-            ),
-          },
-        ]),
+    {
+      key: "installments",
+      label: "Installments",
+      render: (row: FeeStructure) => (
+        <span className="muted">
+          {row.installments.length === 0 ? "Not set" : row.installments.length === 1 ? `One payment, due ${row.installments[0].due_date}` : `${row.installments.length} · first due ${row.installments[0]?.due_date ?? "—"}`}
+        </span>
+      ),
+    },
     { key: "status", label: "Status", render: (row) => (row.status === 1 ? <Chip tone="green">Active</Chip> : <Chip tone="grey">Inactive</Chip>) },
   ];
 

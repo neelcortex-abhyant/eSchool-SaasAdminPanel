@@ -60,14 +60,17 @@ describe("live fee client", () => {
     "/school-admin/fee-payments": [{ id: 7, assignment_id: 11, student_id: 1, amount: 100, method: "cash", status: "success", paid_on: "2026-09-01", created_at: "2026-09-01T09:00:00" }],
   };
 
-  it("works out what a student owes per assigned structure, after concessions and payments", async () => {
-    route(fees);
+  it("works out what a student owes per installment, after concessions and payments, earliest due first", async () => {
+    route({ ...fees, "/school-admin/fee-structures/5/installments": [{ id: 51, name: "Term 1", due_date: "2026-04-10", amount: 600 }, { id: 52, name: "Term 2", due_date: "2999-10-10", amount: 400 }] });
     const dues = await liveFees.dues(1);
-    expect(dues.lines.map((line) => [line.installment_id, line.amount, line.concession, line.paid, line.balance])).toEqual([
-      [11, 1000, 100, 100, 800],
-      [12, 400, 0, 0, 400],
+    // Structure 5: 10% concession spread 60/40, ₹100 paid fills Term 1 first. Structure 6 has no installments.
+    expect(dues.lines.map((line) => [line.installment_id, line.amount, line.concession, line.paid, line.balance, line.overdue])).toEqual([
+      [51, 600, 60, 100, 440, true],
+      [52, 400, 40, 0, 360, false],
+      [0, 400, 0, 0, 400, false],
     ]);
     expect(dues.balance).toBe(1200);
+    expect(dues.overdue).toBe(440);
   });
 
   it("collects through /fees/collect, one request per structure, with a key in the body", async () => {
@@ -88,12 +91,23 @@ describe("live fee client", () => {
     expect(calls.filter((call) => call.method === "POST")).toHaveLength(0);
   });
 
-  it("saves a structure as amounts, with no installments", async () => {
+  it("saves a structure's amounts, then its installments as a set", async () => {
     route(fees);
-    await liveFees.saveStructure({ name: "Class 2", session_year_id: 1, class_id: 2, items: [{ fee_type_id: 1, amount: 900 }], installments: [], late_fee_per_day: 0, status: 1 });
+    await liveFees.saveStructure({ name: "Class 2", session_year_id: 1, class_id: 2, items: [{ fee_type_id: 1, amount: 900 }], installments: [{ name: "Term 1", due_date: "2026-04-10", amount: 500 }, { name: "Term 2", due_date: "2026-10-10", amount: 400 }], late_fee_per_day: 0, status: 1 });
     const post = calls.find((call) => call.method === "POST");
     expect(post?.url).toMatch(/\/school-admin\/fee-structures$/);
     expect(post?.body).toEqual({ name: "Class 2", session_year_id: 1, class_id: 2, amounts: [{ fee_type_id: 1, amount: 900 }], status: 1 });
+    const put = calls.find((call) => call.method === "PUT");
+    expect(put?.url).toMatch(/\/school-admin\/fee-structures\/99\/installments$/);
+    expect(put?.body).toEqual({ installments: [{ name: "Term 1", due_date: "2026-04-10", amount: 500, sort_order: 0 }, { name: "Term 2", due_date: "2026-10-10", amount: 400, sort_order: 1 }] });
+  });
+
+  it("cancels a payment with a reason", async () => {
+    route(fees);
+    await expect(liveFees.cancelPayment(7, " ")).rejects.toMatchObject({ status: 422 });
+    await liveFees.cancelPayment(7, "Cheque bounced");
+    expect(calls.at(-1)).toMatchObject({ method: "POST", body: { reason: "Cheque bounced" } });
+    expect(calls.at(-1)?.url).toMatch(/\/school-admin\/fee-payments\/7\/cancel$/);
   });
 });
 
@@ -186,7 +200,7 @@ describe("live people client", () => {
 });
 
 describe("timetable classroom", () => {
-  it("keeps the classroom on the first line of the server's note and reads it back", async () => {
+  it("saves the classroom in the server's room field and still reads rooms kept in older notes", async () => {
     const { noteWithRoom, roomFromNote, liveTimetable } = await import("@/lib/teaching/timetable");
     expect(noteWithRoom("12", "Bring lab coats")).toBe("Room: 12\nBring lab coats");
     expect(noteWithRoom(" ", "Only a note")).toBe("Only a note");
@@ -196,6 +210,9 @@ describe("timetable classroom", () => {
     expect(roomFromNote("Remember the Room: change")).toEqual({ room: null, note: "Remember the Room: change" });
     await liveTimetable.create({ session_year_id: 1, class_section_id: 2, subject_id: 3, teacher_user_id: 4, day: "monday", start_time: "08:30", end_time: "09:15", note: null, room: "12" });
     expect(calls[0].url).toMatch(/\/school-admin\/timetable-entries$/);
-    expect(calls[0].body).toMatchObject({ note: "Room: 12" });
+    expect(calls[0].body).toMatchObject({ room: "12", note: null });
+    const { withRoom } = await import("@/lib/teaching/timetable");
+    expect(withRoom("Lab 1", "Bring coats")).toEqual({ room: "Lab 1", note: "Bring coats" });
+    expect(withRoom(null, "Room: 12\nBring coats")).toEqual({ room: "12", note: "Bring coats" });
   });
 });

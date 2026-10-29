@@ -26,7 +26,7 @@ export const TIMETABLE_TABS = [
   { href: "/school/timetable/teachers", label: "Teacher schedules" },
 ];
 
-export const TIMETABLE_LIVE_NOTE = "Connected to the school's server. The server has no classroom field yet, so the classroom is saved at the start of the period's note.";
+export const TIMETABLE_LIVE_NOTE = "Connected to the school's server.";
 
 /** The day of the week for today, or Monday on Sunday. */
 export function todayWeekDay(): WeekDay {
