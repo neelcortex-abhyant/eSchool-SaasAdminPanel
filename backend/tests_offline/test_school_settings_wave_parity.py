@@ -37,7 +37,7 @@ def test_migration_0040_revises_0039():
     rev = script.get_revision("20261028_0040")
     assert rev is not None
     assert rev.down_revision == "20261027_0039"
-    assert script.get_heads() == ["20261028_0040"]
+    assert script.get_heads() == ["20261029_0042"]
 
 
 def test_content_slugs_allowlist():

@@ -50,6 +50,14 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class MessageOut(BaseModel):
+    """Simple auth success message (change/reset/forgot password)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    message: str
+
+
 class AuthTokenResponse(BaseModel):
     """Successful login/signup/register body. Always includes the session token.
 

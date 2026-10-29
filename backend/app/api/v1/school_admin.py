@@ -18,6 +18,7 @@ from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
+from app.api.v1 import school_admin_erp as erp_routes
 from app.api.v1 import school_admin_mgmt as mgmt_routes
 from app.api.v1 import school_admin_settings as settings_routes
 from app.services.v1 import person_documents as docs_svc
@@ -30,6 +31,8 @@ from app.services.v1 import school_homework as homework_svc
 from app.services.v1 import school_offline_exams as offline_svc
 from app.services.v1 import school_online_assessments as oa_svc
 from app.services.v1 import school_study_materials as materials_svc
+from app.schemas.v1 import school_admin_core_responses as core_out
+from app.schemas.v1 import school_admin_settings_responses as settings_out
 from app.services.v1 import school_timetable as timetable_svc
 
 router = APIRouter(prefix="/school-admin", tags=["v1-school-admin"])
@@ -59,6 +62,7 @@ def require_teachers_or_staff(
 # Mounted first so /academics/... stays distinct from direct /classes and /sessions.
 router.include_router(academics_routes.router)
 router.include_router(mgmt_routes.router)
+router.include_router(erp_routes.router)
 router.include_router(settings_routes.router)
 
 
@@ -346,6 +350,7 @@ class TimetableEntryCreateBody(BaseModel):
     start_time: str = Field(min_length=4, max_length=8)
     end_time: str = Field(min_length=4, max_length=8)
     note: str | None = Field(default=None, max_length=512)
+    room: str | None = Field(default=None, max_length=128)
 
 
 class TimetableEntryUpdateBody(BaseModel):
@@ -361,6 +366,7 @@ class TimetableEntryUpdateBody(BaseModel):
     start_time: str | None = Field(default=None, min_length=4, max_length=8)
     end_time: str | None = Field(default=None, min_length=4, max_length=8)
     note: str | None = Field(default=None, max_length=512)
+    room: str | None = Field(default=None, max_length=128)
 
 
 class HomeworkAttachmentMeta(BaseModel):
@@ -487,7 +493,7 @@ def school_admin_own_school(
     return SchoolResponse.model_validate(school)
 
 
-@router.get("/sessions")
+@router.get("/sessions", responses=core_out.json_response(core_out.SessionYearListOut))
 def school_admin_sessions(
     auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
@@ -511,7 +517,7 @@ def school_admin_sessions(
 # Compatibility: equivalent academics/classes routes remain for existing clients.
 
 
-@router.get("/classes")
+@router.get("/classes", responses=core_out.json_response(core_out.ClassListOut))
 def list_classes(
     auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
@@ -528,7 +534,7 @@ def list_classes(
     )
 
 
-@router.post("/classes", status_code=status.HTTP_201_CREATED)
+@router.post("/classes", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.ClassOut, status_code=201))
 def create_class(
     body: ClassWriteBody,
     auth: Annotated[AuthContext, Depends(require_structure_write)],
@@ -538,7 +544,7 @@ def create_class(
     return _run(lambda: academics.create_class(db, _school_id(auth), _write_body(body)))
 
 
-@router.get("/classes/{class_id}")
+@router.get("/classes/{class_id}", responses=core_out.json_response(core_out.ClassOut))
 def get_class(
     class_id: int,
     auth: Annotated[AuthContext, Depends(require_school_context)],
@@ -548,7 +554,7 @@ def get_class(
     return _run(lambda: academics.get_class(db, _school_id(auth), class_id))
 
 
-@router.patch("/classes/{class_id}")
+@router.patch("/classes/{class_id}", responses=core_out.json_response(core_out.ClassOut))
 def update_class(
     class_id: int,
     body: ClassWriteBody,
@@ -568,7 +574,7 @@ def update_class(
 # Compatibility: academics/sections (name-only create) remains.
 
 
-@router.get("/sections")
+@router.get("/sections", responses=core_out.json_response(core_out.SectionListOut))
 def list_sections(
     auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
@@ -585,7 +591,7 @@ def list_sections(
     )
 
 
-@router.post("/sections", status_code=status.HTTP_201_CREATED)
+@router.post("/sections", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.SectionOut, status_code=201))
 def create_section(
     body: SectionWriteBody,
     auth: Annotated[AuthContext, Depends(require_structure_write)],
@@ -599,7 +605,7 @@ def create_section(
     )
 
 
-@router.get("/sections/{section_id}")
+@router.get("/sections/{section_id}", responses=core_out.json_response(core_out.SectionOut))
 def get_section(
     section_id: int,
     auth: Annotated[AuthContext, Depends(require_school_context)],
@@ -609,7 +615,7 @@ def get_section(
     return _run(lambda: academics.get_section(db, _school_id(auth), section_id))
 
 
-@router.patch("/sections/{section_id}")
+@router.patch("/sections/{section_id}", responses=core_out.json_response(core_out.SectionOut))
 def update_section(
     section_id: int,
     body: SectionWriteBody,
@@ -628,7 +634,7 @@ def update_section(
 # Class association uses class_subjects. Academics /subjects and /class-subjects remain.
 
 
-@router.get("/subjects")
+@router.get("/subjects", responses=core_out.json_response(core_out.SubjectListOut))
 def list_subjects(
     auth: Annotated[AuthContext, Depends(require_school_context)],
     db: Annotated[Session, Depends(central_db)],
@@ -652,7 +658,7 @@ def list_subjects(
     )
 
 
-@router.post("/subjects", status_code=status.HTTP_201_CREATED)
+@router.post("/subjects", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.SubjectOut, status_code=201))
 def create_subject(
     body: SubjectWriteBody,
     auth: Annotated[AuthContext, Depends(require_structure_write)],
@@ -666,7 +672,7 @@ def create_subject(
     )
 
 
-@router.get("/subjects/{subject_id}")
+@router.get("/subjects/{subject_id}", responses=core_out.json_response(core_out.SubjectOut))
 def get_subject(
     subject_id: int,
     auth: Annotated[AuthContext, Depends(require_school_context)],
@@ -676,7 +682,7 @@ def get_subject(
     return _run(lambda: academics.get_subject(db, _school_id(auth), subject_id))
 
 
-@router.patch("/subjects/{subject_id}")
+@router.patch("/subjects/{subject_id}", responses=core_out.json_response(core_out.SubjectOut))
 def update_subject(
     subject_id: int,
     body: SubjectWriteBody,
@@ -691,7 +697,7 @@ def update_subject(
     )
 
 
-@router.get("/subjects/{subject_id}/classes")
+@router.get("/subjects/{subject_id}/classes", responses=core_out.json_response(core_out.SubjectClassesListOut))
 def list_subject_classes(
     subject_id: int,
     auth: Annotated[AuthContext, Depends(require_school_context)],
@@ -707,7 +713,7 @@ def list_subject_classes(
     )
 
 
-@router.put("/subjects/{subject_id}/classes")
+@router.put("/subjects/{subject_id}/classes", responses=core_out.json_response(core_out.SubjectClassesListOut))
 def replace_subject_classes(
     subject_id: int,
     body: SubjectClassesBody,
@@ -728,7 +734,7 @@ def replace_subject_classes(
 # --- People API: students / parents (keeps /academics/... for compatibility) ---
 
 
-@router.get("/students")
+@router.get("/students", responses=core_out.json_response(core_out.StudentListOut))
 def list_people_students(
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
@@ -761,7 +767,7 @@ def list_people_students(
     )
 
 
-@router.post("/students", status_code=status.HTTP_201_CREATED)
+@router.post("/students", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.StudentOut, status_code=201))
 def create_people_student(
     body: StudentCreateBody,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -770,7 +776,7 @@ def create_people_student(
     return _run(lambda: people_svc.create_student(db, _school_id(auth), _write_body(body)))
 
 
-@router.get("/students/{student_id}")
+@router.get("/students/{student_id}", responses=core_out.json_response(core_out.StudentOut))
 def get_people_student(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -779,7 +785,7 @@ def get_people_student(
     return _run(lambda: people_svc.get_student(db, _school_id(auth), student_id))
 
 
-@router.patch("/students/{student_id}")
+@router.patch("/students/{student_id}", responses=core_out.json_response(core_out.StudentOut))
 def update_people_student(
     student_id: int,
     body: StudentUpdateBody,
@@ -791,7 +797,7 @@ def update_people_student(
     )
 
 
-@router.patch("/students/{student_id}/status")
+@router.patch("/students/{student_id}/status", responses=core_out.json_response(core_out.StudentOut))
 def update_people_student_status(
     student_id: int,
     body: PeopleStatusBody,
@@ -803,7 +809,7 @@ def update_people_student_status(
     )
 
 
-@router.post("/students/{student_id}/guardians")
+@router.post("/students/{student_id}/guardians", responses=core_out.json_response(core_out.StudentOut))
 def link_people_guardian(
     student_id: int,
     body: GuardianLinkBody,
@@ -815,7 +821,7 @@ def link_people_guardian(
     )
 
 
-@router.delete("/students/{student_id}/guardians/{parent_id}")
+@router.delete("/students/{student_id}/guardians/{parent_id}", responses=core_out.json_response(core_out.StudentOut))
 def unlink_people_guardian(
     student_id: int,
     parent_id: int,
@@ -827,7 +833,7 @@ def unlink_people_guardian(
     )
 
 
-@router.post("/students/{student_id}/photo", status_code=status.HTTP_201_CREATED)
+@router.post("/students/{student_id}/photo", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PhotoUploadOut, status_code=201))
 async def upload_student_photo(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -843,7 +849,7 @@ async def upload_student_photo(
     return {"photo_url": result["photo_url"]}
 
 
-@router.get("/students/{student_id}/photo")
+@router.get("/students/{student_id}/photo", responses=core_out.binary_file_response(), response_class=Response)
 def get_student_photo(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -855,7 +861,7 @@ def get_student_photo(
     return Response(content=data, media_type=content_type, headers={"X-Content-Type-Options": "nosniff"})
 
 
-@router.post("/students/{student_id}/documents", status_code=status.HTTP_201_CREATED)
+@router.post("/students/{student_id}/documents", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PersonDocumentOut, status_code=201))
 async def upload_student_document(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -879,7 +885,7 @@ async def upload_student_document(
     )
 
 
-@router.get("/students/{student_id}/documents")
+@router.get("/students/{student_id}/documents", responses=core_out.json_response(core_out.PersonDocumentListOut))
 def list_student_documents(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -901,7 +907,7 @@ def list_student_documents(
     )
 
 
-@router.get("/students/{student_id}/documents/{document_id}")
+@router.get("/students/{student_id}/documents/{document_id}", responses=core_out.json_response(core_out.PersonDocumentOut))
 def get_student_document(
     student_id: int,
     document_id: int,
@@ -915,7 +921,7 @@ def get_student_document(
     )
 
 
-@router.delete("/students/{student_id}/documents/{document_id}")
+@router.delete("/students/{student_id}/documents/{document_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
 def delete_student_document(
     student_id: int,
     document_id: int,
@@ -929,7 +935,7 @@ def delete_student_document(
     )
 
 
-@router.get("/students/{student_id}/documents/{document_id}/download")
+@router.get("/students/{student_id}/documents/{document_id}/download", responses=core_out.binary_file_response(), response_class=Response)
 def download_student_document(
     student_id: int,
     document_id: int,
@@ -947,7 +953,7 @@ def download_student_document(
     return Response(content=data, media_type=content_type, headers=headers)
 
 
-@router.get("/parents")
+@router.get("/parents", responses=core_out.json_response(core_out.ParentListOut))
 def list_people_parents(
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
@@ -972,7 +978,7 @@ def list_people_parents(
     )
 
 
-@router.post("/parents", status_code=status.HTTP_201_CREATED)
+@router.post("/parents", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.ParentOut, status_code=201))
 def create_people_parent(
     body: ParentCreateBody,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -981,7 +987,7 @@ def create_people_parent(
     return _run(lambda: people_svc.create_parent(db, _school_id(auth), _write_body(body)))
 
 
-@router.get("/parents/{parent_id}")
+@router.get("/parents/{parent_id}", responses=core_out.json_response(core_out.ParentOut))
 def get_people_parent(
     parent_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
@@ -990,7 +996,7 @@ def get_people_parent(
     return _run(lambda: people_svc.get_parent(db, _school_id(auth), parent_id))
 
 
-@router.patch("/parents/{parent_id}")
+@router.patch("/parents/{parent_id}", responses=core_out.json_response(core_out.ParentOut))
 def update_people_parent(
     parent_id: int,
     body: ParentUpdateBody,
@@ -1002,7 +1008,7 @@ def update_people_parent(
     )
 
 
-@router.patch("/parents/{parent_id}/status")
+@router.patch("/parents/{parent_id}/status", responses=core_out.json_response(core_out.ParentOut))
 def update_people_parent_status(
     parent_id: int,
     body: PeopleStatusBody,
@@ -1014,7 +1020,7 @@ def update_people_parent_status(
     )
 
 
-@router.get("/teachers/departments")
+@router.get("/teachers/departments", responses=core_out.json_response(core_out.DepartmentListOut))
 def list_teacher_departments(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1022,7 +1028,7 @@ def list_teacher_departments(
     return _run(lambda: teachers_svc.list_departments(db, _school_id(auth), teachers_only=True))
 
 
-@router.get("/teachers")
+@router.get("/teachers", responses=core_out.json_response(core_out.TeacherListOut))
 def list_teachers(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1057,7 +1063,7 @@ def list_teachers(
     )
 
 
-@router.post("/teachers", status_code=status.HTTP_201_CREATED)
+@router.post("/teachers", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.TeacherOut, status_code=201))
 def create_teacher(
     body: TeacherCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1068,7 +1074,7 @@ def create_teacher(
     )
 
 
-@router.get("/teachers/{teacher_id}")
+@router.get("/teachers/{teacher_id}", responses=core_out.json_response(core_out.TeacherOut))
 def get_teacher(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1077,7 +1083,7 @@ def get_teacher(
     return _run(lambda: teachers_svc.get_teacher(db, _school_id(auth), teacher_id))
 
 
-@router.patch("/teachers/{teacher_id}")
+@router.patch("/teachers/{teacher_id}", responses=core_out.json_response(core_out.TeacherOut))
 def update_teacher(
     teacher_id: int,
     body: TeacherUpdateBody,
@@ -1091,7 +1097,7 @@ def update_teacher(
     )
 
 
-@router.patch("/teachers/{teacher_id}/status")
+@router.patch("/teachers/{teacher_id}/status", responses=core_out.json_response(core_out.TeacherOut))
 def update_teacher_status(
     teacher_id: int,
     body: TeacherStatusBody,
@@ -1105,7 +1111,7 @@ def update_teacher_status(
     )
 
 
-@router.post("/teachers/{teacher_id}/documents", status_code=status.HTTP_201_CREATED)
+@router.post("/teachers/{teacher_id}/documents", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PersonDocumentOut, status_code=201))
 async def upload_teacher_document(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1129,7 +1135,7 @@ async def upload_teacher_document(
     )
 
 
-@router.get("/teachers/{teacher_id}/documents")
+@router.get("/teachers/{teacher_id}/documents", responses=core_out.json_response(core_out.PersonDocumentListOut))
 def list_teacher_documents(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1151,7 +1157,7 @@ def list_teacher_documents(
     )
 
 
-@router.get("/teachers/{teacher_id}/documents/{document_id}")
+@router.get("/teachers/{teacher_id}/documents/{document_id}", responses=core_out.json_response(core_out.PersonDocumentOut))
 def get_teacher_document(
     teacher_id: int,
     document_id: int,
@@ -1165,7 +1171,7 @@ def get_teacher_document(
     )
 
 
-@router.get("/teachers/{teacher_id}/documents/{document_id}/download")
+@router.get("/teachers/{teacher_id}/documents/{document_id}/download", responses=core_out.binary_file_response(), response_class=Response)
 def download_teacher_document(
     teacher_id: int,
     document_id: int,
@@ -1183,7 +1189,7 @@ def download_teacher_document(
     return Response(content=data, media_type=content_type, headers=headers)
 
 
-@router.delete("/teachers/{teacher_id}/documents/{document_id}")
+@router.delete("/teachers/{teacher_id}/documents/{document_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
 def delete_teacher_document(
     teacher_id: int,
     document_id: int,
@@ -1197,7 +1203,7 @@ def delete_teacher_document(
     )
 
 
-@router.post("/teachers/{teacher_id}/photo", status_code=status.HTTP_201_CREATED)
+@router.post("/teachers/{teacher_id}/photo", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PhotoUploadOut, status_code=201))
 async def upload_teacher_photo(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1213,7 +1219,7 @@ async def upload_teacher_photo(
     return {"photo_url": result["photo_url"]}
 
 
-@router.get("/teachers/{teacher_id}/photo")
+@router.get("/teachers/{teacher_id}/photo", responses=core_out.binary_file_response(), response_class=Response)
 def get_teacher_photo(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1231,7 +1237,7 @@ def get_teacher_photo(
 # Static suffixes registered before bare /timetable for clarity.
 
 
-@router.get("/teachers/{teacher_user_id}/timetable/daily")
+@router.get("/teachers/{teacher_user_id}/timetable/daily", responses=core_out.json_response(core_out.TeacherDailyTimetableOut))
 def get_teacher_daily_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1250,7 +1256,7 @@ def get_teacher_daily_timetable(
     )
 
 
-@router.get("/teachers/{teacher_user_id}/timetable/weekly")
+@router.get("/teachers/{teacher_user_id}/timetable/weekly", responses=core_out.json_response(core_out.WeeklyTimetableOut))
 def get_teacher_weekly_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1267,7 +1273,7 @@ def get_teacher_weekly_timetable(
     )
 
 
-@router.get("/teachers/{teacher_user_id}/timetable")
+@router.get("/teachers/{teacher_user_id}/timetable", responses=core_out.json_response(core_out.WeeklyTimetableOut))
 def get_teacher_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1290,7 +1296,7 @@ def get_teacher_timetable(
     )
 
 
-@router.get("/teachers/{teacher_user_id}/availability")
+@router.get("/teachers/{teacher_user_id}/availability", responses=core_out.json_response(core_out.TeacherAvailabilityOut))
 def get_teacher_availability(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1315,7 +1321,7 @@ def get_teacher_availability(
     )
 
 
-@router.get("/staff/departments")
+@router.get("/staff/departments", responses=core_out.json_response(core_out.DepartmentListOut))
 def list_staff_departments(
     auth: Annotated[AuthContext, Depends(require_staff)],
     db: Annotated[Session, Depends(central_db)],
@@ -1323,7 +1329,7 @@ def list_staff_departments(
     return _run(lambda: staff_svc.list_departments(db, _school_id(auth)))
 
 
-@router.get("/staff")
+@router.get("/staff", responses=core_out.json_response(core_out.StaffListOut))
 def list_staff(
     auth: Annotated[AuthContext, Depends(require_staff)],
     db: Annotated[Session, Depends(central_db)],
@@ -1354,7 +1360,7 @@ def list_staff(
     )
 
 
-@router.post("/staff", status_code=status.HTTP_201_CREATED)
+@router.post("/staff", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.StaffOut, status_code=201))
 def create_staff(
     body: StaffCreateBody,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1363,7 +1369,7 @@ def create_staff(
     return _run(lambda: staff_svc.create_staff(db, _school_id(auth), _write_body(body)))
 
 
-@router.get("/staff/{staff_id}")
+@router.get("/staff/{staff_id}", responses=core_out.json_response(core_out.StaffOut))
 def get_staff(
     staff_id: int,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1372,7 +1378,7 @@ def get_staff(
     return _run(lambda: staff_svc.get_staff(db, _school_id(auth), staff_id))
 
 
-@router.patch("/staff/{staff_id}")
+@router.patch("/staff/{staff_id}", responses=core_out.json_response(core_out.StaffOut))
 def update_staff(
     staff_id: int,
     body: StaffUpdateBody,
@@ -1384,7 +1390,7 @@ def update_staff(
     )
 
 
-@router.patch("/staff/{staff_id}/status")
+@router.patch("/staff/{staff_id}/status", responses=core_out.json_response(core_out.StaffOut))
 def update_staff_status(
     staff_id: int,
     body: StaffStatusBody,
@@ -1396,7 +1402,7 @@ def update_staff_status(
     )
 
 
-@router.post("/staff/{staff_id}/documents", status_code=status.HTTP_201_CREATED)
+@router.post("/staff/{staff_id}/documents", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PersonDocumentOut, status_code=201))
 async def upload_staff_document(
     staff_id: int,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1420,7 +1426,7 @@ async def upload_staff_document(
     )
 
 
-@router.get("/staff/{staff_id}/documents")
+@router.get("/staff/{staff_id}/documents", responses=core_out.json_response(core_out.PersonDocumentListOut))
 def list_staff_documents(
     staff_id: int,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1442,7 +1448,7 @@ def list_staff_documents(
     )
 
 
-@router.get("/staff/{staff_id}/documents/{document_id}")
+@router.get("/staff/{staff_id}/documents/{document_id}", responses=core_out.json_response(core_out.PersonDocumentOut))
 def get_staff_document(
     staff_id: int,
     document_id: int,
@@ -1456,7 +1462,7 @@ def get_staff_document(
     )
 
 
-@router.get("/staff/{staff_id}/documents/{document_id}/download")
+@router.get("/staff/{staff_id}/documents/{document_id}/download", responses=core_out.binary_file_response(), response_class=Response)
 def download_staff_document(
     staff_id: int,
     document_id: int,
@@ -1474,7 +1480,7 @@ def download_staff_document(
     return Response(content=data, media_type=content_type, headers=headers)
 
 
-@router.delete("/staff/{staff_id}/documents/{document_id}")
+@router.delete("/staff/{staff_id}/documents/{document_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
 def delete_staff_document(
     staff_id: int,
     document_id: int,
@@ -1488,7 +1494,7 @@ def delete_staff_document(
     )
 
 
-@router.post("/staff/{staff_id}/photo", status_code=status.HTTP_201_CREATED)
+@router.post("/staff/{staff_id}/photo", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PhotoUploadOut, status_code=201))
 async def upload_staff_photo(
     staff_id: int,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1504,7 +1510,7 @@ async def upload_staff_photo(
     return {"photo_url": result["photo_url"]}
 
 
-@router.get("/staff/{staff_id}/photo")
+@router.get("/staff/{staff_id}/photo", responses=core_out.binary_file_response(), response_class=Response)
 def get_staff_photo(
     staff_id: int,
     auth: Annotated[AuthContext, Depends(require_staff)],
@@ -1516,7 +1522,7 @@ def get_staff_photo(
     return Response(content=data, media_type=content_type)
 
 
-@router.get("/people")
+@router.get("/people", responses=core_out.json_response(core_out.PeopleListOut))
 def list_people(
     auth: Annotated[AuthContext, Depends(require_teachers_or_staff)],
     db: Annotated[Session, Depends(central_db)],
@@ -1549,7 +1555,7 @@ def list_people(
 # Permission: teachers.manage. Classroom scheduling deferred (no classroom entity).
 
 
-@router.get("/timetable/weekly")
+@router.get("/timetable/weekly", responses=core_out.json_response(core_out.WeeklyTimetableOut))
 def get_weekly_timetable(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1567,7 +1573,7 @@ def get_weekly_timetable(
     )
 
 
-@router.get("/timetable-entries")
+@router.get("/timetable-entries", responses=core_out.json_response(core_out.TimetableEntryListOut))
 def list_timetable_entries(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1594,7 +1600,7 @@ def list_timetable_entries(
     )
 
 
-@router.post("/timetable-entries", status_code=status.HTTP_201_CREATED)
+@router.post("/timetable-entries", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.TimetableEntryOut, status_code=201))
 def create_timetable_entry(
     body: TimetableEntryCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1607,7 +1613,7 @@ def create_timetable_entry(
     )
 
 
-@router.get("/timetable-entries/{entry_id}")
+@router.get("/timetable-entries/{entry_id}", responses=core_out.json_response(core_out.TimetableEntryOut))
 def get_timetable_entry(
     entry_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1616,7 +1622,7 @@ def get_timetable_entry(
     return _run(lambda: timetable_svc.get_entry(db, _school_id(auth), entry_id))
 
 
-@router.patch("/timetable-entries/{entry_id}")
+@router.patch("/timetable-entries/{entry_id}", responses=core_out.json_response(core_out.TimetableEntryOut))
 def update_timetable_entry(
     entry_id: int,
     body: TimetableEntryUpdateBody,
@@ -1630,7 +1636,7 @@ def update_timetable_entry(
     )
 
 
-@router.delete("/timetable-entries/{entry_id}")
+@router.delete("/timetable-entries/{entry_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_timetable_entry(
     entry_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1643,7 +1649,7 @@ def delete_timetable_entry(
 # Reuses TeacherAssignment + ClassSection. Academics paths remain for compatibility.
 
 
-@router.get("/teacher-assignments")
+@router.get("/teacher-assignments", responses=core_out.json_response(core_out.TeacherAssignmentListOut))
 def list_teacher_assignments(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1671,7 +1677,7 @@ def list_teacher_assignments(
     )
 
 
-@router.post("/teacher-assignments", status_code=status.HTTP_201_CREATED)
+@router.post("/teacher-assignments", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.TeacherAssignmentOut, status_code=201))
 def create_teacher_assignment(
     body: TeacherAssignmentWriteBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1685,7 +1691,7 @@ def create_teacher_assignment(
     )
 
 
-@router.get("/teacher-assignments/{assignment_id}")
+@router.get("/teacher-assignments/{assignment_id}", responses=core_out.json_response(core_out.TeacherAssignmentOut))
 def get_teacher_assignment(
     assignment_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1694,7 +1700,7 @@ def get_teacher_assignment(
     return _run(lambda: academics.get_teacher_assignment(db, _school_id(auth), assignment_id))
 
 
-@router.patch("/teacher-assignments/{assignment_id}")
+@router.patch("/teacher-assignments/{assignment_id}", responses=core_out.json_response(core_out.TeacherAssignmentOut))
 def update_teacher_assignment(
     assignment_id: int,
     body: TeacherAssignmentWriteBody,
@@ -1709,7 +1715,7 @@ def update_teacher_assignment(
     )
 
 
-@router.delete("/teacher-assignments/{assignment_id}")
+@router.delete("/teacher-assignments/{assignment_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
 def delete_teacher_assignment(
     assignment_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1741,7 +1747,7 @@ def school_admin_school_by_id(
 # Student submit/list APIs live under /api/student/homework* (legacy student auth).
 
 
-@router.post("/homework", status_code=status.HTTP_201_CREATED)
+@router.post("/homework", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.HomeworkOut, status_code=201))
 def create_homework(
     body: HomeworkCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1752,7 +1758,7 @@ def create_homework(
     )
 
 
-@router.get("/homework")
+@router.get("/homework", responses=core_out.json_response(core_out.HomeworkListOut))
 def list_homework(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -1779,7 +1785,7 @@ def list_homework(
     )
 
 
-@router.get("/homework/{homework_id}/submissions")
+@router.get("/homework/{homework_id}/submissions", responses=core_out.json_response(core_out.HomeworkSubmissionListOut))
 def list_homework_submissions(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1802,7 +1808,7 @@ def list_homework_submissions(
     )
 
 
-@router.get("/homework/{homework_id}/summary")
+@router.get("/homework/{homework_id}/summary", responses=core_out.json_response(core_out.HomeworkSummaryOut))
 def get_homework_summary(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1811,7 +1817,7 @@ def get_homework_summary(
     return _run(lambda: homework_svc.homework_summary(db, _school_id(auth), homework_id))
 
 
-@router.get("/homework/{homework_id}")
+@router.get("/homework/{homework_id}", responses=core_out.json_response(core_out.HomeworkOut))
 def get_homework(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1820,7 +1826,7 @@ def get_homework(
     return _run(lambda: homework_svc.get_homework(db, _school_id(auth), homework_id))
 
 
-@router.patch("/homework/{homework_id}")
+@router.patch("/homework/{homework_id}", responses=core_out.json_response(core_out.HomeworkOut))
 def update_homework(
     homework_id: int,
     body: HomeworkUpdateBody,
@@ -1834,7 +1840,7 @@ def update_homework(
     )
 
 
-@router.delete("/homework/{homework_id}")
+@router.delete("/homework/{homework_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_homework(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1843,7 +1849,7 @@ def delete_homework(
     return _run(lambda: homework_svc.soft_delete_homework(db, _school_id(auth), homework_id))
 
 
-@router.post("/homework/{homework_id}/attachments", status_code=status.HTTP_201_CREATED)
+@router.post("/homework/{homework_id}/attachments", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.HomeworkOut, status_code=201))
 async def upload_homework_attachment(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1863,7 +1869,7 @@ async def upload_homework_attachment(
     )
 
 
-@router.get("/homework-submissions/{submission_id}")
+@router.get("/homework-submissions/{submission_id}", responses=core_out.json_response(core_out.HomeworkSubmissionOut))
 def get_homework_submission(
     submission_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1872,7 +1878,7 @@ def get_homework_submission(
     return _run(lambda: homework_svc.get_submission(db, _school_id(auth), submission_id))
 
 
-@router.patch("/homework-submissions/{submission_id}/evaluation")
+@router.patch("/homework-submissions/{submission_id}/evaluation", responses=core_out.json_response(core_out.HomeworkSubmissionOut))
 def evaluate_homework_submission(
     submission_id: int,
     body: HomeworkEvaluationBody,
@@ -1944,7 +1950,7 @@ def _download_response(data: bytes, content_type: str, filename: str | None) -> 
     return Response(content=data, media_type=content_type, headers=headers)
 
 
-@router.post("/study-materials", status_code=status.HTTP_201_CREATED)
+@router.post("/study-materials", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.StudyMaterialOut, status_code=201))
 def create_study_material(
     body: StudyMaterialCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -1967,7 +1973,7 @@ def create_study_material(
     )
 
 
-@router.post("/study-materials/upload", status_code=status.HTTP_201_CREATED)
+@router.post("/study-materials/upload", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.StudyMaterialOut, status_code=201))
 async def upload_study_material(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -2006,7 +2012,7 @@ async def upload_study_material(
     )
 
 
-@router.get("/study-materials")
+@router.get("/study-materials", responses=settings_out.json_response(settings_out.StudyMaterialListOut))
 def list_study_materials(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
@@ -2039,7 +2045,7 @@ def list_study_materials(
     )
 
 
-@router.get("/study-materials/{material_id}")
+@router.get("/study-materials/{material_id}", responses=settings_out.json_response(settings_out.StudyMaterialOut))
 def get_study_material(
     material_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -2048,7 +2054,7 @@ def get_study_material(
     return _run(lambda: materials_svc.get_material(db, _school_id(auth), material_id))
 
 
-@router.get("/study-materials/{material_id}/download")
+@router.get("/study-materials/{material_id}/download", responses=core_out.binary_file_response(), response_class=Response)
 def download_study_material(
     material_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -2060,7 +2066,7 @@ def download_study_material(
     return _download_response(data, content_type, filename)
 
 
-@router.patch("/study-materials/{material_id}")
+@router.patch("/study-materials/{material_id}", responses=settings_out.json_response(settings_out.StudyMaterialOut))
 def update_study_material(
     material_id: int,
     body: StudyMaterialUpdateBody,
@@ -2078,7 +2084,7 @@ def update_study_material(
     )
 
 
-@router.post("/study-materials/{material_id}/file")
+@router.post("/study-materials/{material_id}/file", responses=settings_out.json_response(settings_out.StudyMaterialOut))
 async def replace_study_material_file(
     material_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -2099,7 +2105,7 @@ async def replace_study_material_file(
     )
 
 
-@router.delete("/study-materials/{material_id}")
+@router.delete("/study-materials/{material_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_study_material(
     material_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
@@ -2169,7 +2175,7 @@ class OnlineAssessmentBulkImportBody(BaseModel):
     items: list[OnlineAssessmentQuestionBody] = Field(min_length=1, max_length=100)
 
 
-@router.post("/online-assessments", status_code=status.HTTP_201_CREATED)
+@router.post("/online-assessments", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.OnlineAssessmentOut, status_code=201))
 def create_online_assessment(
     body: OnlineAssessmentCreateBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2182,7 +2188,7 @@ def create_online_assessment(
     )
 
 
-@router.get("/online-assessments")
+@router.get("/online-assessments", responses=settings_out.json_response(settings_out.OnlineAssessmentListOut))
 def list_online_assessments(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
@@ -2209,7 +2215,7 @@ def list_online_assessments(
     )
 
 
-@router.get("/online-assessments/{assessment_id}")
+@router.get("/online-assessments/{assessment_id}", responses=settings_out.json_response(settings_out.OnlineAssessmentOut))
 def get_online_assessment(
     assessment_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2218,7 +2224,7 @@ def get_online_assessment(
     return _run(lambda: oa_svc.get_assessment(db, _school_id(auth), assessment_id))
 
 
-@router.patch("/online-assessments/{assessment_id}")
+@router.patch("/online-assessments/{assessment_id}", responses=settings_out.json_response(settings_out.OnlineAssessmentOut))
 def update_online_assessment(
     assessment_id: int,
     body: OnlineAssessmentUpdateBody,
@@ -2235,7 +2241,7 @@ def update_online_assessment(
     )
 
 
-@router.delete("/online-assessments/{assessment_id}")
+@router.delete("/online-assessments/{assessment_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_online_assessment(
     assessment_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2244,7 +2250,7 @@ def delete_online_assessment(
     return _run(lambda: oa_svc.soft_delete_assessment(db, _school_id(auth), assessment_id))
 
 
-@router.post("/online-assessments/{assessment_id}/questions", status_code=status.HTTP_201_CREATED)
+@router.post("/online-assessments/{assessment_id}/questions", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.OnlineAssessmentQuestionOut, status_code=201))
 def add_online_assessment_question(
     assessment_id: int,
     body: OnlineAssessmentQuestionBody,
@@ -2258,7 +2264,7 @@ def add_online_assessment_question(
     )
 
 
-@router.post("/online-assessments/{assessment_id}/questions/import", status_code=status.HTTP_201_CREATED)
+@router.post("/online-assessments/{assessment_id}/questions/import", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.OnlineAssessmentQuestionsImportOut, status_code=201))
 def import_online_assessment_questions(
     assessment_id: int,
     body: OnlineAssessmentBulkImportBody,
@@ -2275,7 +2281,7 @@ def import_online_assessment_questions(
     )
 
 
-@router.patch("/online-assessment-questions/{question_id}")
+@router.patch("/online-assessment-questions/{question_id}", responses=settings_out.json_response(settings_out.OnlineAssessmentQuestionOut))
 def update_online_assessment_question(
     question_id: int,
     body: OnlineAssessmentQuestionBody,
@@ -2287,7 +2293,7 @@ def update_online_assessment_question(
     )
 
 
-@router.delete("/online-assessment-questions/{question_id}")
+@router.delete("/online-assessment-questions/{question_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_online_assessment_question(
     question_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2296,7 +2302,7 @@ def delete_online_assessment_question(
     return _run(lambda: oa_svc.soft_delete_question(db, _school_id(auth), question_id))
 
 
-@router.get("/online-assessments/{assessment_id}/attempts")
+@router.get("/online-assessments/{assessment_id}/attempts", responses=settings_out.json_response(settings_out.OnlineAssessmentAttemptListOut))
 def list_online_assessment_attempts(
     assessment_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2311,7 +2317,7 @@ def list_online_assessment_attempts(
     )
 
 
-@router.get("/online-assessment-attempts/{attempt_id}")
+@router.get("/online-assessment-attempts/{attempt_id}", responses=settings_out.json_response(settings_out.OnlineAssessmentAttemptOut))
 def get_online_assessment_attempt(
     attempt_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2388,7 +2394,7 @@ class OfflineMarkBulkBody(BaseModel):
     items: list[OfflineMarkBody] = Field(min_length=1, max_length=200)
 
 
-@router.post("/offline-exams", status_code=status.HTTP_201_CREATED)
+@router.post("/offline-exams", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.OfflineExamOut, status_code=201))
 def create_offline_exam(
     body: OfflineExamCreateBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2401,7 +2407,7 @@ def create_offline_exam(
     )
 
 
-@router.get("/offline-exams")
+@router.get("/offline-exams", responses=core_out.json_response(core_out.OfflineExamListOut))
 def list_offline_exams(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
@@ -2424,7 +2430,7 @@ def list_offline_exams(
     )
 
 
-@router.get("/offline-exams/{exam_id}")
+@router.get("/offline-exams/{exam_id}", responses=core_out.json_response(core_out.OfflineExamOut))
 def get_offline_exam(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2433,7 +2439,7 @@ def get_offline_exam(
     return _run(lambda: offline_svc.get_exam(db, _school_id(auth), exam_id))
 
 
-@router.patch("/offline-exams/{exam_id}")
+@router.patch("/offline-exams/{exam_id}", responses=core_out.json_response(core_out.OfflineExamOut))
 def update_offline_exam(
     exam_id: int,
     body: OfflineExamUpdateBody,
@@ -2450,7 +2456,7 @@ def update_offline_exam(
     )
 
 
-@router.delete("/offline-exams/{exam_id}")
+@router.delete("/offline-exams/{exam_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_offline_exam(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2459,7 +2465,7 @@ def delete_offline_exam(
     return _run(lambda: offline_svc.soft_delete_exam(db, _school_id(auth), exam_id))
 
 
-@router.post("/offline-exams/{exam_id}/schedules", status_code=status.HTTP_201_CREATED)
+@router.post("/offline-exams/{exam_id}/schedules", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.OfflineExamScheduleOut, status_code=201))
 def create_offline_exam_schedule(
     exam_id: int,
     body: OfflineScheduleCreateBody,
@@ -2476,7 +2482,7 @@ def create_offline_exam_schedule(
     )
 
 
-@router.get("/offline-exam-schedules")
+@router.get("/offline-exam-schedules", responses=core_out.json_response(core_out.OfflineExamScheduleListOut))
 def list_offline_exam_schedules(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
@@ -2503,7 +2509,7 @@ def list_offline_exam_schedules(
     )
 
 
-@router.get("/offline-exam-schedules/{schedule_id}")
+@router.get("/offline-exam-schedules/{schedule_id}", responses=core_out.json_response(core_out.OfflineExamScheduleOut))
 def get_offline_exam_schedule(
     schedule_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2512,7 +2518,7 @@ def get_offline_exam_schedule(
     return _run(lambda: offline_svc.get_schedule(db, _school_id(auth), schedule_id))
 
 
-@router.patch("/offline-exam-schedules/{schedule_id}")
+@router.patch("/offline-exam-schedules/{schedule_id}", responses=core_out.json_response(core_out.OfflineExamScheduleOut))
 def patch_offline_exam_schedule(
     schedule_id: int,
     body: OfflineSchedulePatchBody,
@@ -2529,7 +2535,7 @@ def patch_offline_exam_schedule(
     )
 
 
-@router.delete("/offline-exam-schedules/{schedule_id}")
+@router.delete("/offline-exam-schedules/{schedule_id}", responses=core_out.json_response(core_out.DeletedOut))
 def delete_offline_exam_schedule(
     schedule_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2538,7 +2544,7 @@ def delete_offline_exam_schedule(
     return _run(lambda: offline_svc.soft_delete_schedule(db, _school_id(auth), schedule_id))
 
 
-@router.post("/offline-exam-schedules/{schedule_id}/marks", status_code=status.HTTP_201_CREATED)
+@router.post("/offline-exam-schedules/{schedule_id}/marks", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.OfflineExamMarkOut, status_code=201))
 def upsert_offline_exam_mark(
     schedule_id: int,
     body: OfflineMarkBody,
@@ -2559,7 +2565,7 @@ def upsert_offline_exam_mark(
     )
 
 
-@router.post("/offline-exam-schedules/{schedule_id}/marks/bulk")
+@router.post("/offline-exam-schedules/{schedule_id}/marks/bulk", responses=core_out.json_response(core_out.OfflineExamMarksBulkOut))
 def bulk_offline_exam_marks(
     schedule_id: int,
     body: OfflineMarkBulkBody,
@@ -2578,7 +2584,7 @@ def bulk_offline_exam_marks(
     )
 
 
-@router.get("/offline-exam-marks")
+@router.get("/offline-exam-marks", responses=core_out.json_response(core_out.OfflineExamMarkListOut))
 def list_offline_exam_marks(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
@@ -2601,7 +2607,7 @@ def list_offline_exam_marks(
     )
 
 
-@router.get("/offline-exam-marks/{mark_id}/audits")
+@router.get("/offline-exam-marks/{mark_id}/audits", responses=core_out.json_response(core_out.OfflineExamMarkAuditListOut))
 def list_offline_exam_mark_audits(
     mark_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2610,7 +2616,7 @@ def list_offline_exam_mark_audits(
     return _run(lambda: offline_svc.list_mark_audits(db, _school_id(auth), mark_id))
 
 
-@router.post("/offline-exams/{exam_id}/process-results")
+@router.post("/offline-exams/{exam_id}/process-results", responses=core_out.json_response(core_out.OfflineExamProcessResultsOut))
 def process_offline_exam_results(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2619,7 +2625,7 @@ def process_offline_exam_results(
     return _run(lambda: offline_svc.process_results(db, _school_id(auth), exam_id))
 
 
-@router.get("/offline-exams/{exam_id}/results")
+@router.get("/offline-exams/{exam_id}/results", responses=core_out.json_response(core_out.OfflineExamResultListOut))
 def list_offline_exam_results(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
@@ -2634,7 +2640,7 @@ def list_offline_exam_results(
     )
 
 
-@router.get("/offline-exams/{exam_id}/results/summary")
+@router.get("/offline-exams/{exam_id}/results/summary", responses=core_out.json_response(core_out.OfflineExamResultSummaryOut))
 def offline_exam_results_summary(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],

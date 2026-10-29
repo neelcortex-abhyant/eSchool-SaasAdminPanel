@@ -394,6 +394,8 @@ class ClassTimetableEntry(Base, TimestampMixin):
     start_time: Mapped[TimeType] = mapped_column(Time, nullable=False)
     end_time: Mapped[TimeType] = mapped_column(Time, nullable=False)
     note: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    # Free-text room / classroom label (no classroom entity yet).
+    room: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -1793,6 +1795,44 @@ class FeePayment(Base, TimestampMixin):
         String(32), nullable=False, default="success", server_default="success"
     )
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    cancel_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class FeeInstallment(Base, TimestampMixin):
+    __tablename__ = "fee_installments"
+    __table_args__ = (Index("ix_fee_installments_school_structure", "school_id", "structure_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    structure_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("fee_structures.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    due_date: Mapped[DateType] = mapped_column(Date, nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class FeePaymentAllocation(Base, TimestampMixin):
+    __tablename__ = "fee_payment_allocations"
+    __table_args__ = (
+        Index("ix_fee_payment_allocations_payment", "school_id", "payment_id"),
+        Index("ix_fee_payment_allocations_installment", "school_id", "installment_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    payment_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("fee_payments.id"), nullable=False, index=True
+    )
+    installment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("fee_installments.id"), nullable=True, index=True
+    )
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # created_at from TimestampMixin
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2036,6 +2076,30 @@ class PayrollSetting(Base, TimestampMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class SalaryComponent(Base, TimestampMixin):
+    """School-scoped payroll earning/deduction catalog (not per-run line items)."""
+
+    __tablename__ = "salary_components"
+    __table_args__ = (Index("ix_salary_components_school_kind", "school_id", "kind"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="earning", server_default="earning"
+    )  # earning | deduction
+    calc_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="fixed", server_default="fixed"
+    )  # fixed | percent
+    default_value: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class PayrollRun(Base, TimestampMixin):
     __tablename__ = "payroll_runs"
     __table_args__ = (Index("ix_payroll_runs_school_period", "school_id", "period_label"),)
@@ -2083,6 +2147,12 @@ class TransportVehicle(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     registration_no: Mapped[str] = mapped_column(String(64), nullable=False)
     capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    driver_staff_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("staffs.id"), nullable=True, index=True
+    )
+    helper_staff_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("staffs.id"), nullable=True, index=True
+    )
     status: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -2139,6 +2209,89 @@ class StudentTransportAssignment(Base, TimestampMixin):
     stop_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("transport_stops.id"), nullable=True, index=True
     )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TransportTrip(Base, TimestampMixin):
+    __tablename__ = "transport_trips"
+    __table_args__ = (
+        Index("ix_transport_trips_school_route", "school_id", "route_id"),
+        Index("ix_transport_trips_school_status", "school_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    route_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("transport_routes.id"), nullable=False, index=True
+    )
+    vehicle_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("transport_vehicles.id"), nullable=False, index=True
+    )
+    driver_staff_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("staffs.id"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="scheduled", server_default="scheduled"
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TransportGpsPoint(Base, TimestampMixin):
+    """GPS breadcrumb for a trip. Retention cron not implemented; see docs.
+
+    Optional expires_at may be set by writers using GPS_RETENTION_DAYS; purge is manual/cron.
+    """
+
+    __tablename__ = "transport_gps_points"
+    __table_args__ = (
+        Index("ix_transport_gps_points_trip_recorded", "trip_id", "recorded_at"),
+        Index("ix_transport_gps_points_school_trip", "school_id", "trip_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    trip_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("transport_trips.id"), nullable=False, index=True
+    )
+    vehicle_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("transport_vehicles.id"), nullable=False, index=True
+    )
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lng: Mapped[float] = mapped_column(Float, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    staff_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("staffs.id"), nullable=True, index=True
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TransportAttendanceEvent(Base, TimestampMixin):
+    __tablename__ = "transport_attendance_events"
+    __table_args__ = (
+        Index(
+            "uq_transport_attendance_trip_student_event_active",
+            "trip_id",
+            "student_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_transport_attendance_school_trip", "school_id", "trip_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    trip_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("transport_trips.id"), nullable=False, index=True
+    )
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    stop_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("transport_stops.id"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(16), nullable=False)  # board | drop
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 

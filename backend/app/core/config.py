@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # Must be true to accept restore requests (still a safe no-op; does not drop Neon).
     allow_backup_restore: bool = False
 
+    # Transport GPS breadcrumb hint for expires_at on new points. No auto-purge cron yet.
+    gps_retention_days: int = 90
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())

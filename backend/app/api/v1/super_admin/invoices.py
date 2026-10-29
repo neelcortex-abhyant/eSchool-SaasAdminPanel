@@ -115,7 +115,16 @@ def get_admin_invoice(
     return invoice_response(row)
 
 
-@router.get("/{invoice_id}/pdf")
+_PDF_RESPONSE = {
+    200: {
+        "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+        "description": "PDF invoice",
+    },
+    404: {"description": "Invoice not found"},
+}
+
+
+@router.get("/{invoice_id}/pdf", responses=_PDF_RESPONSE)
 def download_admin_invoice(
     invoice_id: int,
     _auth: Annotated[AuthContext, Depends(require_super_admin)],

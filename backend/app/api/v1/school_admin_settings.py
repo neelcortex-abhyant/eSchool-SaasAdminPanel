@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
+from app.schemas.v1 import school_admin_settings_responses as settings_out
 from app.api.v1.deps import AuthContext, require_school_permission
 from app.core import rate_limit
 from app.services.v1 import rbac
@@ -171,7 +172,7 @@ class PublicContactBody(BaseModel):
 # ---- Phase A: content + FAQ ----
 
 
-@router.get("/content/{slug}")
+@router.get("/content/{slug}", responses=settings_out.json_response(settings_out.ContentPageOut))
 def get_content(
     slug: str,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -180,7 +181,7 @@ def get_content(
     return _run(lambda: cms.get_content(db, _school_id(auth), slug))
 
 
-@router.put("/content/{slug}")
+@router.put("/content/{slug}", responses=settings_out.json_response(settings_out.ContentPageOut))
 def put_content(
     slug: str,
     body: ContentUpsertBody,
@@ -192,7 +193,7 @@ def put_content(
     )
 
 
-@router.get("/web-content")
+@router.get("/web-content", responses=settings_out.json_response(settings_out.ContentPageOut))
 def get_web_content(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -200,7 +201,7 @@ def get_web_content(
     return _run(lambda: cms.get_web_content(db, _school_id(auth)))
 
 
-@router.put("/web-content")
+@router.put("/web-content", responses=settings_out.json_response(settings_out.ContentPageOut))
 def put_web_content(
     body: ContentUpsertBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -211,7 +212,7 @@ def put_web_content(
     )
 
 
-@router.get("/faqs")
+@router.get("/faqs", responses=settings_out.json_response(settings_out.FaqListOut))
 def list_faqs(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -221,7 +222,7 @@ def list_faqs(
     return _run(lambda: cms.list_faqs(db, _school_id(auth), page=page, page_size=page_size))
 
 
-@router.post("/faqs", status_code=status.HTTP_201_CREATED)
+@router.post("/faqs", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.FaqOut, status_code=201))
 def create_faq(
     body: FaqCreateBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -230,7 +231,7 @@ def create_faq(
     return _run(lambda: cms.create_faq(db, _school_id(auth), body.model_dump(exclude_unset=True)))
 
 
-@router.patch("/faqs/{faq_id}")
+@router.patch("/faqs/{faq_id}", responses=settings_out.json_response(settings_out.FaqOut))
 def patch_faq(
     faq_id: int,
     body: FaqPatchBody,
@@ -242,7 +243,7 @@ def patch_faq(
     )
 
 
-@router.delete("/faqs/{faq_id}")
+@router.delete("/faqs/{faq_id}", responses=settings_out.json_response(settings_out.OkIdOut))
 def delete_faq(
     faq_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -254,7 +255,7 @@ def delete_faq(
 # ---- Phase B ----
 
 
-@router.get("/leave-settings")
+@router.get("/leave-settings", responses=settings_out.json_response(settings_out.LeaveSettingsOut))
 def get_leave_settings(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -262,7 +263,7 @@ def get_leave_settings(
     return _run(lambda: cms.get_leave_settings(db, _school_id(auth)))
 
 
-@router.put("/leave-settings")
+@router.put("/leave-settings", responses=settings_out.json_response(settings_out.LeaveSettingsOut))
 def put_leave_settings(
     body: LeaveSettingsBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -273,7 +274,7 @@ def put_leave_settings(
     )
 
 
-@router.get("/online-exam-terms")
+@router.get("/online-exam-terms", responses=settings_out.json_response(settings_out.OnlineExamTermsOut))
 def get_online_exam_terms(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -281,7 +282,7 @@ def get_online_exam_terms(
     return _run(lambda: cms.get_online_exam_terms(db, _school_id(auth)))
 
 
-@router.put("/online-exam-terms")
+@router.put("/online-exam-terms", responses=settings_out.json_response(settings_out.OnlineExamTermsOut))
 def put_online_exam_terms(
     body: OnlineExamTermsBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -297,7 +298,7 @@ def put_online_exam_terms(
 # ---- Phase C ----
 
 
-@router.get("/email-templates")
+@router.get("/email-templates", responses=settings_out.json_response(settings_out.EmailTemplateListOut))
 def list_email_templates(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -309,7 +310,7 @@ def list_email_templates(
     )
 
 
-@router.post("/email-templates", status_code=status.HTTP_201_CREATED)
+@router.post("/email-templates", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.EmailTemplateOut, status_code=201))
 def create_email_template(
     body: EmailTemplateCreateBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -322,7 +323,7 @@ def create_email_template(
     )
 
 
-@router.get("/email-templates/{template_id}")
+@router.get("/email-templates/{template_id}", responses=settings_out.json_response(settings_out.EmailTemplateOut))
 def get_email_template(
     template_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -331,7 +332,7 @@ def get_email_template(
     return _run(lambda: cms.get_email_template(db, _school_id(auth), template_id))
 
 
-@router.patch("/email-templates/{template_id}")
+@router.patch("/email-templates/{template_id}", responses=settings_out.json_response(settings_out.EmailTemplateOut))
 def patch_email_template(
     template_id: int,
     body: EmailTemplatePatchBody,
@@ -345,7 +346,7 @@ def patch_email_template(
     )
 
 
-@router.delete("/email-templates/{template_id}")
+@router.delete("/email-templates/{template_id}", responses=settings_out.json_response(settings_out.OkIdOut))
 def delete_email_template(
     template_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -357,7 +358,7 @@ def delete_email_template(
 # ---- Phase D ----
 
 
-@router.get("/whatsapp-settings")
+@router.get("/whatsapp-settings", responses=settings_out.json_response(settings_out.IntegrationSettingsOut))
 def get_whatsapp_settings(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -365,7 +366,7 @@ def get_whatsapp_settings(
     return _run(lambda: cms.get_whatsapp_settings(db, _school_id(auth)))
 
 
-@router.put("/whatsapp-settings")
+@router.put("/whatsapp-settings", responses=settings_out.json_response(settings_out.IntegrationSettingsOut))
 def put_whatsapp_settings(
     body: IntegrationUpsertBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -378,7 +379,7 @@ def put_whatsapp_settings(
     )
 
 
-@router.get("/payment-gateway-settings")
+@router.get("/payment-gateway-settings", responses=settings_out.json_response(settings_out.IntegrationSettingsOut))
 def get_payment_gateway_settings(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -386,7 +387,7 @@ def get_payment_gateway_settings(
     return _run(lambda: cms.get_payment_gateway_settings(db, _school_id(auth)))
 
 
-@router.put("/payment-gateway-settings")
+@router.put("/payment-gateway-settings", responses=settings_out.json_response(settings_out.IntegrationSettingsOut))
 def put_payment_gateway_settings(
     body: IntegrationUpsertBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -399,7 +400,7 @@ def put_payment_gateway_settings(
     )
 
 
-@router.get("/third-party-integrations")
+@router.get("/third-party-integrations", responses=settings_out.json_response(settings_out.IntegrationSettingsListOut))
 def list_third_party_integrations(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -407,7 +408,7 @@ def list_third_party_integrations(
     return _run(lambda: cms.list_third_party_integrations(db, _school_id(auth)))
 
 
-@router.put("/third-party-integrations/{provider}")
+@router.put("/third-party-integrations/{provider}", responses=settings_out.json_response(settings_out.IntegrationSettingsOut))
 def put_third_party_integration(
     provider: str,
     body: IntegrationUpsertBody,
@@ -424,7 +425,7 @@ def put_third_party_integration(
 # ---- Phase E ----
 
 
-@router.get("/user-form-fields")
+@router.get("/user-form-fields", responses=settings_out.json_response(settings_out.UserFormFieldListOut))
 def list_user_form_fields(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -443,7 +444,7 @@ def list_user_form_fields(
     )
 
 
-@router.post("/user-form-fields", status_code=status.HTTP_201_CREATED)
+@router.post("/user-form-fields", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.UserFormFieldOut, status_code=201))
 def create_user_form_field(
     body: FormFieldCreateBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -454,7 +455,7 @@ def create_user_form_field(
     )
 
 
-@router.patch("/user-form-fields/{field_id}")
+@router.patch("/user-form-fields/{field_id}", responses=settings_out.json_response(settings_out.UserFormFieldOut))
 def patch_user_form_field(
     field_id: int,
     body: FormFieldPatchBody,
@@ -468,7 +469,7 @@ def patch_user_form_field(
     )
 
 
-@router.delete("/user-form-fields/{field_id}")
+@router.delete("/user-form-fields/{field_id}", responses=settings_out.json_response(settings_out.OkIdOut))
 def delete_user_form_field(
     field_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -480,7 +481,7 @@ def delete_user_form_field(
 # ---- Phase F ----
 
 
-@router.get("/contact-inquiries")
+@router.get("/contact-inquiries", responses=settings_out.json_response(settings_out.ContactInquiryListOut))
 def list_contact_inquiries(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -499,7 +500,7 @@ def list_contact_inquiries(
     )
 
 
-@router.get("/contact-inquiries/{inquiry_id}")
+@router.get("/contact-inquiries/{inquiry_id}", responses=settings_out.json_response(settings_out.ContactInquiryOut))
 def get_contact_inquiry(
     inquiry_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -508,7 +509,7 @@ def get_contact_inquiry(
     return _run(lambda: cms.get_contact_inquiry(db, _school_id(auth), inquiry_id))
 
 
-@router.patch("/contact-inquiries/{inquiry_id}")
+@router.patch("/contact-inquiries/{inquiry_id}", responses=settings_out.json_response(settings_out.ContactInquiryOut))
 def patch_contact_inquiry(
     inquiry_id: int,
     body: ContactInquiryPatchBody,
@@ -522,7 +523,7 @@ def patch_contact_inquiry(
     )
 
 
-@router.get("/support-tickets")
+@router.get("/support-tickets", responses=settings_out.json_response(settings_out.SupportTicketListOut))
 def list_support_tickets(
     auth: Annotated[AuthContext, Depends(require_settings)],
     db: Annotated[Session, Depends(central_db)],
@@ -541,7 +542,7 @@ def list_support_tickets(
     )
 
 
-@router.post("/support-tickets", status_code=status.HTTP_201_CREATED)
+@router.post("/support-tickets", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.SupportTicketOut, status_code=201))
 def create_support_ticket(
     body: SupportTicketCreateBody,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -553,7 +554,7 @@ def create_support_ticket(
     return _run(lambda: cms.create_support_ticket(db, _school_id(auth), payload))
 
 
-@router.get("/support-tickets/{ticket_id}")
+@router.get("/support-tickets/{ticket_id}", responses=settings_out.json_response(settings_out.SupportTicketOut))
 def get_support_ticket(
     ticket_id: int,
     auth: Annotated[AuthContext, Depends(require_settings)],
@@ -562,7 +563,7 @@ def get_support_ticket(
     return _run(lambda: cms.get_support_ticket(db, _school_id(auth), ticket_id))
 
 
-@router.patch("/support-tickets/{ticket_id}")
+@router.patch("/support-tickets/{ticket_id}", responses=settings_out.json_response(settings_out.SupportTicketOut))
 def patch_support_ticket(
     ticket_id: int,
     body: SupportTicketPatchBody,
@@ -576,7 +577,7 @@ def patch_support_ticket(
     )
 
 
-@router.post("/support-tickets/{ticket_id}/messages", status_code=status.HTTP_201_CREATED)
+@router.post("/support-tickets/{ticket_id}/messages", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.SupportTicketMessageOut, status_code=201))
 def add_support_ticket_message(
     ticket_id: int,
     body: SupportTicketMessageBody,
@@ -597,6 +598,7 @@ def add_support_ticket_message(
 @public_router.post(
     "/schools/{code}/contact-inquiries",
     status_code=status.HTTP_201_CREATED,
+    responses=settings_out.json_response(settings_out.ContactInquiryOut, status_code=201),
 )
 def public_create_contact_inquiry(
     code: str,

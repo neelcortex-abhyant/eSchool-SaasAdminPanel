@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, payments, school_admin, school_payments, school_registration, users
+from app.api.v1 import auth, payments, public_schools, school_admin, school_payments, school_registration, users
 from app.api.v1.school_admin_settings import public_router as public_contact_router
 from app.api.v1.super_admin import router as super_admin_router
 
@@ -13,3 +13,4 @@ router.include_router(school_admin.router)
 router.include_router(payments.router)
 router.include_router(super_admin_router)
 router.include_router(public_contact_router)
+router.include_router(public_schools.router)

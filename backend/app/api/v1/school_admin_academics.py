@@ -27,6 +27,7 @@ from app.models.tables import (
     Subject,
     TeacherAssignment,
 )
+from app.schemas.v1 import school_admin_core_responses as core_out
 from app.services.v1 import rbac
 from app.services.v1 import school_academics as academics
 
@@ -138,7 +139,7 @@ def _run(action):
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
 
 
-@router.get("/summary")
+@router.get("/summary", responses=core_out.json_response(core_out.AcademicSummaryOut))
 def summary(
     auth: Annotated[AuthContext, Depends(require_school_admin)],
     db: Annotated[Session, Depends(central_db)],
@@ -148,7 +149,7 @@ def summary(
     return academics.summary(db, _school_id(auth), session_year_id)
 
 
-@router.post("/sessions/{session_id}/activate")
+@router.post("/sessions/{session_id}/activate", responses=core_out.json_response(core_out.SessionYearOut))
 def activate_session(
     session_id: int,
     auth: Annotated[AuthContext, Depends(require_school_admin)],
@@ -159,7 +160,7 @@ def activate_session(
     return _run(lambda: academics.activate_session(db, _school_id(auth), session_id))
 
 
-@router.get("/sessions/{row_id}")
+@router.get("/sessions/{row_id}", responses=core_out.json_response(core_out.SessionYearOut))
 def get_session(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_school_admin)],
@@ -169,7 +170,7 @@ def get_session(
     return _run(lambda: academics.get_session(db, _school_id(auth), row_id))
 
 
-@router.get("/teacher-assignments/{row_id}")
+@router.get("/teacher-assignments/{row_id}", responses=core_out.json_response(core_out.TeacherAssignmentOut))
 def get_teacher_assignment(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_school_admin)],
@@ -179,7 +180,7 @@ def get_teacher_assignment(
     return _run(lambda: academics.get_teacher_assignment(db, _school_id(auth), row_id))
 
 
-@router.get("/{resource}")
+@router.get("/{resource}", responses=core_out.json_response(core_out.AcademicListOut))
 def index(
     resource: str,
     auth: Annotated[AuthContext, Depends(require_school_admin)],
@@ -328,21 +329,14 @@ def index(
                 "",
                 page,
                 page_size,
-                lambda row: {
-                    "id": row.id,
-                    "name": row.reason,
-                    "user_id": row.user_id,
-                    "from_date": row.from_date.isoformat(),
-                    "to_date": row.to_date.isoformat(),
-                    "status": row.status,
-                },
+                lambda row: academics._leave_dict(db, school_id, row),
             )
         raise academics.AcademicError(404, "Unknown school record")
 
     return _run(load)
 
 
-@router.post("/{resource}", status_code=201)
+@router.post("/{resource}", status_code=201, responses=core_out.json_response(core_out.AcademicResourceOut, status_code=201))
 def create(
     resource: str,
     body: WriteBody,
@@ -391,7 +385,7 @@ def create(
     return _run(save)
 
 
-@router.patch("/{resource}/{row_id}")
+@router.patch("/{resource}/{row_id}", responses=core_out.json_response(core_out.AcademicResourceOut))
 def update(
     resource: str,
     row_id: int,
@@ -423,13 +417,14 @@ def update(
             return academics.update_teacher_assignment(db, school_id, row_id, data)
         if resource == "sessions":
             return academics.update_session(db, school_id, row_id, data)
+        if resource == "leaves":
+            return academics.update_leave(db, school_id, row_id, data)
         models = {
             "mediums": Medium,
             "exams": Exam,
             "fees": Fee,
             "expenses": Expense,
             "notices": Announcement,
-            "leaves": Leave,
         }
         model = models.get(resource)
         if model is None:
@@ -454,7 +449,7 @@ def update(
     return _run(change)
 
 
-@router.delete("/{resource}/{row_id}")
+@router.delete("/{resource}/{row_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
 def remove(
     resource: str,
     row_id: int,

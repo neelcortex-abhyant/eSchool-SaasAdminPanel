@@ -1,0 +1,1667 @@
+{
+  "ops": 768,
+  "with_ref": 425,
+  "missing": [
+    {
+      "method": "GET",
+      "path": "/api/admin/announcements",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/announcements",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/announcements/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/announcements/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/attendances",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/attendances",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/attendances/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/attendances/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classes",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/classes",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/classes/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/classes/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/dashboard",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/exams",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/exams",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/exams/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/exams/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/expenses",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/expenses",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/expenses/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/expenses/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/fees",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/fees",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/fees/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/fees/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/leaves",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/leaves",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/leaves/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/leaves/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/login",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/logout",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/me",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/packages",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/packages",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/packages/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/packages/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/schools",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/schools",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/schools/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/schools/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/schools/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/students",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/students",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/students/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/students/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/subjects",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/subjects",
+      "code": "201"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/subjects/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/subjects/{row_id}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/certificate/assign",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/certificate/generate",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/change-password",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/class-section/teachers",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/classes",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/country-codes",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/create-transportation-expense",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/delete/message",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diaries",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/driver-helpr/dashboard",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/driver-helpr/get-trips",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/driver-helpr/get-vehicle-details",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/driver-helpr/trip/start-end",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/forgot-password",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/gallery",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/get-image",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/get-languages",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/get-transportation-expense",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/get-vehicle-assignment-status",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/holidays",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/leave-settings",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/leaves",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/leaves",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/logout",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/medium",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/message",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/message",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/message/read",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/announcements",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/assignments",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/attendance",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/children/{student_id}/fees/payments/{payment_id}/receipt/pdf",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/children/{student_id}/report-cards/{report_id}/pdf",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/diary-categories",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/exam-marks",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/fail-payment-transaction",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/fees",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/fees/compulsory/pay",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/fees/fees-transactions",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/fees/manual/compulsory/pay",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/fees/manual/optional/pay",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/fees/optional/pay",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/fees/receipt",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/fees/transaction-receipt",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-assignments-report",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-child-profile-data",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-data",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-exam-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-exam-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-online-exam-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-online-exam-report",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-online-exam-result",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/get-online-exam-result-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/lesson-topics",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/lessons",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/login",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/offline-exams/{exam_id}/children/{student_id}/result",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/school-settings",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/sliders",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/store-fees",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/student/leave",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/student/leave",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/parent/student/leave/cancel",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/subjects",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parent/timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-confirmation",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-transactions",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/pickup-points",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profile",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/school-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/school-settings",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/semester",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/session-years",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/set-languages",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff-leaves-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/allowances-deductions",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/attendance",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/class-timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/counter",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/delete-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/features-permission",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/fees-paid-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/get-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/get-fees",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/id-card",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/leave-approve",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/leave-request",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/login",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/my-payroll",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/notification",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/notification-delete",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/payroll-create",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/payroll-slip",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/payroll-staff-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/payroll-year",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/qr-attendance/config",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/qr-attendance/my-attendance",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/qr-attendance/punch",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/qr-attendance/punches",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/qr-attendance/today",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/roles",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/send-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/staff-attendance",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/staff-attendance-store",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/staffs",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/student-fees-receipt",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/student-leave",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/student-leave/update-status",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/student-offline-exam-result",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/student/attendance",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/tasks",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/tasks",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/tasks/delete",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/tasks/status",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/tasks/update",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/teacher-timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/teachers",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/update-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/users",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/users-role-wise",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student-exan-result-pdf",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/announcements",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/assignment-status",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/assignments",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/attendance",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/class-subjects",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/delete-assignment-submission",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/diary-categories",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/exam-marks",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/fees/payments/{payment_id}/receipt/pdf",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/forgot-password",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-assignments-report",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-exam-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-exam-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-online-exam-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-online-exam-questions",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-online-exam-report",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-online-exam-result",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-online-exam-result-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/get-profile-data",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/guradian-details",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/homework",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/homework/{homework_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/homework/{homework_id}/my-submission",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/homework/{homework_id}/my-submission/attachments",
+      "code": "201"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/homework/{homework_id}/submissions",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/id-card",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/lesson-topics",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/lessons",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/login",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/offline-exams",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/offline-exams/{exam_id}/result",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/online-assessment-attempts/{attempt_id}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/online-assessment-attempts/{attempt_id}/answers",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/online-assessment-attempts/{attempt_id}/submit",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/online-assessments",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/online-assessments/{assessment_id}/attempts",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/report",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/report-cards/{report_id}/pdf",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/school-settings",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/select-subjects",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/sliders",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/study-materials",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/study-materials/{material_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/study-materials/{material_id}/download",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/subjects",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/submit-assignment",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/student/submit-online-exam-answers",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/transportation/live-tracking",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/student/web-sliders",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/webhook/razorpay",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/webhook/stripe",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/system-settings",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/assignments",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/class-detail",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/create-assignment",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/create-diary",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/create-diary-category",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/create-lesson",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/create-topic",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-announcement",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-assignment",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-diary",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-diary-category",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-file",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-lesson",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/delete-topic",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/diary-categories",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-assignment",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-assignment-submission",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-attendance",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-exam-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-lesson",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/get-topic",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/homework",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/homework",
+      "code": "200"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/teacher/homework-submissions/{submission_id}/evaluation",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/homework/{homework_id}",
+      "code": "200"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/teacher/homework/{homework_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/teacher/homework/{homework_id}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/homework/{homework_id}/attachments",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/homework/{homework_id}/submissions",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/homework/{homework_id}/summary",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/login",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/me",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/offline-exam-marks",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/offline-exam-marks/{mark_id}/audits",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/offline-exam-schedules",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/offline-exam-schedules/{schedule_id}/marks",
+      "code": "201"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/offline-exam-schedules/{schedule_id}/marks/bulk",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/online-assessments",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/online-assessments",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/online-assessments/{assessment_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/online-assessments/{assessment_id}/attempts",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/online-classes",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/online-classes/delete",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/online-classes/periods",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/online-classes/subject-classes",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/online-classes/update",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/send-announcement",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/student-list",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/study-materials",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/study-materials",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/study-materials/upload",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/study-materials/{material_id}",
+      "code": "200"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/teacher/study-materials/{material_id}",
+      "code": "200"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/teacher/study-materials/{material_id}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/study-materials/{material_id}/download",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/subjects",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/submit-attendance",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/submit-exam-marks/subject",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/teacher_timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/timetable",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/timetable/daily",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teacher/timetable/weekly",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-announcement",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-assignment",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-assignment-submission",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-diary-category",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-file",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-lesson",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/teacher/update-topic",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/teachers",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/attendance/create",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/dashboard",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transport/expense/categories/list",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/plans/current",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/receipt",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/requests",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/routes/stops",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/store-trip-reports",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transport/user/attendance-list",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transportation-fees",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transportation-payments",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transportation-shifts",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transportation/live-route",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transportation/live-tracking/link",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transportation/live-tracking/session",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transportation/trip/location",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/update-profile",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users-by-role",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/chat/history",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schools/{school_id}/invoices/{invoice_id}/pdf",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/super-admin/backups",
+      "code": "201"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/super-admin/backups",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/super-admin/backups/{backup_id}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/super-admin/backups/{backup_id}/restore",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/super-admin/invoices/{invoice_id}/pdf",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/super-admin/ping",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhook/flutterwave",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhook/paystack",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhook/razorpay",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhook/stripe",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/api/whatsapp/webhook/{schoolCode}",
+      "code": "200"
+    },
+    {
+      "method": "POST",
+      "path": "/api/whatsapp/webhook/{schoolCode}",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "code": "200"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "code": "200"
+    }
+  ],
+  "school_admin_writes": []
+}
