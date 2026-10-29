@@ -14,6 +14,7 @@ from app.schemas.v1.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    MessageOut,
     ResetPasswordRequest,
     SignupRequest,
 )
@@ -106,7 +107,7 @@ def change_password(
 FORGOT_PASSWORD_MESSAGE = "If an account exists for that email, a reset link has been sent."
 
 
-@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED, responses={202: {"model": MessageOut}})
 def forgot_password(
     body: ForgotPasswordRequest,
     request: Request,
@@ -132,7 +133,7 @@ def forgot_password(
     return {"message": FORGOT_PASSWORD_MESSAGE}
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", responses={200: {"model": MessageOut}})
 def reset_password(
     body: ResetPasswordRequest,
     request: Request,

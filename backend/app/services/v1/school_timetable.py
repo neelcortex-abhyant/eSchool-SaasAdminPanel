@@ -309,6 +309,7 @@ def _entry_item(db: Session, row: ClassTimetableEntry) -> dict:
         "start_time": _format_time(row.start_time),
         "end_time": _format_time(row.end_time),
         "note": row.note,
+        "room": row.room,
     }
 
 
@@ -561,6 +562,14 @@ def _resolve_write_fields(
     else:
         note = existing.note if existing is not None else None
 
+    if "room" in body:
+        room_raw = body.get("room")
+        room = None if room_raw is None else (str(room_raw).strip() or None)
+        if room is not None and len(room) > 128:
+            raise AcademicError(422, "room must be at most 128 characters")
+    else:
+        room = existing.room if existing is not None else None
+
     _active_session(db, school_id, session_year_id)
     link = _active_class_section(db, school_id, class_section_id)
     _same_school(db, Subject, subject_id, school_id, "Subject")
@@ -585,6 +594,7 @@ def _resolve_write_fields(
         "start_time": start_time,
         "end_time": end_time,
         "note": note,
+        "room": room,
     }
 
 
@@ -622,6 +632,7 @@ def create_entry(db: Session, school_id: int, body: dict) -> dict:
         start_time=fields["start_time"],
         end_time=fields["end_time"],
         note=fields["note"],
+        room=fields["room"],
         created_at=_now(),
         updated_at=_now(),
     )
@@ -734,6 +745,7 @@ def update_entry(db: Session, school_id: int, entry_id: int, body: dict) -> dict
     row.start_time = fields["start_time"]
     row.end_time = fields["end_time"]
     row.note = fields["note"]
+    row.room = fields["room"]
     row.updated_at = _now()
     _commit(db)
     db.refresh(row)

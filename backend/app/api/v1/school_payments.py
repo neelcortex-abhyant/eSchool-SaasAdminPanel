@@ -113,7 +113,16 @@ def get_school_invoice(
     return invoice_response(row)
 
 
-@router.get("/{school_id}/invoices/{invoice_id}/pdf")
+_PDF_RESPONSE = {
+    200: {
+        "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+        "description": "PDF invoice",
+    },
+    404: {"description": "Invoice not found"},
+}
+
+
+@router.get("/{school_id}/invoices/{invoice_id}/pdf", responses=_PDF_RESPONSE)
 def download_school_invoice(
     school_id: int,
     invoice_id: int,

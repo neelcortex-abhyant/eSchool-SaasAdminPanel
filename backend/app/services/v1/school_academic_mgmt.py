@@ -49,6 +49,7 @@ from app.models.tables import (
     PayrollItem,
     PayrollRun,
     PayrollSetting,
+    SalaryComponent,
     QuestionBankChoice,
     QuestionBankQuestion,
     ReportCard,
@@ -234,10 +235,7 @@ def _scale_item(db: Session, row: GradingScale) -> dict:
 def _replace_bands(db: Session, school_id: int, scale_id: int, bands: list) -> None:
     if not isinstance(bands, list) or not bands:
         raise AcademicError(422, "bands must be a non-empty list")
-    now = _now()
-    for old in _bands_for_scale(db, school_id, scale_id):
-        old.deleted_at = now
-        old.updated_at = now
+    parsed: list[tuple[float, float, dict, int]] = []
     for i, raw in enumerate(bands):
         if not isinstance(raw, dict):
             raise AcademicError(422, "each band must be an object")
@@ -245,12 +243,26 @@ def _replace_bands(db: Session, school_id: int, scale_id: int, bands: list) -> N
         if not letter:
             raise AcademicError(422, "band letter is required")
         try:
-            lo = float(raw["min_percent"])
-            hi = float(raw["max_percent"])
+            lo = round(float(raw["min_percent"]), 2)
+            hi = round(float(raw["max_percent"]), 2)
         except (KeyError, TypeError, ValueError) as exc:
             raise AcademicError(422, "band min_percent and max_percent are required") from exc
         if not (0 <= lo <= hi <= 100):
             raise AcademicError(422, "band percent range must satisfy 0 <= min <= max <= 100")
+        parsed.append((lo, hi, raw, i))
+    # Inclusive ranges must not overlap (contract); gaps of 0.01 allowed.
+    ordered = sorted(parsed, key=lambda t: (t[0], t[1]))
+    for idx in range(1, len(ordered)):
+        prev_hi = ordered[idx - 1][1]
+        cur_lo = ordered[idx][0]
+        if cur_lo <= prev_hi:
+            raise AcademicError(422, "grading bands must not overlap")
+    now = _now()
+    for old in _bands_for_scale(db, school_id, scale_id):
+        old.deleted_at = now
+        old.updated_at = now
+    for lo, hi, raw, i in parsed:
+        letter = str(raw.get("letter") or raw.get("grade") or "").strip()
         db.add(
             GradingScaleBand(
                 school_id=school_id,
@@ -1075,11 +1087,15 @@ def _structure_amounts(db: Session, school_id: int, structure_id: int) -> list[F
 def _structure_item(db: Session, row: FeeStructure) -> dict:
     amounts = _structure_amounts(db, row.school_id, row.id)
     total = sum(float(a.amount) for a in amounts)
+    from app.services.v1 import school_erp_fees as erp_fees
+
+    installment_payload = erp_fees.list_installments(db, row.school_id, row.id)
     return _row_dict(
         row,
         {
             "amounts": [_row_dict(a) for a in amounts],
             "total": total,
+            "installments": installment_payload.get("items") or [],
         },
     )
 
@@ -1135,6 +1151,17 @@ def create_fee_structure(db: Session, school_id: int, body: dict) -> dict:
                 updated_at=_now(),
             )
         )
+    installments = body.get("installments")
+    if installments is not None:
+        from app.services.v1 import school_erp_fees as erp_fees
+
+        if not isinstance(installments, list):
+            raise AcademicError(422, "installments must be a list")
+        # Flush amounts so structure total is queryable; set_structure_installments commits.
+        db.flush()
+        erp_fees.set_structure_installments(db, school_id, row.id, installments)
+        db.refresh(row)
+        return _structure_item(db, row)
     _commit(db)
     db.refresh(row)
     return _structure_item(db, row)
@@ -1173,6 +1200,17 @@ def update_fee_structure(db: Session, school_id: int, row_id: int, body: dict) -
                     updated_at=now,
                 )
             )
+    installments = body.get("installments")
+    if installments is not None:
+        from app.services.v1 import school_erp_fees as erp_fees
+
+        if not isinstance(installments, list):
+            raise AcademicError(422, "installments must be a list")
+        row.updated_at = _now()
+        db.flush()
+        erp_fees.set_structure_installments(db, school_id, row.id, installments)
+        db.refresh(row)
+        return _structure_item(db, row)
     row.updated_at = _now()
     _commit(db)
     db.refresh(row)
@@ -1308,11 +1346,13 @@ def _concession_amount(db: Session, school_id: int, student_id: int, structure_i
 
 
 def collect_fee(db: Session, school_id: int, body: dict) -> dict:
+    from app.services.v1 import school_erp_fees as erp_fees
+
     assignment_id = int(body.get("assignment_id") or 0)
     if not assignment_id:
         raise AcademicError(422, "assignment_id is required")
     try:
-        amount = float(body.get("amount"))
+        amount = erp_fees.inr_float(float(body.get("amount")))
     except (TypeError, ValueError) as exc:
         raise AcademicError(422, "amount is required") from exc
     if amount <= 0:
@@ -1335,7 +1375,7 @@ def collect_fee(db: Session, school_id: int, body: dict) -> dict:
     concession = _concession_amount(db, school_id, assignment.student_id, assignment.structure_id, total)
     payable = max(total - concession, 0)
     already = _paid_for_assignment(db, school_id, assignment.id)
-    balance = round(payable - already, 2)
+    balance = erp_fees.inr_float(payable - already)
     if amount > balance + 0.001:
         raise AcademicError(422, "amount exceeds outstanding balance")
     receipt = body.get("receipt_no") or f"RCPT-{_now().strftime('%Y%m%d%H%M%S')}-{assignment.id}"
@@ -1355,6 +1395,8 @@ def collect_fee(db: Session, school_id: int, body: dict) -> dict:
         updated_at=_now(),
     )
     db.add(row)
+    db.flush()
+    erp_fees.allocate_payment(db, school_id, row, assignment.structure_id)
     _commit(db)
     db.refresh(row)
     return _row_dict(row)
@@ -1987,6 +2029,131 @@ def list_payroll_runs(db: Session, school_id: int, page: int = 1, page_size: int
     return _list_active(db, PayrollRun, school_id, page=page, page_size=page_size)
 
 
+_SALARY_KINDS = frozenset({"earning", "deduction"})
+_SALARY_CALC_TYPES = frozenset({"fixed", "percent"})
+
+
+def _salary_component_item(row: SalaryComponent) -> dict:
+    return _row_dict(row)
+
+
+def list_salary_components(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    kind: str | None = None,
+    active_only: bool = False,
+) -> dict:
+    def filt(q):
+        if kind is not None:
+            key = str(kind).strip().lower()
+            if key not in _SALARY_KINDS:
+                raise AcademicError(422, "kind must be earning or deduction")
+            q = q.filter(SalaryComponent.kind == key)
+        if active_only:
+            q = q.filter(SalaryComponent.is_active == 1)
+        return q
+
+    return _list_active(
+        db,
+        SalaryComponent,
+        school_id,
+        page=page,
+        page_size=page_size,
+        serialize=_salary_component_item,
+        filters=filt,
+        order_by=SalaryComponent.sort_order.asc(),
+    )
+
+
+def get_salary_component(db: Session, school_id: int, row_id: int) -> dict:
+    return _salary_component_item(_owned(db, SalaryComponent, row_id, school_id))
+
+
+def create_salary_component(db: Session, school_id: int, body: dict) -> dict:
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise AcademicError(422, "name is required")
+    kind = str(body.get("kind") or "earning").strip().lower()
+    if kind not in _SALARY_KINDS:
+        raise AcademicError(422, "kind must be earning or deduction")
+    calc_type = str(body.get("calc_type") or "fixed").strip().lower()
+    if calc_type not in _SALARY_CALC_TYPES:
+        raise AcademicError(422, "calc_type must be fixed or percent")
+    default_value = float(body.get("default_value") if body.get("default_value") is not None else 0)
+    if default_value < 0:
+        raise AcademicError(422, "default_value must be >= 0")
+    if calc_type == "percent" and default_value > 100:
+        raise AcademicError(422, "percent default_value must be <= 100")
+    code_raw = body.get("code")
+    code = None if code_raw is None else (str(code_raw).strip() or None)
+    if code is not None and len(code) > 64:
+        raise AcademicError(422, "code must be at most 64 characters")
+    row = SalaryComponent(
+        school_id=school_id,
+        name=name,
+        code=code,
+        kind=kind,
+        calc_type=calc_type,
+        default_value=default_value,
+        is_active=int(body.get("is_active") if body.get("is_active") is not None else 1),
+        sort_order=int(body.get("sort_order") if body.get("sort_order") is not None else 0),
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(row)
+    _commit(db)
+    db.refresh(row)
+    return _salary_component_item(row)
+
+
+def update_salary_component(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    row = _owned(db, SalaryComponent, row_id, school_id)
+    if "name" in body:
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise AcademicError(422, "name is required")
+        row.name = name
+    if "code" in body:
+        code_raw = body.get("code")
+        code = None if code_raw is None else (str(code_raw).strip() or None)
+        if code is not None and len(code) > 64:
+            raise AcademicError(422, "code must be at most 64 characters")
+        row.code = code
+    if "kind" in body and body["kind"] is not None:
+        kind = str(body["kind"]).strip().lower()
+        if kind not in _SALARY_KINDS:
+            raise AcademicError(422, "kind must be earning or deduction")
+        row.kind = kind
+    if "calc_type" in body and body["calc_type"] is not None:
+        calc_type = str(body["calc_type"]).strip().lower()
+        if calc_type not in _SALARY_CALC_TYPES:
+            raise AcademicError(422, "calc_type must be fixed or percent")
+        row.calc_type = calc_type
+    if "default_value" in body and body["default_value"] is not None:
+        default_value = float(body["default_value"])
+        if default_value < 0:
+            raise AcademicError(422, "default_value must be >= 0")
+        effective_calc = row.calc_type
+        if effective_calc == "percent" and default_value > 100:
+            raise AcademicError(422, "percent default_value must be <= 100")
+        row.default_value = default_value
+    if "is_active" in body and body["is_active"] is not None:
+        row.is_active = int(body["is_active"])
+    if "sort_order" in body and body["sort_order"] is not None:
+        row.sort_order = int(body["sort_order"])
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _salary_component_item(row)
+
+
+def soft_delete_salary_component(db: Session, school_id: int, row_id: int) -> dict:
+    return _soft_delete(db, _owned(db, SalaryComponent, row_id, school_id))
+
+
 def create_payroll_run(db: Session, school_id: int, body: dict) -> dict:
     period = str(body.get("period_label") or "").strip()
     if not period:
@@ -2042,10 +2209,21 @@ def create_payroll_run(db: Session, school_id: int, body: dict) -> dict:
 
 
 def list_vehicles(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
-    return _list_active(db, TransportVehicle, school_id, page=page, page_size=page_size)
+    from app.services.v1 import school_erp_transport as erp_transport
+
+    return _list_active(
+        db,
+        TransportVehicle,
+        school_id,
+        page=page,
+        page_size=page_size,
+        serialize=erp_transport._vehicle_item,
+    )
 
 
 def create_vehicle(db: Session, school_id: int, body: dict) -> dict:
+    from app.services.v1 import school_erp_transport as erp_transport
+
     name = str(body.get("name") or "").strip()
     reg = str(body.get("registration_no") or "").strip()
     if not name or not reg:
@@ -2059,13 +2237,16 @@ def create_vehicle(db: Session, school_id: int, body: dict) -> dict:
         created_at=_now(),
         updated_at=_now(),
     )
+    erp_transport.update_vehicle_staff_fields(db, school_id, row, body)
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return _row_dict(row)
+    return erp_transport._vehicle_item(row)
 
 
 def update_vehicle(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    from app.services.v1 import school_erp_transport as erp_transport
+
     row = _owned(db, TransportVehicle, row_id, school_id)
     if "name" in body:
         row.name = str(body["name"] or "").strip()
@@ -2075,9 +2256,10 @@ def update_vehicle(db: Session, school_id: int, row_id: int, body: dict) -> dict
         row.capacity = int(body["capacity"]) if body["capacity"] is not None else None
     if "status" in body:
         row.status = int(body["status"])
+    erp_transport.update_vehicle_staff_fields(db, school_id, row, body)
     row.updated_at = _now()
     _commit(db)
-    return _row_dict(row)
+    return erp_transport._vehicle_item(row)
 
 
 def soft_delete_vehicle(db: Session, school_id: int, row_id: int) -> dict:
@@ -2199,12 +2381,15 @@ def list_student_transport_assignments(db: Session, school_id: int, page: int = 
 
 
 def create_student_transport_assignment(db: Session, school_id: int, body: dict) -> dict:
+    from app.services.v1 import school_erp_transport as erp_transport
+
     student_id = int(body.get("student_id") or 0)
     route_id = int(body.get("route_id") or 0)
     if not student_id or not route_id:
         raise AcademicError(422, "student_id and route_id are required")
     _owned(db, Student, student_id, school_id)
     _owned(db, TransportRoute, route_id, school_id)
+    erp_transport.assert_route_vehicle_capacity(db, school_id, route_id)
     stop_id = body.get("stop_id")
     if stop_id is not None:
         stop = _owned(db, TransportStop, int(stop_id), school_id)

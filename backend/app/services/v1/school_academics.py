@@ -1565,14 +1565,67 @@ def create_announcement(db: Session, school_id: int, body: dict) -> dict:
     return {"id": row.id, "name": row.title, "title": row.title, "description": row.description, "session_year_id": row.session_year_id}
 
 
+def _student_id_for_user(db: Session, school_id: int, user_id: int) -> int | None:
+    student = (
+        db.query(Student)
+        .filter(
+            Student.school_id == school_id,
+            Student.user_id == user_id,
+            Student.deleted_at.is_(None),
+        )
+        .first()
+    )
+    return student.id if student else None
+
+
+def _leave_dict(db: Session, school_id: int, row: Leave) -> dict:
+    return {
+        "id": row.id,
+        "name": row.reason,
+        "user_id": row.user_id,
+        "student_id": _student_id_for_user(db, school_id, row.user_id),
+        "reason": row.reason,
+        "from_date": row.from_date.isoformat(),
+        "to_date": row.to_date.isoformat(),
+        "status": row.status,
+        "session_year_id": row.session_year_id,
+    }
+
+
 def create_leave(db: Session, school_id: int, body: dict) -> dict:
-    user = _same_school(db, User, int(body["user_id"]), school_id, "User")
+    """Create leave for a school user.
+
+    Accepts ``user_id`` (v1_users.id) and/or ``student_id`` (students.id).
+    When only ``student_id`` is sent, resolves to that student's ``user_id``.
+    Never treats student_id as user_id.
+    """
+    raw_user_id = body.get("user_id")
+    raw_student_id = body.get("student_id")
+    user_id: int | None = int(raw_user_id) if raw_user_id is not None else None
+    student_id: int | None = int(raw_student_id) if raw_student_id is not None else None
+
+    if student_id is not None:
+        student = _owned(db, Student, student_id, school_id)
+        resolved = int(student.user_id)
+        if user_id is not None and user_id != resolved:
+            raise AcademicError(422, "student_id does not match user_id")
+        user_id = resolved
+    if user_id is None:
+        raise AcademicError(422, "user_id or student_id is required")
+
+    user = _same_school(db, User, user_id, school_id, "User")
+    if not body.get("session_year_id"):
+        raise AcademicError(422, "session_year_id is required")
+    if not body.get("reason") or not str(body.get("reason")).strip():
+        raise AcademicError(422, "reason is required")
+    if body.get("from_date") is None or body.get("to_date") is None:
+        raise AcademicError(422, "from_date and to_date are required")
     _same_school(db, SessionYear, int(body["session_year_id"]), school_id, "Session year")
     if body["to_date"] < body["from_date"]:
         raise AcademicError(422, "Leave end date must be on or after the start date")
     row = Leave(
         user_id=user.id,
-        reason=body["reason"].strip(),
+        reason=str(body["reason"]).strip(),
         from_date=body["from_date"],
         to_date=body["to_date"],
         status=int(body.get("status") or 0),
@@ -1584,7 +1637,48 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
-    return {"id": row.id, "name": row.reason, "user_id": row.user_id, "reason": row.reason, "from_date": row.from_date.isoformat(), "to_date": row.to_date.isoformat(), "status": row.status, "session_year_id": row.session_year_id}
+    return _leave_dict(db, school_id, row)
+
+
+def update_leave(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+    """Partial leave update. Resolves student_id → user_id; never confuses the two."""
+    row = _owned(db, Leave, row_id, school_id)
+    data = dict(body)
+
+    raw_student_id = data.pop("student_id", None)
+    if raw_student_id is not None:
+        student = _owned(db, Student, int(raw_student_id), school_id)
+        resolved = int(student.user_id)
+        if "user_id" in data and data["user_id"] is not None and int(data["user_id"]) != resolved:
+            raise AcademicError(422, "student_id does not match user_id")
+        data["user_id"] = resolved
+
+    if "user_id" in data and data["user_id"] is not None:
+        user = _same_school(db, User, int(data["user_id"]), school_id, "User")
+        row.user_id = user.id
+
+    if "reason" in data:
+        reason = str(data.get("reason") or "").strip()
+        if not reason:
+            raise AcademicError(422, "reason is required")
+        row.reason = reason
+    if "from_date" in data and data["from_date"] is not None:
+        row.from_date = data["from_date"]
+    if "to_date" in data and data["to_date"] is not None:
+        row.to_date = data["to_date"]
+    if "status" in data and data["status"] is not None:
+        row.status = int(data["status"])
+    if "session_year_id" in data and data["session_year_id"] is not None:
+        _same_school(db, SessionYear, int(data["session_year_id"]), school_id, "Session year")
+        row.session_year_id = int(data["session_year_id"])
+
+    if row.to_date < row.from_date:
+        raise AcademicError(422, "Leave end date must be on or after the start date")
+
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    return _leave_dict(db, school_id, row)
 
 
 def list_people(db: Session, school_id: int, kind: str, q: str, page: int, page_size: int) -> dict:

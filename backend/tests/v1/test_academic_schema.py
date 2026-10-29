@@ -28,11 +28,12 @@ def _script() -> ScriptDirectory:
 def test_alembic_academic_revision_chain_is_linear():
     script = _script()
     heads = script.get_heads()
-    assert heads == ["20261028_0040"], heads
+    assert heads == ["20261029_0041"], heads
 
-    latest = script.get_revision("20261028_0040")
+    latest = script.get_revision("20261029_0041")
     assert latest is not None
-    assert latest.down_revision == "20261027_0039"
+    assert latest.down_revision == "20261028_0040"
+    assert script.get_revision("20261028_0040").down_revision == "20261027_0039"
     assert script.get_revision("20261027_0039").down_revision == "20261025_0038"
     assert script.get_revision("20261025_0038").down_revision == "20261024_0037"
     assert script.get_revision("20261024_0037").down_revision == "20261023_0036"
