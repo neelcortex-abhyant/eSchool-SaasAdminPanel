@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
@@ -13,9 +13,9 @@ import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { staffDirectory } from "@/lib/extras/api";
-import { balances, createLeave, LEAVE_STATUS, leaveDays, leaveTypeProblems, loadLeaves, loadLeaveSettings, saveLeaveSettings, setLeaveStatus, type LeaveSettings } from "@/lib/operations/leave";
+import { balances, createLeave, LEAVE_STATUS, leaveDays, loadLeaves, loadLeaveTypes, serverBalances, setLeaveStatus } from "@/lib/operations/leave";
 import type { LeaveRequest, LeaveStatus, LeaveType } from "@/lib/operations/types";
-import { IconCalendar, IconSettings } from "@/lib/icons";
+import { IconCalendar } from "@/lib/icons";
 
 const STATUS_TONE: Record<LeaveStatus, ChipTone> = { 0: "amber", 1: "green", 2: "red" };
 const PAGE_SIZE = 20;
@@ -65,8 +65,8 @@ export function StaffLeavePage() {
 
 function LeaveBody({ adding, setAdding }: { adding: boolean; setAdding: (value: boolean) => void }) {
   const toast = useToast();
-  const settings = useOptions(useCallback(() => loadLeaveSettings().then((row) => [row]), []));
-  const types = settings.options[0]?.types;
+  const settings = useOptions(useCallback(() => loadLeaveTypes().then((rows) => [rows]), []));
+  const types = settings.options[0];
   const leaves = useOptions(useCallback(() => (types ? loadLeaves(types) : Promise.resolve([] as LeaveRequest[])), [types]));
   const people = useOptions(useCallback(() => staffDirectory(), []));
   const [filter, setFilter] = useState({ status: "0", userId: "", type: "", q: "", from: "", to: "" });
@@ -193,7 +193,7 @@ function LeaveForm({ types, onClose, onSaved }: { types: LeaveType[]; onClose: (
     errors.clear();
     setSaving(true);
     try {
-      await createLeave({ user_id: Number(userId), leave_type: type, reason, from_date: from, to_date: to, session_year_id: Number(session) });
+      await createLeave({ user_id: Number(userId), leave_type: type, leave_type_id: types.find((row) => row.name === type)?.id, reason, from_date: from, to_date: to, session_year_id: Number(session) });
       onSaved();
     } catch (caught) {
       errors.fromError(caught, "Unable to add the leave.");
@@ -203,7 +203,7 @@ function LeaveForm({ types, onClose, onSaved }: { types: LeaveType[]; onClose: (
   return (
     <FormModal title="Add leave" description="Recorded as pending; approve it from the list." error={errors.formError} saving={saving} submitLabel="Add leave" onSubmit={() => void submit()} onClose={onClose}>
       <SelectField id="lv-user" label="Employee" required placeholder="Choose someone" loading={people.loading} value={userId} onChange={setUserId} options={people.options.filter((row) => row.user_id).map((row) => ({ value: String(row.user_id), label: `${row.name}${row.designation ? ` · ${row.designation}` : ""}` }))} error={errors.fieldErrors.user_id} />
-      <SelectField id="lv-type" label="Leave type" required value={type} onChange={setType} options={types.filter((row) => row.applies_to !== "student").map((row) => ({ value: row.name, label: row.name }))} error={errors.fieldErrors.leave_type} />
+      <SelectField id="lv-type" label="Leave type" required value={type} onChange={setType} options={types.filter((row) => row.applies_to !== "student").map((row) => ({ value: row.name, label: row.name }))} error={errors.fieldErrors.leave_type ?? errors.fieldErrors.leave_type_id} hint={types.length ? undefined : "Add leave types under Leave types first."} />
       <TextField id="lv-from" label="First day" type="date" required value={from} onChange={setFrom} error={errors.fieldErrors.from_date} />
       <TextField id="lv-to" label="Last day" type="date" required value={to} onChange={setTo} error={errors.fieldErrors.to_date} hint={from && to && to >= from ? `${leaveDays(from, to)} day(s)` : undefined} />
       <TextAreaField id="lv-reason" label="Reason" required value={reason} onChange={setReason} error={errors.fieldErrors.reason ?? errors.fieldErrors.session_year_id} span />
@@ -215,7 +215,10 @@ function HistoryDialog({ userId, leaves, types, onClose }: { userId: number; lea
   const mine = leaves.filter((row) => row.user_id === userId);
   const name = mine[0]?.person_name ?? "Employee";
   const year = new Date().getFullYear();
-  const left = balances(leaves, userId, types, year);
+  const server = useOptions(useCallback(() => serverBalances(userId, year), [userId, year]));
+  const left = server.options.length
+    ? server.options.map((row) => ({ type: { key: row.type, name: row.type }, allowed: row.allowed ?? 0, used: row.used, pending: row.pending, remaining: row.remaining ?? 0 }))
+    : balances(leaves, userId, types, year);
   return (
     <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
       <div className="modal-card acad-modal" role="dialog" aria-modal="true" aria-labelledby="lh-title">
@@ -256,92 +259,5 @@ function HistoryDialog({ userId, leaves, types, onClose }: { userId: number; lea
         </div>
       </div>
     </div>
-  );
-}
-
-// ---------- Leave types (leave settings) ----------
-
-export function LeaveConfigPage() {
-  return (
-    <ExtrasPage title="Leave types" description="The kinds of leave staff can take and how many days a year each allows." icon={<IconSettings width={18} height={18} />} tabs={LEAVE_TABS}>
-      <LeaveConfigBody />
-    </ExtrasPage>
-  );
-}
-
-function LeaveConfigBody() {
-  const toast = useToast();
-  const state = useOptions(useCallback(() => loadLeaveSettings().then((row) => [row]), []));
-  const [draft, setDraft] = useState<LeaveSettings | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [problems, setProblems] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (state.options[0]) setDraft(state.options[0]);
-  }, [state.options]);
-
-  if (state.error) return <ErrorAlert error={state.error} onRetry={() => void state.reload()} />;
-  if (!draft) return <div className="resource-card"><div className="skeleton" style={{ height: 200 }} /></div>;
-
-  const setType = (index: number, patch: Partial<LeaveType>) => setDraft({ ...draft, types: draft.types.map((type, i) => (i === index ? { ...type, ...patch } : type)) });
-
-  async function save() {
-    if (!draft) return;
-    const found = leaveTypeProblems(draft.types);
-    setProblems(found);
-    if (Object.keys(found).length) return;
-    setSaving(true);
-    try {
-      await saveLeaveSettings(draft);
-      toast("success", "Leave types saved.");
-      void state.reload();
-    } catch (caught) {
-      toast("error", errorMessage(caught, "Unable to save the leave types."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form
-      className="resource-card"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <fieldset className="form-field ops-lines">
-        <legend>Leave types</legend>
-        {draft.types.map((type, index) => (
-          <div key={index} className="ops-line ops-line-3">
-            <input aria-label={`Leave type ${index + 1} name`} placeholder="Casual leave" maxLength={60} value={type.name} className={problems[`types.${index}`] ? "invalid" : undefined} onChange={(event) => setType(index, { name: event.target.value })} />
-            <input aria-label={`${type.name || "Leave type"} days per year`} type="number" min={0} max={365} value={type.days_per_year} onChange={(event) => setType(index, { days_per_year: Number(event.target.value) })} />
-            <select aria-label={`${type.name || "Leave type"} applies to`} value={type.applies_to} onChange={(event) => setType(index, { applies_to: event.target.value as LeaveType["applies_to"] })}>
-              <option value="staff">Staff</option>
-              <option value="student">Students</option>
-              <option value="all">Everyone</option>
-            </select>
-            <button className="link-btn danger" type="button" disabled={draft.types.length <= 1} onClick={() => setDraft({ ...draft, types: draft.types.filter((_, i) => i !== index) })}>
-              Remove<span className="acad-sr"> {type.name}</span>
-            </button>
-            {problems[`types.${index}`] ? <p className="field-error ops-line-error">{problems[`types.${index}`]}</p> : null}
-          </div>
-        ))}
-        <div className="ops-line-foot">
-          <button className="link-btn" type="button" onClick={() => setDraft({ ...draft, types: [...draft.types, { key: "", name: "", days_per_year: 0, applies_to: "staff" }] })}>
-            + Add leave type
-          </button>
-          <span className="muted">0 days means no yearly limit.</span>
-        </div>
-        {problems.types ? <p className="field-error">{problems.types}</p> : null}
-      </fieldset>
-      <div className="resource-fields">
-        <SelectField id="lc-approval" label="Who approves leave" value={draft.approval} onChange={(value) => setDraft({ ...draft, approval: value })} options={[{ value: "admin", label: "School admin" }, { value: "class_teacher", label: "Class teacher (students)" }]} />
-        <TextAreaField id="lc-notes" label="Notes" value={draft.notes} onChange={(value) => setDraft({ ...draft, notes: value })} span />
-      </div>
-      <button className="btn-pill btn-pill-green ops-inline-btn" type="submit" disabled={saving}>
-        {saving ? "Saving…" : "Save leave types"}
-      </button>
-    </form>
   );
 }

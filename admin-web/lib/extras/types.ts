@@ -63,6 +63,8 @@ export type ResourceConfig = {
   note?: string;
   /** Rows sorted by this key, newest/largest first when `desc`. */
   sort?: { key: string; desc?: boolean };
+  /** Only rows that pass are shown (e.g. student leave out of all leave). */
+  rowFilter?: (row: Raw) => boolean;
 };
 
 /** A settings object read with GET and saved with PUT. */

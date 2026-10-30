@@ -50,6 +50,10 @@ function audienceOf(value: unknown): Audience[] {
 }
 
 /** Published, or scheduled when the publish time is still ahead. */
+// Values the pages know how to show; anything else from the server is worked out here instead.
+const NOTICE_STATUSES: NoticeStatus[] = ["draft", "scheduled", "published"];
+const DELIVERY_STATUSES: DeliveryStatus[] = ["queued", "sent", "partial", "failed"];
+
 export function noticeStatus(publishAt: string | null, now = Date.now()): NoticeStatus {
   return publishAt && new Date(publishAt).getTime() > now ? "scheduled" : "published";
 }
@@ -79,7 +83,7 @@ export async function listAnnouncements(): Promise<Announcement[]> {
       session_year_id: num(row.session_year_id) || null,
       audience,
       publish_at: publishAt,
-      status: live() && optStr(row.status) ? (str(row.status) as NoticeStatus) : noticeStatus(publishAt),
+      status: live() && NOTICE_STATUSES.includes(str(row.status) as NoticeStatus) ? (str(row.status) as NoticeStatus) : noticeStatus(publishAt),
       created_at: optStr(row.created_at),
     };
   });
@@ -173,7 +177,7 @@ export async function listNotifications(): Promise<NotificationRecord[]> {
         body: str(row.body),
         audience: live() ? audienceOf(row.audience) : extra?.audience ?? ["all"],
         created_at: optStr(row.created_at),
-        delivery: live() && optStr(row.delivery) ? (str(row.delivery) as DeliveryStatus) : extra ? deliveryOf(recipients, delivered, failed) : num(row.status) === 1 ? "sent" : "queued",
+        delivery: live() && DELIVERY_STATUSES.includes(str(row.delivery) as DeliveryStatus) ? (str(row.delivery) as DeliveryStatus) : extra ? deliveryOf(recipients, delivered, failed) : num(row.status) === 1 ? "sent" : "queued",
         recipients,
         delivered,
         failed,

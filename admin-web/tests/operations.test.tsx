@@ -57,11 +57,11 @@ afterEach(() => {
 });
 
 describe("operations mode flag", () => {
-  it("uses the server's trips by default, sample data for the rest, and reads per-feature settings", () => {
-    expect(parseOperationsMode(undefined)).toEqual({ tracking: "live", payroll: "mock", messaging: "mock", notices: "mock" });
+  it("uses the server for every feature by default and reads per-feature settings", () => {
+    expect(parseOperationsMode(undefined)).toEqual({ tracking: "live", payroll: "live", messaging: "live", notices: "live" });
     expect(parseOperationsMode("mock").tracking).toBe("mock");
     expect(parseOperationsMode("live").payroll).toBe("live");
-    expect(parseOperationsMode("tracking:live, payroll:mock")).toMatchObject({ tracking: "live", payroll: "mock", messaging: "mock" });
+    expect(parseOperationsMode("tracking:live, payroll:mock")).toMatchObject({ tracking: "live", payroll: "mock", messaging: "live" });
   });
 });
 
@@ -168,8 +168,8 @@ describe("module 2: staff attendance and leave", () => {
   it("approves a pending leave on the server after confirming", async () => {
     serve({
       "/school-admin/me": { id: 1 },
-      "/school-admin/leave-settings": { policy: null, notes: null },
-      "/school-admin/academics/leaves": [{ id: 41, user_id: 31, name: "Sick leave: Fever", from_date: "2026-11-02", to_date: "2026-11-03", status: 0 }],
+      "/school-admin/leave-types": [{ id: 2, code: "SL", name: "Sick leave", days_per_year: 10, applies_to: "staff", is_active: true }],
+      "/school-admin/academics/leaves": [{ id: 41, user_id: 31, student_id: null, reason: "Fever", leave_type_id: 2, leave_type: "Sick leave", from_date: "2026-11-02", to_date: "2026-11-03", status: 0 }],
       "/school-admin/staff": [{ id: 31, staff_id: 5, name: "Asha Rao", designation: "Clerk" }],
       "/school-admin/teachers": [],
     });
@@ -224,16 +224,16 @@ describe("module 4: announcements and notifications", () => {
     expect(noticeStatus(null)).toBe("published");
   });
 
-  it("keeps drafts private and sends only the server's fields when publishing", async () => {
-    serve({ "/school-admin/announcements": [] });
+  it("saves drafts and publishes with audience and status on the server, and reads them back", async () => {
+    serve({ "/school-admin/announcements": [{ id: 5, title: "Sports day", description: "Friday", session_year_id: 3, audience: ["parents"], publish_at: null, status: "draft", created_at: "2026-10-29T09:00:00" }] });
     await saveAnnouncement({ title: "Sports day", description: "Friday", session_year_id: 3, audience: ["parents"], publish_at: null, draft: true });
-    expect(calls.some((call) => call.method === "POST")).toBe(false);
+    expect(calls.find((call) => call.method === "POST")?.body).toEqual({ title: "Sports day", description: "Friday", session_year_id: 3, audience: ["parents"], publish_at: null, status: "draft" });
     const [draft] = await listAnnouncements();
-    expect(draft).toMatchObject({ status: "draft", audience: ["parents"] });
+    expect(draft).toMatchObject({ id: 5, status: "draft", audience: ["parents"] });
     await saveAnnouncement({ title: "Sports day", description: "Friday", session_year_id: 3, audience: ["parents"], publish_at: null, draft: false }, draft.id);
-    const post = calls.find((call) => call.method === "POST");
-    expect(post?.url).toMatch(/\/school-admin\/announcements$/);
-    expect(post?.body).toEqual({ title: "Sports day", description: "Friday", session_year_id: 3 });
+    const patch = calls.find((call) => call.method === "PATCH");
+    expect(patch?.url).toMatch(/\/school-admin\/announcements\/5$/);
+    expect(patch?.body).toMatchObject({ status: "published" });
   });
 
   it("summarises delivery and filters history", () => {

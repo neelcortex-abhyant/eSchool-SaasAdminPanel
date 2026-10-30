@@ -335,9 +335,10 @@ function storedFile(kind: EmployeeKind, ownerId: number, row: Raw): StoredFile {
 
 async function employeeDetail(kind: EmployeeKind, row: Raw): Promise<Employee> {
   const id = num(row.id);
+  // The profile (GET /{id}) carries the documents; other answers don't, so those fetch them.
   const [photo, documents] = await Promise.all([
     photoFor(kind, row),
-    allAt(`${EMPLOYEE_ROUTE[kind]}/${id}/documents`, {}, "Unable to load documents."),
+    Array.isArray(row.documents) ? (row.documents as Raw[]) : allAt(`${EMPLOYEE_ROUTE[kind]}/${id}/documents`, {}, "Unable to load documents."),
   ]);
   return {
     ...employeeRow(row, photo),
@@ -481,7 +482,8 @@ export const httpPeopleService: PeopleService = {
 
   async listDepartments(kind) {
     const data = await requestAt<Raw>(`${EMPLOYEE_ROUTE[kind]}/departments`, { method: "GET" }, "Unable to load departments.");
-    return (Array.isArray(data.items) ? (data.items as unknown[]) : []).map(str).filter(Boolean);
+    // Each name once, even if the server repeats one; the dropdown keys on the name.
+    return [...new Set((Array.isArray(data.items) ? (data.items as unknown[]) : []).map(str).filter(Boolean))];
   },
 
   async getEmployee(kind, id) {

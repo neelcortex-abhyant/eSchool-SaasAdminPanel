@@ -8,6 +8,9 @@ export const RENDER_V1_API = "https://eschool-backend-8322.onrender.com/api/v1";
 export const TOKEN_KEY = "v1_access_token";
 export const SESSION_COOKIE = "v1_session";
 
+/** Fired on window when the API refuses the saved token (see fetchApi). */
+export const SESSION_EXPIRED_EVENT = "v1:session-expired";
+
 /** Visible on /login so we can confirm which build Netlify is serving. */
 export const CLIENT_BUILD = "2026-10-06-netlify-direct-v2";
 
@@ -70,6 +73,13 @@ async function fetchApi<T>(url: string, options: RequestInit): Promise<ApiResult
     credentials: "same-origin",
     headers,
   });
+
+  // A signed-in request refused with 401 means the token expired or was revoked; the shell
+  // listens for this and sends the user to sign in again. Sign-in itself answers 401 for a
+  // wrong password, so /auth/ routes are left out.
+  if (response.status === 401 && token && typeof window !== "undefined" && !/\/auth\/(login|register|forgot|reset)/.test(url)) {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
 
   if (response.status === 204) {
     return { ok: response.ok, status: response.status, data: {} as T };

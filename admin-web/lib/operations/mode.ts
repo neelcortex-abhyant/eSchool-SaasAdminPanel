@@ -3,9 +3,9 @@
  * (see backend/docs/OPERATIONS_MODULES_API_CONTRACT.md).
  *
  * NEXT_PUBLIC_OPERATIONS_API_MODE:
- *   unset (default)   tracking uses the server's trip routes; the rest use sample data
+ *   unset (default)   every feature uses the server's routes (all deployed from backend 0043)
  *   "mock"            every feature below uses sample data kept in this browser
- *   "live"            every feature calls the contract routes
+ *   "live"            same as unset
  *   per feature       e.g. "tracking:live,messaging:mock"
  *
  * Features that already have backend routes (staff attendance, leave, announcements,
@@ -22,8 +22,8 @@ export function parseOperationsMode(raw: string | undefined): Record<OperationsF
   const all = (source: ApiSource) => Object.fromEntries(OPERATIONS_FEATURES.map((f) => [f, source])) as Record<OperationsFeature, ApiSource>;
   if (value === "live") return all("live");
   if (value === "mock") return all("mock");
-  // Trips and boarding records are on the server (backend 0041), so tracking uses it unless told otherwise.
-  const sources: Record<OperationsFeature, ApiSource> = { ...all("mock"), tracking: "live" };
+  // Every feature's routes are on the server (backend 0043); a per-feature list can still pick sample data.
+  const sources: Record<OperationsFeature, ApiSource> = all("live");
   for (const part of value.split(",")) {
     const [feature, source] = part.split(":").map((s) => s.trim());
     if ((OPERATIONS_FEATURES as string[]).includes(feature) && (source === "live" || source === "mock")) sources[feature as OperationsFeature] = source;
@@ -34,7 +34,7 @@ export function parseOperationsMode(raw: string | undefined): Record<OperationsF
 const SOURCES = parseOperationsMode(process.env.NEXT_PUBLIC_OPERATIONS_API_MODE);
 
 /** Shown on the tracking pages when trips come from the server. */
-export const TRACKING_LIVE_NOTE = "Trips and boarding records are on the school's server. Bus positions on the map are simulated until the server shares drivers' GPS locations with admins.";
+export const TRACKING_LIVE_NOTE = "Bus positions come from the drivers' app. A bus with no fix in the last few minutes is shown as stale or offline.";
 
 export function isOperationsLive(feature: OperationsFeature): boolean {
   return SOURCES[feature] === "live";

@@ -117,6 +117,14 @@ function Inbox({ policy }: { policy: MessagingPolicy }) {
   );
 }
 
+/** Who sent a message: the server marks senders only as "user", so match them to the conversation's teacher and parent. */
+export function senderRole(message: Message, conversation: Conversation): "teacher" | "parent" | "school_admin" {
+  if (message.sender.user_id && message.sender.user_id === conversation.teacher.user_id) return "teacher";
+  if (message.sender.user_id && message.sender.user_id === conversation.parent.user_id) return "parent";
+  if (message.sender.role === "teacher" || message.sender.role === "parent") return message.sender.role;
+  return "school_admin";
+}
+
 function Thread({ conversation, policy, onBack, onChanged }: { conversation: Conversation; policy: MessagingPolicy; onBack: () => void; onChanged: () => void }) {
   const toast = useToast();
   const messages = useOptions(useCallback(() => messagingService().messages(conversation.id), [conversation.id]));
@@ -190,7 +198,7 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
       <ol className="ticket-thread msg-messages">
         {messages.loading && !messages.options.length ? <li className="skeleton" style={{ height: 60 }} /> : null}
         {messages.options.map((message: Message) => (
-          <li key={message.id} className={`${message.sender.role === "teacher" ? "is-mine" : ""}${message.hidden ? " is-hidden" : ""}`}>
+          <li key={message.id} className={`${senderRole(message, conversation) === "teacher" ? "is-mine" : ""}${message.hidden ? " is-hidden" : ""}`}>
             {message.hidden ? <p className="muted"><em>Hidden by a moderator.</em>{policy.can_moderate ? ` ${message.body}` : ""}</p> : <p>{message.body}</p>}
             {!message.hidden && message.attachments.length ? (
               <p className="msg-attachments">
@@ -200,7 +208,7 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
               </p>
             ) : null}
             <small className="muted">
-              {message.sender.name} · {message.sender.role === "school_admin" ? "School admin" : message.sender.role === "teacher" ? "Teacher" : "Parent"} · {when(message.sent_at)}
+              {message.sender.name || "School admin"} · {{ school_admin: "School admin", teacher: "Teacher", parent: "Parent" }[senderRole(message, conversation)]} · {when(message.sent_at)}
               {policy.can_moderate ? (
                 <>
                   {" · "}

@@ -4,7 +4,7 @@
  * DELETE), /offline-exams/{id}/schedules (add a subject paper), /offline-exam-schedules (list),
  * /offline-exam-schedules/{id}/marks (one mark, with a reason for corrections) and /marks/bulk
  * (up to 200), /offline-exam-marks (list) and /{id}/audits, /offline-exams/{id}/process-results,
- * /results and /results/summary. The server has no route to edit or remove a subject paper.
+ * /results and /results/summary, and PATCH/DELETE /offline-exam-schedules/{id} to edit or remove a paper.
  * Rules the server enforces (and the sample data repeats): marks can't change while results are
  * published; a correction after results were processed needs a reason; an exam with marks
  * can't move class or be deleted; papers for one class can't overlap.
@@ -45,7 +45,6 @@ export interface OfflineExamService {
   setPublish(id: number, publish: boolean): Promise<OfflineExam>;
   remove(id: number): Promise<void>;
   addSchedule(examId: number, input: OfflineScheduleInput): Promise<OfflineSchedule>;
-  /** The server has no route for these yet; the live client says so (sample data only). */
   updateSchedule(scheduleId: number, input: OfflineScheduleInput): Promise<OfflineSchedule>;
   removeSchedule(scheduleId: number): Promise<void>;
   schedules(query: { sessionYearId?: number | ""; classSectionId?: number | ""; examId?: number }): Promise<OfflineSchedule[]>;
@@ -563,9 +562,9 @@ export const mockOffline: OfflineExamService = {
   },
 };
 
-/** Editing or removing a paper works only on sample data until the server has routes for it. */
+/** Papers can be edited and removed on the server (PATCH/DELETE /offline-exam-schedules/{id}) and in the sample. */
 export function paperEditing(): boolean {
-  return !isLive("offline");
+  return true;
 }
 
 /** Every exam matching the filters (all pages), for sorting on the page. */

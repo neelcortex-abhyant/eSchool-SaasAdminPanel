@@ -56,7 +56,8 @@ export function BusMap({ locations, selected, onSelect }: { locations: VehicleLo
     const target = map.current;
     if (!ready || !L || !target) return;
     const seen = new Set<number>();
-    for (const location of locations) {
+    const placed = locations.filter((location) => Number.isFinite(location.latitude) && Number.isFinite(location.longitude));
+    for (const location of placed) {
       seen.add(location.vehicle_id);
       const state = freshness(location.recorded_at);
       const html = `<span class="bus-pin is-${state}${selected === location.vehicle_id ? " is-selected" : ""}" style="--pin:${COLORS[state]}">🚌</span>`;
@@ -77,9 +78,9 @@ export function BusMap({ locations, selected, onSelect }: { locations: VehicleLo
         markers.current.delete(id);
       }
     }
-    if (!fitted.current && locations.length) {
+    if (!fitted.current && placed.length) {
       fitted.current = true;
-      target.fitBounds(L.latLngBounds(locations.map((row) => [row.latitude, row.longitude] as [number, number])).pad(0.3), { maxZoom: 15 });
+      target.fitBounds(L.latLngBounds(placed.map((row) => [row.latitude, row.longitude] as [number, number])).pad(0.3), { maxZoom: 15 });
     }
   }, [locations, selected, ready]);
 

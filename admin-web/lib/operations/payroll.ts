@@ -115,7 +115,8 @@ function payslipOf(row: Raw): Payslip {
     paid_days: num(row.paid_days),
     gross: num(row.gross),
     net: num(row.net),
-    status: (str(row.status, "processed") as PayrollStatus),
+    // An unknown status from the server shows as pending rather than breaking the page.
+    status: (["processed", "pending", "failed"].includes(str(row.status, "processed")) ? str(row.status, "processed") : "pending") as PayrollStatus,
     processed_at: optStr(row.processed_at),
     failure_reason: optStr(row.failure_reason),
   };

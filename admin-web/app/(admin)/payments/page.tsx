@@ -60,7 +60,8 @@ export default function PaymentsPage() {
       setGatewayOptions((current) => {
         if (result.data.source === "sample") return sampleGateways();
         const names = new Set(current);
-        items.forEach((item) => names.add(item.gateway));
+        // Payments recorded without a gateway don't add an empty choice.
+        items.forEach((item) => item.gateway && names.add(item.gateway));
         return Array.from(names).sort();
       });
     }

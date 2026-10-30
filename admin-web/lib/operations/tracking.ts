@@ -1,8 +1,7 @@
 /**
  * Bus tracking, trips and transport attendance.
- * Live: trips and boarding events on the server's /school-admin/transport-trips routes (see
- * the live section). Bus positions stay simulated until the server has an admin GPS read route
- * (backend/docs/OPERATIONS_MODULES_API_CONTRACT.md).
+ * Live: trips, boarding events and GPS locations on the server's /school-admin/transport-trips
+ * and /transport/vehicle-locations routes (see the live section).
  * Sample: built from the school's real vehicles, routes, stops and student transport (the
  * transport client, live or sample), with simulated GPS positions, trips and boarding records.
  * Corrections are kept in this browser.
@@ -57,6 +56,7 @@ export function freshness(recordedAt: string, now = Date.now()): Freshness {
 
 /** "2 min ago", "1 h 5 min ago". */
 export function ageLabel(recordedAt: string, now = Date.now()): string {
+  if (!recordedAt || Number.isNaN(new Date(recordedAt).getTime())) return "no report yet";
   const minutes = Math.max(0, Math.round((now - new Date(recordedAt).getTime()) / 60_000));
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes} min ago`;
@@ -76,8 +76,7 @@ export function boardingRate(rows: Pick<TransportAttendance, "status">[]): numbe
 //   GET/POST /school-admin/transport-trips, POST /transport-trips/{id}/start|complete,
 //   GET/POST /transport-trips/{id}/attendance {student_id, event_type: board|drop, stop_id},
 //   GET /school-admin/transport/reports/trips.
-// The server has no admin route that returns GPS fixes yet (drivers post them), so bus positions
-// on the map are simulated around the school; trip status on the map is real.
+// GET /school-admin/transport/vehicle-locations gives each vehicle's latest GPS fix.
 
 const SA = "/school-admin";
 
@@ -187,27 +186,25 @@ function paged<T>(rows: T[], page = 1, pageSize = 20): Page<T> {
 
 export const liveTracking: TrackingService = {
   async locations() {
-    const context = await liveContext();
-    const trips = await allLiveTrips({}, context).catch(() => [] as Trip[]);
-    const now = Date.now();
-    return context.vehicles.map((vehicle): VehicleLocation => {
-      const trip = trips.find((row) => row.vehicle_id === vehicle.id && row.status === "active") ?? trips.find((row) => row.vehicle_id === vehicle.id && row.trip_date === localDay(new Date().toISOString())) ?? null;
-      const route = context.routes.find((row) => row.vehicle_id === vehicle.id && row.status === 1) ?? null;
-      const position = samplePosition(vehicle.id, now);
+    // The server's latest GPS fix per vehicle (from the drivers' app). A vehicle that hasn't
+    // reported has no position; it's listed but not drawn on the map.
+    const data = await get(`${SA}/transport/vehicle-locations`, {}, "Unable to load bus locations.");
+    return (Array.isArray(data.items) ? (data.items as Raw[]) : []).map((row): VehicleLocation => {
+      const lat = optNum(row.latitude);
+      const lng = optNum(row.longitude);
       return {
-        vehicle_id: vehicle.id,
-        registration_no: vehicle.registration_no,
-        route_id: trip?.route_id ?? route?.id ?? null,
-        route_name: trip?.route_name ?? route?.name ?? null,
-        driver_name: trip?.driver_name ?? vehicle.driver_name,
-        trip_id: trip?.id ?? null,
-        trip_status: trip?.status ?? null,
-        latitude: Number(position.latitude.toFixed(6)),
-        longitude: Number(position.longitude.toFixed(6)),
+        vehicle_id: num(row.vehicle_id),
+        registration_no: str(row.registration_no) || str(row.vehicle_name),
+        route_id: optNum(row.route_id),
+        route_name: optStr(row.route_name),
+        driver_name: optStr(row.driver_name),
+        trip_id: optNum(row.trip_id),
+        trip_status: optStr(row.trip_status) ? STATUS_FROM_SERVER[str(row.trip_status)] ?? null : null,
+        latitude: lat ?? Number.NaN,
+        longitude: lng ?? Number.NaN,
         speed_kmph: null,
-        heading: position.heading,
-        // Simulated position: "live" while a trip runs, offline otherwise.
-        recorded_at: new Date(trip?.status === "active" ? now : now - 2 * 3_600_000).toISOString(),
+        heading: null,
+        recorded_at: str(row.recorded_at),
       };
     });
   },

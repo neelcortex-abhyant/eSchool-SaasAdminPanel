@@ -1,52 +1,57 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { ComponentType, ReactNode } from "react";
 import { ResourcePage } from "@/components/extras/ResourcePage";
 import { ReportPage, SettingsPage } from "@/components/extras/SettingsPage";
-import { MarkStaffAttendance, StaffAttendanceRegister, StaffAttendanceReports, TodaysStaffAttendance } from "@/components/extras/StaffAttendance";
-import { AssignElectives, ImportStaff, ImportStudents, ImportTeachers, PromoteStudents, ResetStudentPassword, TransferStudent } from "@/components/extras/StudentTools";
-import { IdCardSettingsPage, PayrollPage, RolePermission, SalaryStructurePage, StaffIdCard, StudentIdCard } from "@/components/extras/Tools";
-import { SupportPage, ThirdPartyPage } from "@/components/extras/Support";
-import { LeaveConfigPage, StaffLeavePage } from "@/components/operations/Leave";
-import { AnnouncementsPage, NotificationsPage } from "@/components/operations/Notices";
-import { MessagesPage } from "@/components/operations/Messages";
-import { BulkIdCardsPage, CertificatesPage } from "@/components/operations/Documents";
-import { PayrollProcessPage, PayrollReportsPage, PayslipsPage, SalaryStructuresPage } from "@/components/operations/Payroll";
 import { EXTRA_PAGES } from "@/lib/extras/pages";
 import { IconBell, IconBook, IconCalendar, IconChart, IconClasses, IconFees, IconGlobe, IconPackage, IconSettings, IconStaff, IconUsers } from "@/lib/icons";
 
+function PageLoading() {
+  return (
+    <div className="acad-page" aria-busy="true" aria-label="Loading page">
+      <div className="skeleton" style={{ height: 28, width: 240, marginBottom: 16 }} />
+      <div className="skeleton" style={{ height: 220 }} />
+    </div>
+  );
+}
+
+/** Each screen is its own chunk, loaded when its menu item is opened. */
+const lazy = (load: () => Promise<ComponentType>) => dynamic(load, { loading: PageLoading });
+
 /** Pages with their own screens, by menu slug. */
 const CUSTOM: Record<string, ComponentType> = {
-  "staff-attendance": MarkStaffAttendance,
-  "todays-attendance": TodaysStaffAttendance,
-  "attendance-register": StaffAttendanceRegister,
-  "attendance-reports": StaffAttendanceReports,
-  "promote-students": PromoteStudents,
-  "transfer-student": TransferStudent,
-  "students-reset-password": ResetStudentPassword,
-  "assign-elective-subject": AssignElectives,
-  "add-bulk-data": ImportStudents,
-  "bulk-upload-staffs": ImportStaff,
-  "certificate-assign": CertificatesPage,
-  "bulk-id-cards": BulkIdCardsPage,
-  "student-id-card": StudentIdCard,
-  "staff-id-card": StaffIdCard,
-  "id-card-settings": IdCardSettingsPage,
-  "role-permission": RolePermission,
-  payroll: PayrollProcessPage,
-  "payroll-runs": PayrollPage,
-  payslips: PayslipsPage,
-  "payroll-reports": PayrollReportsPage,
-  "salary-structure": SalaryStructuresPage,
-  "monthly-salary": SalaryStructurePage,
-  "bulk-upload-teachers": ImportTeachers,
-  support: SupportPage,
-  "third-party-api": ThirdPartyPage,
-  "staff-leave": StaffLeavePage,
-  "leave-settings": LeaveConfigPage,
-  announcement: AnnouncementsPage,
-  notification: NotificationsPage,
-  messages: MessagesPage,
+  "staff-attendance": lazy(() => import("@/components/extras/StaffAttendance").then((mod) => mod.MarkStaffAttendance)),
+  "todays-attendance": lazy(() => import("@/components/extras/StaffAttendance").then((mod) => mod.TodaysStaffAttendance)),
+  "attendance-register": lazy(() => import("@/components/extras/StaffAttendance").then((mod) => mod.StaffAttendanceRegister)),
+  "attendance-reports": lazy(() => import("@/components/extras/StaffAttendance").then((mod) => mod.StaffAttendanceReports)),
+  "promote-students": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.PromoteStudents)),
+  "transfer-student": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.TransferStudent)),
+  "students-reset-password": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.ResetStudentPassword)),
+  "assign-elective-subject": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.AssignElectives)),
+  "add-bulk-data": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.ImportStudents)),
+  "bulk-upload-staffs": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.ImportStaff)),
+  "certificate-assign": lazy(() => import("@/components/operations/Documents").then((mod) => mod.CertificatesPage)),
+  "bulk-id-cards": lazy(() => import("@/components/operations/Documents").then((mod) => mod.BulkIdCardsPage)),
+  "student-id-card": lazy(() => import("@/components/extras/Tools").then((mod) => mod.StudentIdCard)),
+  "staff-id-card": lazy(() => import("@/components/extras/Tools").then((mod) => mod.StaffIdCard)),
+  "id-card-settings": lazy(() => import("@/components/extras/Tools").then((mod) => mod.IdCardSettingsPage)),
+  "role-permission": lazy(() => import("@/components/extras/Tools").then((mod) => mod.RolePermission)),
+  payroll: lazy(() => import("@/components/operations/Payroll").then((mod) => mod.PayrollProcessPage)),
+  "payroll-runs": lazy(() => import("@/components/extras/Tools").then((mod) => mod.PayrollPage)),
+  payslips: lazy(() => import("@/components/operations/Payroll").then((mod) => mod.PayslipsPage)),
+  "payroll-reports": lazy(() => import("@/components/operations/Payroll").then((mod) => mod.PayrollReportsPage)),
+  "salary-structure": lazy(() => import("@/components/operations/Payroll").then((mod) => mod.SalaryStructuresPage)),
+  "monthly-salary": lazy(() => import("@/components/extras/Tools").then((mod) => mod.SalaryStructurePage)),
+  "bulk-upload-teachers": lazy(() => import("@/components/extras/StudentTools").then((mod) => mod.ImportTeachers)),
+  support: lazy(() => import("@/components/extras/Support").then((mod) => mod.SupportPage)),
+  "third-party-api": lazy(() => import("@/components/extras/Support").then((mod) => mod.ThirdPartyPage)),
+  "assign-roll-number": lazy(() => import("@/components/extras/StudentBulk").then((mod) => mod.RollNumbersPage)),
+  "upload-profile-images": lazy(() => import("@/components/extras/StudentBulk").then((mod) => mod.ProfilePhotosPage)),
+  "staff-leave": lazy(() => import("@/components/operations/Leave").then((mod) => mod.StaffLeavePage)),
+  announcement: lazy(() => import("@/components/operations/Notices").then((mod) => mod.AnnouncementsPage)),
+  notification: lazy(() => import("@/components/operations/Notices").then((mod) => mod.NotificationsPage)),
+  messages: lazy(() => import("@/components/operations/Messages").then((mod) => mod.MessagesPage)),
 };
 
 const ICONS: Record<string, ReactNode> = {

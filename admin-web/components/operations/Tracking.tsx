@@ -194,7 +194,7 @@ function TrackingBody() {
                     <span className="bus-row-meta">
                       {row.trip_status ? <Chip tone={TRIP_STATUS[row.trip_status].tone}>{TRIP_STATUS[row.trip_status].label}</Chip> : <span className="muted">No trip today</span>}
                       <span className="muted">
-                        {row.latitude.toFixed(5)}, {row.longitude.toFixed(5)}
+                        {Number.isFinite(row.latitude) ? `${row.latitude.toFixed(5)}, ${row.longitude.toFixed(5)}` : "No GPS fix yet"}
                         {row.speed_kmph ? ` · ${row.speed_kmph} km/h` : ""} · {ageLabel(row.recorded_at)}
                       </span>
                     </span>

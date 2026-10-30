@@ -92,7 +92,7 @@ function ResourceBody({
   );
 
   const rows = useMemo(() => {
-    const sorted = [...state.options];
+    const sorted = config.rowFilter ? state.options.filter(config.rowFilter) : [...state.options];
     if (config.sort) {
       const { key, desc } = config.sort;
       sorted.sort((a, b) => String(a[key] ?? "").localeCompare(String(b[key] ?? ""), undefined, { numeric: true }) * (desc ? -1 : 1));

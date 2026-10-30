@@ -3,13 +3,13 @@
  *   GET/POST /school-admin/academics/leaves, PATCH /academics/leaves/{id} {status} (0 pending,
  *   1 approved, 2 rejected), DELETE /academics/leaves/{id}
  *   GET/PUT  /school-admin/leave-settings {policy, notes}
- * The server's leave has no type, so the type is kept at the start of the reason
- * ("Casual leave: fever") and read back from there. Leave types live in the leave settings
- * policy as `types`.
+ *   GET/POST/PATCH/DELETE /school-admin/leave-types, GET /school-admin/leave-balances
+ * Leaves carry `leave_type_id`. Older leaves kept the type at the start of the reason
+ * ("Casual leave: fever"); those are still read back.
  */
 import { listRows, getOne, replace, staffDirectory, type StaffRef } from "@/lib/extras/api";
 import type { LeaveRequest, LeaveStatus, LeaveType } from "@/lib/operations/types";
-import { num, send, str, type Raw } from "@/lib/teaching/client";
+import { num, optStr, send, str, type Raw } from "@/lib/teaching/client";
 import { invalid } from "@/lib/ops/store";
 
 export const LEAVE_STATUS: Record<LeaveStatus, string> = { 0: "Pending", 1: "Approved", 2: "Rejected" };
@@ -125,19 +125,49 @@ function kindOf(userId: number, people: StaffRef[]): LeaveRequest["kind"] {
   return person ? person.kind : "unknown";
 }
 
+/** The school's leave types (server route /leave-types). */
+export async function loadLeaveTypes(): Promise<LeaveType[]> {
+  const rows = await listRows("/leave-types");
+  return rows
+    .map((row) => ({
+      id: num(row.id),
+      key: str(row.code) || str(row.name).toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+      name: str(row.name),
+      days_per_year: num(row.days_per_year),
+      applies_to: (["staff", "student", "all"].includes(str(row.applies_to)) ? str(row.applies_to) : "staff") as LeaveType["applies_to"],
+      active: row.is_active !== false,
+    }))
+    .filter((row) => row.name && row.active)
+    .map(({ active: _active, ...row }) => row);
+}
+
+/** One person's balances for a year, as the server works them out. */
+export async function serverBalances(userId: number, year: number): Promise<{ type: string; allowed: number | null; used: number; pending: number; remaining: number | null }[]> {
+  const data = await getOne("/leave-balances", { user_id: userId, year });
+  return (Array.isArray(data.items) ? (data.items as Raw[]) : []).map((row) => ({
+    type: str(row.leave_type) || str(row.code) || "Leave",
+    allowed: row.allowed === null || row.allowed === undefined ? null : num(row.allowed),
+    used: num(row.used),
+    pending: num(row.pending),
+    remaining: row.remaining === null || row.remaining === undefined ? null : num(row.remaining),
+  }));
+}
+
 export async function loadLeaves(types: LeaveType[]): Promise<LeaveRequest[]> {
   const [rows, people] = await Promise.all([listRows("/academics/leaves"), staffDirectory()]);
   return rows
     .map((row): LeaveRequest => {
       const userId = num(row.user_id);
-      const { type, reason } = splitReason(str(row.name ?? row.reason), types);
+      const legacy = splitReason(str(row.reason ?? row.name), types);
+      const type = optStr(row.leave_type) ?? legacy.type;
+      const reason = optStr(row.leave_type) ? str(row.reason ?? row.name) : legacy.reason;
       const from = str(row.from_date).slice(0, 10);
       const to = str(row.to_date).slice(0, 10);
       return {
         id: num(row.id),
         user_id: userId,
         person_name: people.find((person) => person.user_id === userId)?.name ?? `User #${userId}`,
-        kind: kindOf(userId, people),
+        kind: row.student_id !== null && row.student_id !== undefined ? "student" : kindOf(userId, people),
         leave_type: type,
         reason,
         from_date: from,
@@ -153,7 +183,7 @@ export async function setLeaveStatus(id: number, status: LeaveStatus): Promise<v
   await send("PATCH", `/school-admin/academics/leaves/${id}`, { status }, status === 1 ? "Unable to approve the leave." : "Unable to reject the leave.");
 }
 
-export type LeaveInput = { user_id: number; leave_type: string; reason: string; from_date: string; to_date: string; session_year_id: number };
+export type LeaveInput = { user_id: number; leave_type: string; leave_type_id?: number; reason: string; from_date: string; to_date: string; session_year_id: number };
 
 export function leaveProblems(input: LeaveInput): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -173,7 +203,9 @@ export async function createLeave(input: LeaveInput): Promise<void> {
   await send(
     "POST",
     "/school-admin/academics/leaves",
-    { user_id: input.user_id, reason: joinReason(input.leave_type, input.reason), from_date: input.from_date, to_date: input.to_date, session_year_id: input.session_year_id, status: 0 },
+    input.leave_type_id
+      ? { user_id: input.user_id, leave_type_id: input.leave_type_id, reason: input.reason.trim(), from_date: input.from_date, to_date: input.to_date, session_year_id: input.session_year_id, status: 0 }
+      : { user_id: input.user_id, reason: joinReason(input.leave_type, input.reason), from_date: input.from_date, to_date: input.to_date, session_year_id: input.session_year_id, status: 0 },
     "Unable to add the leave.",
   );
 }

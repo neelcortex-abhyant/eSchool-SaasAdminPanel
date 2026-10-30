@@ -49,3 +49,26 @@ describe("middleware host routing", () => {
     expect(off.headers.get("x-middleware-rewrite")).toBeNull();
   });
 });
+
+describe("middleware sign-in guard", () => {
+  it("sends signed-out visitors of any admin page to sign in, keeping the page", async () => {
+    for (const path of ["/school/reports", "/dashboard", "/schools", "/school/payroll-reports"]) {
+      const response = await run(`http://localhost:3000${path}`, "localhost:3000");
+      expect(response.headers.get("location")).toBe(`http://localhost:3000/login?next=${encodeURIComponent(path)}`);
+    }
+  });
+
+  it("lets signed-in users through and keeps them off the sign-in page", async () => {
+    const page = await run("http://localhost:3000/school/reports", "localhost:3000", "v1_session=1");
+    expect(page.headers.get("location")).toBeNull();
+    const login = await run("http://localhost:3000/login", "localhost:3000", "v1_session=1");
+    expect(login.headers.get("location")).toBe("http://localhost:3000/dashboard");
+  });
+
+  it("leaves public pages and password reset open", async () => {
+    for (const path of ["/", "/login", "/login/reset", "/register-school"]) {
+      const response = await run(`http://localhost:3000${path}`, "localhost:3000");
+      expect(response.headers.get("location")).toBeNull();
+    }
+  });
+});

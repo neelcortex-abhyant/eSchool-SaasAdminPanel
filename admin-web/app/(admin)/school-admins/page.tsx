@@ -60,7 +60,7 @@ function SchoolAdminsPageInner() {
         loadSchoolAdminRoles(),
       ]);
       if (schoolsResult.ok) setSchools(schoolsResult.data.items || []);
-      if (rolesResult.ok) setRoles((rolesResult.data.items || []).map((r) => ({ key: r.key, label: r.label })));
+      if (rolesResult.ok) setRoles((rolesResult.data.items || []).filter((r) => r.key).map((r) => ({ key: r.key, label: r.label })));
     })();
   }, []);
 

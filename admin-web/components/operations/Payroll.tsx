@@ -19,6 +19,7 @@ import { isMonth, money, monthLabel, payrollService, salaryComponents, structure
 import type { PayrollStatus, Payslip, SalaryLine, SalaryStructure } from "@/lib/operations/types";
 import { newIdempotencyKey, useSubmitOnce } from "@/lib/ops/submit";
 import { IconFees } from "@/lib/icons";
+import { PdfDownload } from "@/components/operations/PdfDownload";
 
 export const PAYROLL_TABS = [
   { href: "/school/payroll", label: "Process payroll" },
@@ -526,7 +527,8 @@ function PayslipDialog({ payslip, onClose }: { payslip: Payslip; onClose: () => 
       <div className="modal-card acad-modal payslip-modal extras-print" role="dialog" aria-modal="true" aria-label="Payslip">
         <PayslipView payslip={payslip} schoolName={school.name} />
         <div className="resource-actions acad-modal-actions ops-no-print">
-          <button className="btn-pill btn-pill-green" type="button" onClick={() => window.print()}>Download PDF / print</button>
+          {isOperationsLive("payroll") ? <PdfDownload path={`/school-admin/payslips/${payslip.id}/pdf`} fileName={`payslip-${payslip.month}-${payslip.employee_code || payslip.staff_id}.pdf`} /> : null}
+          <button className="btn-pill btn-pill-green" type="button" onClick={() => window.print()}>Print</button>
           <button className="btn-pill btn-pill-green-soft" type="button" onClick={onClose}>Close</button>
         </div>
       </div>

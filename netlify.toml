@@ -18,6 +18,9 @@
   # /school-admin v1 routes. The question bank, Leave status and attendance corrections/locks
   # aren't on the server yet, so those stay in the browser or are hidden.
   NEXT_PUBLIC_TEACHING_API_MODE = "live"
+  # Grading, fees and transport use the backend's /school-admin routes. Without this they show
+  # sample data kept in the browser (and so do the Finance and Transport reports).
+  NEXT_PUBLIC_OPS_API_MODE = "live"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

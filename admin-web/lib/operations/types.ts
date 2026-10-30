@@ -73,7 +73,7 @@ export type RouteAttendanceSummary = { route_id: number; route_name: string; tri
 
 // ---------- Leave ----------
 
-export type LeaveType = { key: string; name: string; days_per_year: number; applies_to: "staff" | "student" | "all" };
+export type LeaveType = { key: string; name: string; days_per_year: number; applies_to: "staff" | "student" | "all"; /** Server id (GET /leave-types). */ id?: number };
 
 export type LeaveStatus = 0 | 1 | 2;
 

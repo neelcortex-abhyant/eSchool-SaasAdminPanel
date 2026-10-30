@@ -284,6 +284,7 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
     label: "Reports",
     icon: IconSupport,
     children: [
+      { href: "/school/reports", label: "Reports & analytics" },
       { href: "/school/student-reports", label: "Student reports" },
       { href: "/school/teacher-reports", label: "Teacher reports" },
       { href: "/school/staff-reports", label: "Staff reports" },
@@ -334,7 +335,6 @@ export const SCHOOL_ADMIN_NAV: NavItem[] = [
           { href: "/school/faqs", label: "FAQs" },
         ],
       },
-      { href: "/school/database-backup", label: "Database backup" },
     ],
   },
   { href: "/school/contact-inquiry", label: "Contact inquiry", icon: IconBell },

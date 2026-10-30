@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { api, getMe } from "@/lib/api";
+import { api, clearSession, getMe, SESSION_EXPIRED_EVENT } from "@/lib/api";
 import { SCHOOL_ADMIN_NAV } from "@/lib/nav";
 import Sidebar from "@/components/layout/Sidebar";
 import TopHeader from "@/components/layout/TopHeader";
@@ -46,6 +46,20 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }, []);
 
   const schoolAdmin = user?.role === "school_admin";
+
+  // An expired or revoked session: clear it and sign in again, coming back to this page.
+  useEffect(() => {
+    let sent = false;
+    function onExpired() {
+      if (sent) return;
+      sent = true;
+      clearSession();
+      const next = `${window.location.pathname}${window.location.search}`;
+      router.replace(`/login?expired=1&next=${encodeURIComponent(next)}`);
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [router]);
 
   useEffect(() => {
     if (!schoolAdmin) return;

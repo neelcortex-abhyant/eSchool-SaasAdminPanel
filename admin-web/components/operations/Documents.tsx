@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
 import { SelectField, TextField } from "@/components/academics/Fields";
 import { useOptions } from "@/components/academics/hooks";
@@ -10,9 +10,14 @@ import { IdCardView, useCardSchool, type CardData } from "@/components/extras/Id
 import { cardOf, fillTemplate } from "@/components/extras/Tools";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { errorMessage, listAll } from "@/lib/academics";
-import { create, getOne, listRows, staffDirectory, type Raw, type StaffRef } from "@/lib/extras/api";
+import { create, displayValue, getOne, listRows, staffDirectory, type Raw, type StaffRef } from "@/lib/extras/api";
 import { peopleService, type StudentRow } from "@/lib/people";
-import { settleLimited, str } from "@/lib/teaching/client";
+import { num, optNum, optStr, settleLimited, str } from "@/lib/teaching/client";
+import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { DataTable, type Column } from "@/components/academics/DataTable";
+import { Chip } from "@/components/teaching/Frame";
+import { PdfDownload } from "@/components/operations/PdfDownload";
+import { refNames } from "@/lib/extras/refs";
 import { IconBook } from "@/lib/icons";
 
 const icon = <IconBook width={18} height={18} />;
@@ -50,7 +55,7 @@ export function staffValues(person: Pick<StaffRef, "name" | "designation" | "emp
   return { name: person.name, staff_name: person.name, designation: person.designation, employee_id: person.employee_code ?? "", department: person.department ?? "", date: today() };
 }
 
-type Issued = { key: string; title: string; text: string; number: string | null; person: string };
+type Issued = { key: string; title: string; text: string; number: string | null; person: string; id?: number; verifyUrl?: string | null };
 
 function CertificateSheet({ items, schoolName }: { items: Issued[]; schoolName: string }) {
   return (
@@ -61,6 +66,7 @@ function CertificateSheet({ items, schoolName }: { items: Issued[]; schoolName: 
           <h2>{item.title}</h2>
           {item.number ? <p className="muted">Certificate no. {item.number}</p> : null}
           <p className="cert-text">{item.text || "This template has no text."}</p>
+          {item.verifyUrl ? <p className="cert-verify muted">Check this certificate at {item.verifyUrl}</p> : null}
           <div className="cert-sign">
             <span>Date: {today()}</span>
             <span>Principal</span>
@@ -80,7 +86,7 @@ export function CertificatesPage() {
       description="Pick a template and a student or staff member, check the preview, then issue and print. Or issue for a whole section at once."
       icon={icon}
       tabs={DOCUMENT_TABS}
-      note="Placeholders: {name}, {admission_no}, {class}, {section}, {roll_number}, {guardian}, {session} for students; {name}, {designation}, {employee_id}, {department} for staff; {certificate_no} and {date} for both. The server records certificates issued to students; staff certificates are printed without a record."
+      note="Placeholders: {name}, {admission_no}, {class}, {section}, {roll_number}, {guardian}, {session} for students; {name}, {designation}, {employee_id}, {department} for staff; {certificate_no} and {date} for both."
     >
       <CertificatesBody />
     </ExtrasPage>
@@ -88,17 +94,18 @@ export function CertificatesPage() {
 }
 
 function CertificatesBody() {
-  const [mode, setMode] = useState<"one" | "bulk">("one");
+  const [mode, setMode] = useState<"one" | "bulk" | "issued">("one");
   const templates = useOptions(useCallback(() => listRows("/certificate-templates") as Promise<(Raw & { id: number })[]>, []));
   return (
     <>
       <nav className="acad-tabs" aria-label="How many">
         <button type="button" className={`acad-tab${mode === "one" ? " is-active" : ""}`} aria-pressed={mode === "one"} onClick={() => setMode("one")}>One person</button>
         <button type="button" className={`acad-tab${mode === "bulk" ? " is-active" : ""}`} aria-pressed={mode === "bulk"} onClick={() => setMode("bulk")}>A whole section</button>
+        <button type="button" className={`acad-tab${mode === "issued" ? " is-active" : ""}`} aria-pressed={mode === "issued"} onClick={() => setMode("issued")}>Issued certificates</button>
       </nav>
       <ErrorAlert error={templates.error} onRetry={() => void templates.reload()} />
       {!templates.loading && !templates.options.length ? <div className="alert alert-info">Add a certificate template first, under Certificate templates.</div> : null}
-      {mode === "one" ? <OneCertificate templates={templates.options} loading={templates.loading} /> : <BulkCertificates templates={templates.options} loading={templates.loading} />}
+      {mode === "one" ? <OneCertificate templates={templates.options} loading={templates.loading} /> : mode === "bulk" ? <BulkCertificates templates={templates.options} loading={templates.loading} /> : <IssuedCertificates templates={templates.options} />}
     </>
   );
 }
@@ -130,10 +137,13 @@ function OneCertificate({ templates, loading }: { templates: Raw[]; loading: boo
       if (kind === "student" && student) {
         const row = await create("/certificates/issue", { template_id: Number(templateId), student_id: student.id, certificate_no: number.trim() || null, data: values });
         const certificateNo = str(row.certificate_no);
-        setIssued({ key: certificateNo, title: str(template.name), number: certificateNo, person: student.name, text: fillTemplate(str(template.body_text), { ...values, certificate_no: certificateNo }) });
+        setIssued({ key: certificateNo, id: num(row.id), verifyUrl: optStr(row.verify_url), title: str(template.name), number: certificateNo, person: student.name, text: fillTemplate(str(template.body_text), { ...values, certificate_no: certificateNo }) });
         toast("success", `Certificate ${certificateNo} issued to ${student.name}.`);
       } else if (person) {
-        setIssued({ key: `staff-${person.staff_id}`, title: str(template.name), number: number.trim() || null, person: person.name, text: fillTemplate(str(template.body_text), { ...values, certificate_no: number.trim() }) });
+        const row = await create("/certificates/issue-staff", { template_id: Number(templateId), staff_id: person.staff_id, certificate_no: number.trim() || null, data: values });
+        const certificateNo = str(row.certificate_no);
+        setIssued({ key: certificateNo, id: num(row.id), verifyUrl: optStr(row.verify_url), title: str(template.name), number: certificateNo, person: person.name, text: fillTemplate(str(template.body_text), { ...values, certificate_no: certificateNo }) });
+        toast("success", `Certificate ${certificateNo} issued to ${person.name}.`);
       }
     } catch (caught) {
       toast("error", errorMessage(caught, "Unable to issue the certificate."));
@@ -152,12 +162,13 @@ function OneCertificate({ templates, loading }: { templates: Raw[]; loading: boo
         ) : (
           <SelectField id="ct-staff" label="Staff member" required placeholder="Choose someone" loading={people.loading} value={staffId} onChange={(value) => { setStaffId(value); setIssued(null); }} options={people.options.map((row) => ({ value: String(row.staff_id), label: `${row.name}${row.designation ? ` · ${row.designation}` : ""}` }))} />
         )}
-        <TextField id="ct-number" label="Certificate number" maxLength={64} value={number} onChange={setNumber} hint={kind === "student" ? "Leave empty to number it automatically." : "Optional."} />
+        <TextField id="ct-number" label="Certificate number" maxLength={64} value={number} onChange={setNumber} hint="Leave empty to number it automatically." />
         <div className="field-span page-actions">
           <button className="btn-pill btn-pill-green" type="button" disabled={!template || !values || busy} onClick={() => void issue()}>
-            {busy ? "Issuing…" : kind === "student" ? "Issue certificate" : "Prepare to print"}
+            {busy ? "Issuing…" : "Issue certificate"}
           </button>
-          {issued ? <button className="btn-pill btn-pill-green-soft" type="button" onClick={() => window.print()}>Download PDF / print</button> : null}
+          {issued?.id ? <PdfDownload path={`/school-admin/certificates/${issued.id}/pdf`} fileName={`certificate-${issued.number ?? issued.id}.pdf`} /> : null}
+          {issued ? <button className="btn-pill btn-pill-green-soft" type="button" onClick={() => window.print()}>Print</button> : null}
         </div>
       </section>
       <section className={`resource-card cert-preview${issued ? " extras-print" : ""}`} aria-label="Preview">
@@ -381,6 +392,87 @@ function BulkCardsBody() {
             {cards.map((item) => <IdCardView key={item.key} card={item.card} school={school} />)}
           </div>
         </section>
+      ) : null}
+    </>
+  );
+}
+
+// ---------- Issued certificates ----------
+
+type IssuedRow = Raw & { id: number };
+
+function IssuedCertificates({ templates }: { templates: Raw[] }) {
+  const toast = useToast();
+  const [status, setStatus] = useState("");
+  const list = useOptions(useCallback(() => listRows("/certificates", { status: status || undefined }) as Promise<IssuedRow[]>, [status]));
+  const people = useOptions(useCallback(() => staffDirectory(), []));
+  const [students, setStudents] = useState<Map<number, string>>(new Map());
+  const [revoking, setRevoking] = useState<IssuedRow | null>(null);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    const ids = list.options.map((row) => num(row.student_id)).filter(Boolean);
+    if (!ids.length) return;
+    void refNames("student", ids).then(setStudents).catch(() => undefined);
+  }, [list.options]);
+
+  const who = (row: IssuedRow) =>
+    optNum(row.student_id) ? students.get(num(row.student_id)) ?? `Student #${num(row.student_id)}` : people.options.find((person) => person.staff_id === num(row.staff_id))?.name ?? `Staff #${num(row.staff_id)}`;
+  const columns: Column<IssuedRow>[] = [
+    { key: "no", label: "Certificate no.", render: (row) => <strong>{str(row.certificate_no)}</strong> },
+    { key: "who", label: "Issued to", render: (row) => <div>{who(row)}<div className="muted">{optNum(row.student_id) ? "Student" : "Staff"}</div></div> },
+    { key: "template", label: "Template", render: (row) => str(templates.find((item) => num(item.id) === num(row.template_id))?.name, "—") },
+    { key: "issued", label: "Issued", render: (row) => displayValue(row.issued_at) },
+    { key: "status", label: "Status", render: (row) => (optStr(row.revoked_at) || str(row.status) === "revoked" ? <Chip tone="red">Revoked</Chip> : <Chip tone="green">Valid</Chip>) },
+  ];
+  return (
+    <>
+      <div className="school-filters">
+        <select aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="">All certificates</option>
+          <option value="issued">Valid</option>
+          <option value="revoked">Revoked</option>
+        </select>
+      </div>
+      <ErrorAlert error={list.error} onRetry={() => void list.reload()} />
+      <div className="resource-card">
+        <DataTable
+          columns={columns}
+          rows={list.options}
+          loading={list.loading}
+          emptyText="No certificates issued yet."
+          actions={(row) => (
+            <>
+              <PdfDownload className="link-btn" label="PDF" path={`/school-admin/certificates/${row.id}/pdf`} fileName={`certificate-${str(row.certificate_no) || row.id}.pdf`} />
+              {optStr(row.revoked_at) || str(row.status) === "revoked" ? null : (
+                <button className="link-btn danger" type="button" onClick={() => setRevoking(row)}>Revoke</button>
+              )}
+            </>
+          )}
+        />
+      </div>
+      {revoking ? (
+        <ConfirmDialog
+          title="Revoke this certificate?"
+          body={`${str(revoking.certificate_no)} will show as revoked to anyone who checks it. This can't be undone.`}
+          confirmLabel="Revoke"
+          tone="danger"
+          pending={pending}
+          onCancel={() => setRevoking(null)}
+          onConfirm={async () => {
+            setPending(true);
+            try {
+              await create(`/certificates/${revoking.id}/revoke`, {});
+              toast("success", "Certificate revoked.");
+              void list.reload();
+            } catch (caught) {
+              toast("error", errorMessage(caught, "Unable to revoke the certificate."));
+            } finally {
+              setPending(false);
+              setRevoking(null);
+            }
+          }}
+        />
       ) : null}
     </>
   );

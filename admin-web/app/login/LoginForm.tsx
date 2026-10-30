@@ -35,7 +35,9 @@ export default function LoginForm() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("forgot") === "1") setMode("forgot");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("forgot") === "1") setMode("forgot");
+    if (params.get("expired") === "1") setNotice("Your session has expired. Sign in again to continue.");
   }, []);
 
   async function onSubmit(event: FormEvent) {
@@ -71,7 +73,8 @@ export default function LoginForm() {
       setSession(result.data.access_token);
       const next = new URLSearchParams(window.location.search).get("next");
       const destination = result.data.user?.role === "school_admin" ? "/school" : "/dashboard";
-      router.push(next && next.startsWith("/") && next !== "/" ? next : destination);
+      // Only same-site paths: "//host" or "/\host" would leave the app.
+      router.push(next && /^\/(?![/\\])/.test(next) && next !== "/" ? next : destination);
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
