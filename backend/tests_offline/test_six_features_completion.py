@@ -79,10 +79,11 @@ def test_payroll_formula_deterministic():
 
 def test_announcement_lazy_publish_helper():
     from app.services.v1.school_academic_mgmt import _lazy_publish_announcement
+    from app.services.v1.school_academics import _now
 
     class _Ann:
         status = "scheduled"
-        publish_at = datetime.now() - timedelta(minutes=1)
+        publish_at = _now() - timedelta(minutes=1)
         published_at = None
         updated_at = None
 
@@ -113,11 +114,11 @@ def test_messaging_policy_defaults():
     assert item["poll_seconds"] == 15
 
 
-def test_alembic_single_head_0043():
+def test_alembic_single_head_follows_0045():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
     cfg = Config("alembic.ini")
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["20261029_0043"]
+    assert heads == ["20261030_0045"]

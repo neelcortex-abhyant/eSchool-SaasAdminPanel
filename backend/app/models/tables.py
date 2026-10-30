@@ -1167,6 +1167,10 @@ class Leave(Base, TimestampMixin):
     leave_type_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("leave_types.id"), nullable=True, index=True
     )
+    # Approver audit (gap-closure 0045): legacy users.id and/or v1 UUID string.
+    decided_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    decided_by_v1: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Announcement(Base, TimestampMixin):
@@ -1490,6 +1494,10 @@ class Notification(Base, TimestampMixin):
     delivered: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(191), nullable=True)
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2116,6 +2124,10 @@ class PayrollSetting(Base, TimestampMixin):
     pay_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     currency: Mapped[str] = mapped_column(String(16), nullable=False, default="INR", server_default="INR")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    apply_unpaid_leave_adjustment: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    working_days_per_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2176,11 +2188,11 @@ class SalaryAssignment(Base, TimestampMixin):
     __tablename__ = "salary_assignments"
     __table_args__ = (
         Index(
-            "uq_salary_assignments_staff_active",
+            "uq_salary_assignments_staff_current",
             "school_id",
             "staff_id",
             unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL AND effective_to IS NULL"),
         ),
     )
 
@@ -2191,6 +2203,7 @@ class SalaryAssignment(Base, TimestampMixin):
         Integer, ForeignKey("salary_structures.id"), nullable=False, index=True
     )
     effective_from: Mapped[DateType] = mapped_column(Date, nullable=False)
+    effective_to: Mapped[Optional[DateType]] = mapped_column(Date, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2199,11 +2212,13 @@ class PayrollRun(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_payroll_runs_school_period", "school_id", "period_label"),
         Index(
-            "uq_payroll_runs_school_period_active",
+            "uq_payroll_runs_school_period_final",
             "school_id",
             "period_label",
             unique=True,
-            postgresql_where=text("deleted_at IS NULL AND status = 'processed'"),
+            postgresql_where=text(
+                "deleted_at IS NULL AND status IN ('processed', 'paid')"
+            ),
         ),
     )
 
@@ -2314,6 +2329,8 @@ class ConversationMessage(Base, TimestampMixin):
     )
     sender_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional JSON list of {original_filename, content_type, size_bytes, storage_key}
+    attachments_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     hidden: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

@@ -1440,6 +1440,28 @@ def fees_outstanding(db: Session, school_id: int, page: int = 1, page_size: int 
     return {**_envelope(slice_items, total_n, page, page_size), "summary": summary}
 
 
+def send_fee_reminders(db: Session, school_id: int, *, limit: int = 100) -> dict:
+    """Enqueue fee-reminder notifications for outstanding assignments (deduped)."""
+    from app.services.v1 import notification_delivery as notif
+
+    payload = fees_outstanding(db, school_id, page=1, page_size=max(1, min(limit, 200)))
+    queued = 0
+    skipped = 0
+    for item in payload.get("items") or []:
+        result = notif.enqueue_fee_reminder(
+            db,
+            school_id,
+            assignment_id=int(item["assignment_id"]),
+            student_id=int(item["student_id"]),
+            amount=float(item.get("balance") or 0),
+        )
+        if result.get("idempotent_replay"):
+            skipped += 1
+        else:
+            queued += 1
+    return {"queued": queued, "skipped_duplicate": skipped, "considered": len(payload.get("items") or [])}
+
+
 # ---------------------------------------------------------------------------
 # Semesters / streams / shifts / syllabus / online classes
 # ---------------------------------------------------------------------------
@@ -1662,6 +1684,41 @@ def soft_delete_online_class(db: Session, school_id: int, row_id: int) -> dict:
 # Staff attendance / QR / tasks
 # ---------------------------------------------------------------------------
 
+_STAFF_ATTENDANCE_STATUSES = frozenset({"present", "absent", "late", "half_day", "leave"})
+_STAFF_ATTENDANCE_ALIASES = {
+    "present": "present",
+    "absent": "absent",
+    "late": "late",
+    "half_day": "half_day",
+    "half-day": "half_day",
+    "halfday": "half_day",
+    "leave": "leave",
+}
+
+
+def normalize_staff_attendance_status(raw: str | None) -> str:
+    key = str(raw or "present").strip().lower().replace(" ", "_")
+    key = _STAFF_ATTENDANCE_ALIASES.get(key, key)
+    if key not in _STAFF_ATTENDANCE_STATUSES:
+        raise AcademicError(
+            422,
+            "status must be one of: present, absent, late, half_day, leave",
+        )
+    return key
+
+
+def _attendance_summary(rows: list) -> dict[str, int]:
+    summary = {s: 0 for s in sorted(_STAFF_ATTENDANCE_STATUSES)}
+    summary["working_days"] = len(rows)
+    for r in rows:
+        st = normalize_staff_attendance_status(getattr(r, "status", None) or "present")
+        summary[st] = summary.get(st, 0) + 1
+    # Payroll-compatible aliases
+    summary["present_days"] = summary["present"] + summary["late"]
+    summary["absent_days"] = summary["absent"]
+    summary["leave_days"] = summary["leave"] + summary["half_day"]
+    return summary
+
 
 def mark_staff_attendance(db: Session, school_id: int, body: dict) -> dict:
     staff_id = int(body.get("staff_id") or 0)
@@ -1669,7 +1726,7 @@ def mark_staff_attendance(db: Session, school_id: int, body: dict) -> dict:
         raise AcademicError(422, "staff_id is required")
     _same_school(db, Staff, staff_id, school_id, "Staff")
     att_date = _parse_date(body.get("attendance_date") or body.get("date") or date.today().isoformat(), "attendance_date")
-    status_v = str(body.get("status") or "present")
+    status_v = normalize_staff_attendance_status(body.get("status"))
     existing = (
         db.query(StaffAttendanceRecord)
         .filter(
@@ -1716,7 +1773,12 @@ def staff_attendance_today(db: Session, school_id: int) -> dict:
         )
         .all()
     )
-    return {"date": today.isoformat(), "items": [_row_dict(r) for r in rows], "total": len(rows)}
+    return {
+        "date": today.isoformat(),
+        "items": [_row_dict(r) for r in rows],
+        "total": len(rows),
+        "summary": _attendance_summary(rows),
+    }
 
 
 def staff_attendance_register(db: Session, school_id: int, attendance_date: date | None = None) -> dict:
@@ -1750,7 +1812,12 @@ def staff_attendance_report(
     *,
     from_date: date | None = None,
     to_date: date | None = None,
+    staff_id: int | None = None,
+    department: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
 ) -> dict:
+    page, page_size = _page(page, page_size)
     query = db.query(StaffAttendanceRecord).filter(
         StaffAttendanceRecord.school_id == school_id,
         StaffAttendanceRecord.deleted_at.is_(None),
@@ -1759,13 +1826,55 @@ def staff_attendance_report(
         query = query.filter(StaffAttendanceRecord.attendance_date >= from_date)
     if to_date:
         query = query.filter(StaffAttendanceRecord.attendance_date <= to_date)
-    rows = query.order_by(StaffAttendanceRecord.attendance_date.desc()).limit(500).all()
-    present = sum(1 for r in rows if r.status == "present")
-    absent = sum(1 for r in rows if r.status == "absent")
+    if staff_id is not None:
+        _same_school(db, Staff, int(staff_id), school_id, "Staff")
+        query = query.filter(StaffAttendanceRecord.staff_id == int(staff_id))
+    if department and department.strip():
+        staff_ids = [
+            s.id
+            for s in db.query(Staff)
+            .filter(Staff.school_id == school_id, Staff.department.ilike(department.strip()))
+            .all()
+        ]
+        if not staff_ids:
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "summary": _attendance_summary([]),
+                "by_month": [],
+            }
+        query = query.filter(StaffAttendanceRecord.staff_id.in_(staff_ids))
+    total = query.count()
+    # Full summary over filtered set (capped for safety)
+    all_rows = query.order_by(StaffAttendanceRecord.attendance_date.desc()).limit(5000).all()
+    summary = _attendance_summary(all_rows)
+    by_month: dict[str, dict] = {}
+    for r in all_rows:
+        key = r.attendance_date.strftime("%Y-%m")
+        if key not in by_month:
+            by_month[key] = {
+                "month": key,
+                "working_days": 0,
+                "present": 0,
+                "absent": 0,
+                "late": 0,
+                "half_day": 0,
+                "leave": 0,
+            }
+        bucket = by_month[key]
+        st = normalize_staff_attendance_status(r.status)
+        bucket[st] = int(bucket.get(st, 0)) + 1
+        bucket["working_days"] = int(bucket["working_days"]) + 1
+    rows = all_rows[(page - 1) * page_size : (page - 1) * page_size + page_size]
     return {
         "items": [_row_dict(r) for r in rows],
-        "total": len(rows),
-        "summary": {"present": present, "absent": absent},
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "summary": summary,
+        "by_month": [by_month[k] for k in sorted(by_month.keys())],
     }
 
 
@@ -1993,7 +2102,14 @@ def get_payroll_settings(db: Session, school_id: int) -> dict:
         .first()
     )
     if row is None:
-        return {"school_id": school_id, "pay_day": None, "currency": "INR", "notes": None}
+        return {
+            "school_id": school_id,
+            "pay_day": None,
+            "currency": "INR",
+            "notes": None,
+            "apply_unpaid_leave_adjustment": 0,
+            "working_days_per_month": 30,
+        }
     return _row_dict(row)
 
 
@@ -2003,12 +2119,16 @@ def put_payroll_settings(db: Session, school_id: int, body: dict) -> dict:
         .filter(PayrollSetting.school_id == school_id, PayrollSetting.deleted_at.is_(None))
         .first()
     )
+    apply_adj = 1 if body.get("apply_unpaid_leave_adjustment") in (True, 1, "1", "true") else 0
+    working_days = body.get("working_days_per_month")
     if row is None:
         row = PayrollSetting(
             school_id=school_id,
             pay_day=int(body["pay_day"]) if body.get("pay_day") is not None else None,
             currency=str(body.get("currency") or "INR"),
             notes=body.get("notes"),
+            apply_unpaid_leave_adjustment=apply_adj if "apply_unpaid_leave_adjustment" in body else 0,
+            working_days_per_month=int(working_days) if working_days is not None else 30,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -2020,6 +2140,10 @@ def put_payroll_settings(db: Session, school_id: int, body: dict) -> dict:
             row.currency = str(body["currency"] or "INR")
         if "notes" in body:
             row.notes = body["notes"]
+        if "apply_unpaid_leave_adjustment" in body:
+            row.apply_unpaid_leave_adjustment = apply_adj
+        if "working_days_per_month" in body:
+            row.working_days_per_month = int(working_days) if working_days is not None else None
         row.updated_at = _now()
     _commit(db)
     db.refresh(row)
@@ -2156,52 +2280,44 @@ def soft_delete_salary_component(db: Session, school_id: int, row_id: int) -> di
 
 
 def create_payroll_run(db: Session, school_id: int, body: dict) -> dict:
-    period = str(body.get("period_label") or "").strip()
+    """Legacy draft shell only — client payroll amounts are never trusted.
+
+    Authoritative calculation: ``POST /payroll/process``.
+    """
+    period = str(body.get("period_label") or body.get("month") or "").strip()
     if not period:
         raise AcademicError(422, "period_label is required")
-    items = body.get("items") or []
-    if not isinstance(items, list) or not items:
-        raise AcademicError(422, "items must be a non-empty list")
-    total = 0.0
-    prepared = []
-    for raw in items:
-        staff_id = int(raw.get("staff_id") or 0)
-        if not staff_id:
-            raise AcademicError(422, "each item needs staff_id")
-        _same_school(db, Staff, staff_id, school_id, "Staff")
-        gross = float(raw.get("gross") or 0)
-        deductions = float(raw.get("deductions") or 0)
-        net = float(raw.get("net") if raw.get("net") is not None else gross - deductions)
-        total += net
-        prepared.append({"staff_id": staff_id, "gross": gross, "deductions": deductions, "net": net, "notes": raw.get("notes")})
+    if body.get("items"):
+        raise AcademicError(
+            422,
+            "Client-supplied payroll amounts are not accepted. "
+            "Create a draft without items, then use POST /payroll/process.",
+        )
+    # Reject processed/paid period duplicates early.
+    from app.services.v1 import school_erp_payroll as erp_payroll
+
+    if erp_payroll._processed_or_paid_run(db, school_id, period) is not None:
+        raise AcademicError(409, "Payroll period already processed")
     run = PayrollRun(
         school_id=school_id,
         period_label=period,
         run_date=_parse_date(body.get("run_date") or date.today().isoformat(), "run_date"),
-        status=str(body.get("status") or "draft"),
-        total_amount=total,
+        status="draft",
+        total_amount=0,
         created_at=_now(),
         updated_at=_now(),
     )
     db.add(run)
-    db.flush()
-    for item in prepared:
-        db.add(
-            PayrollItem(
-                school_id=school_id,
-                run_id=run.id,
-                staff_id=item["staff_id"],
-                gross=item["gross"],
-                deductions=item["deductions"],
-                net=item["net"],
-                notes=item["notes"],
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
     _commit(db)
     db.refresh(run)
-    return _row_dict(run, {"items_count": len(prepared)})
+    return _row_dict(
+        run,
+        {
+            "items_count": 0,
+            "deprecated": True,
+            "hint": "Use POST /payroll/process for authoritative structure-driven payroll",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3019,6 +3135,19 @@ def create_notification(db: Session, school_id: int, body: dict, *, created_by: 
     _commit(db)
     db.refresh(row)
     return _notification_item(row)
+
+
+def get_notification(db: Session, school_id: int, row_id: int) -> dict:
+    row = db.get(Notification, row_id)
+    if row is None or row.school_id != school_id or row.deleted_at is not None:
+        raise AcademicError(404, "Notification not found")
+    return _notification_item(row)
+
+
+def cancel_notification(db: Session, school_id: int, row_id: int) -> dict:
+    from app.services.v1 import notification_delivery as notif
+
+    return notif.cancel_notification(db, school_id, row_id)
 
 
 def _lazy_publish_announcement(db: Session, row: Announcement) -> None:

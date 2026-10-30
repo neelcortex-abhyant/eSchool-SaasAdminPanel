@@ -258,7 +258,10 @@ class StaffAttendanceMarkBody(_MgmtBase):
     staff_id: int = Field(..., ge=1)
     attendance_date: Date | None = None
     date: Date | None = Field(default=None, description="Alias for attendance_date")
-    status: str = "present"
+    status: str = Field(
+        default="present",
+        description="present|absent|late|half_day|leave (aliases: Half-Day, half-day)",
+    )
     check_in: str | None = None
     check_out: str | None = None
     remark: str | None = None
@@ -318,6 +321,8 @@ class PayrollSettingsPutBody(_MgmtBase):
     pay_day: int | None = Field(default=None, ge=1, le=28)
     currency: str | None = Field(default=None, max_length=16)
     notes: str | None = None
+    apply_unpaid_leave_adjustment: bool | int | None = None
+    working_days_per_month: int | None = Field(default=None, ge=1, le=31)
 
 
 class PayrollRunItemIn(_MgmtBase):

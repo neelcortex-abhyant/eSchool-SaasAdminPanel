@@ -260,6 +260,16 @@ def parent_child_transport_live(
 # ---- Parent messaging ----
 
 
+@router.get("/parent/conversations/unread-count")
+def parent_conversations_unread_count(
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.unread_count(db, school.id, role="parent", user_id=user.id)
+    )
+
+
 @router.get("/parent/conversations")
 def parent_list_conversations(
     tenant: Tuple[Session, User, School] = Depends(require_guardian_user),

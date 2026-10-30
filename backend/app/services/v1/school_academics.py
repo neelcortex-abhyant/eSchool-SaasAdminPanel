@@ -1511,6 +1511,37 @@ def create_attendance(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
+    if kind == 0:
+        try:
+            from app.models.tables import AttendanceEvent
+            from app.services.v1 import notification_delivery as notif
+
+            now = _now()
+            db.add(
+                AttendanceEvent(
+                    school_id=school_id,
+                    attendance_id=row.id,
+                    student_id=row.student_id,
+                    session_year_id=row.session_year_id,
+                    attendance_date=row.date,
+                    event_type="absence",
+                    status_type=0,
+                    metadata_json=None,
+                    created_at=now,
+                    processed_at=None,
+                )
+            )
+            _commit(db)
+            notif.enqueue_student_absence(
+                db,
+                school_id,
+                attendance_id=row.id,
+                student_id=row.student_id,
+                attendance_date=row.date,
+            )
+        except Exception:
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("absence_notification_enqueue_failed attendance_id=%s", row.id)
     return {"id": row.id, "student_id": row.student_id, "class_section_id": row.class_section_id, "session_year_id": row.session_year_id, "type": row.type, "date": row.date.isoformat(), "remark": row.remark, "name": row.date.isoformat()}
 
 
@@ -1658,7 +1689,133 @@ def _leave_dict(db: Session, school_id: int, row: Leave) -> dict:
         "leave_type_id": getattr(row, "leave_type_id", None),
         "leave_type": leave_type,
         "leave_type_code": leave_type_code,
+        "decided_by_user_id": getattr(row, "decided_by_user_id", None),
+        "decided_by_v1": getattr(row, "decided_by_v1", None),
+        "decided_at": row.decided_at.isoformat() if getattr(row, "decided_at", None) else None,
     }
+
+
+def _assert_leave_type_applies_to(
+    db: Session, school_id: int, user_id: int, leave_type_id: int | None
+) -> None:
+    """Enforce LeaveType.applies_to against the requester role (student/staff/teacher)."""
+    if leave_type_id is None:
+        return
+    lt = _owned(db, LeaveType, leave_type_id, school_id)
+    applies = str(lt.applies_to or "all").strip().lower()
+    if applies in ("", "all"):
+        return
+    is_student = _student_id_for_user(db, school_id, user_id) is not None
+    is_staff = (
+        db.query(Staff)
+        .filter(Staff.school_id == school_id, Staff.user_id == user_id)
+        .first()
+        is not None
+    )
+    if applies in ("students", "student"):
+        if not is_student:
+            raise AcademicError(422, "This leave type applies only to students")
+        return
+    if applies in ("teachers", "teacher"):
+        if not is_staff:
+            raise AcademicError(422, "This leave type applies only to teachers")
+        return
+    if applies in ("staff",):
+        if not is_staff:
+            raise AcademicError(422, "This leave type applies only to staff")
+        return
+    raise AcademicError(422, f"Unsupported leave type applies_to value: {applies}")
+
+
+def _record_leave_decision(
+    row: Leave,
+    *,
+    actor_user_id: int | None = None,
+    actor_v1: str | None = None,
+) -> None:
+    row.decided_by_user_id = int(actor_user_id) if actor_user_id is not None else None
+    row.decided_by_v1 = str(actor_v1)[:36] if actor_v1 else None
+    row.decided_at = _now()
+
+
+LEAVE_STATUS_PENDING = 0
+LEAVE_STATUS_APPROVED = 1
+LEAVE_STATUS_REJECTED = 2
+LEAVE_STATUS_CANCELLED = 3
+
+
+def _leave_day_count(from_date, to_date) -> int:
+    return (to_date - from_date).days + 1
+
+
+def _assert_no_leave_overlap(
+    db: Session,
+    school_id: int,
+    user_id: int,
+    from_date,
+    to_date,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    """Block overlapping pending/approved leaves for the same user."""
+    q = db.query(Leave).filter(
+        Leave.school_id == school_id,
+        Leave.user_id == user_id,
+        Leave.status.in_([LEAVE_STATUS_PENDING, LEAVE_STATUS_APPROVED]),
+        Leave.from_date <= to_date,
+        Leave.to_date >= from_date,
+    )
+    if exclude_id is not None:
+        q = q.filter(Leave.id != exclude_id)
+    if q.first() is not None:
+        raise AcademicError(409, "Overlapping leave request already exists for these dates")
+
+
+def _assert_leave_balance_allows(
+    db: Session,
+    school_id: int,
+    user_id: int,
+    leave_type_id: int | None,
+    from_date,
+    to_date,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    """When leave type has days_per_year, refuse approve/create that would exceed allowance."""
+    if leave_type_id is None:
+        return
+    lt = _owned(db, LeaveType, leave_type_id, school_id)
+    if lt.days_per_year is None:
+        return
+    yr = from_date.year
+    year_start = from_date.replace(month=1, day=1)
+    year_end = from_date.replace(month=12, day=31)
+    used = 0
+    rows = (
+        db.query(Leave)
+        .filter(
+            Leave.school_id == school_id,
+            Leave.user_id == user_id,
+            Leave.leave_type_id == leave_type_id,
+            Leave.status == LEAVE_STATUS_APPROVED,
+            Leave.from_date <= year_end,
+            Leave.to_date >= year_start,
+        )
+        .all()
+    )
+    for row in rows:
+        if exclude_id is not None and row.id == exclude_id:
+            continue
+        a = max(row.from_date, year_start)
+        b = min(row.to_date, year_end)
+        if b >= a:
+            used += (b - a).days + 1
+    needed = _leave_day_count(from_date, to_date)
+    if used + needed > int(lt.days_per_year):
+        raise AcademicError(
+            422,
+            f"Insufficient leave balance for {lt.name}: allowed {lt.days_per_year}, used {used}, requested {needed}",
+        )
 
 
 def create_leave(db: Session, school_id: int, body: dict) -> dict:
@@ -1668,6 +1825,7 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
     When only ``student_id`` is sent, resolves to that student's ``user_id``.
     Never treats student_id as user_id.
     Optional ``leave_type_id`` or ``leave_type`` / ``leave_type_code``.
+    New requests are always pending (status 0); clients cannot invent approved status.
     """
     raw_user_id = body.get("user_id")
     raw_student_id = body.get("student_id")
@@ -1694,12 +1852,17 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
     if body["to_date"] < body["from_date"]:
         raise AcademicError(422, "Leave end date must be on or after the start date")
     leave_type_id = _resolve_leave_type_id(db, school_id, body)
+    _assert_leave_type_applies_to(db, school_id, user.id, leave_type_id)
+    _assert_no_leave_overlap(db, school_id, user.id, body["from_date"], body["to_date"])
+    _assert_leave_balance_allows(
+        db, school_id, user.id, leave_type_id, body["from_date"], body["to_date"]
+    )
     row = Leave(
         user_id=user.id,
         reason=str(body["reason"]).strip(),
         from_date=body["from_date"],
         to_date=body["to_date"],
-        status=int(body.get("status") or 0),
+        status=LEAVE_STATUS_PENDING,
         session_year_id=int(body["session_year_id"]),
         school_id=school_id,
         leave_type_id=leave_type_id,
@@ -1713,9 +1876,13 @@ def create_leave(db: Session, school_id: int, body: dict) -> dict:
 
 
 def update_leave(db: Session, school_id: int, row_id: int, body: dict) -> dict:
-    """Partial leave update. Resolves student_id → user_id; never confuses the two."""
+    """Partial leave update. Status transitions use approve/reject/cancel helpers."""
     row = _owned(db, Leave, row_id, school_id)
     data = dict(body)
+
+    if int(row.status) in (LEAVE_STATUS_APPROVED, LEAVE_STATUS_REJECTED, LEAVE_STATUS_CANCELLED):
+        if any(k in data for k in ("from_date", "to_date", "user_id", "student_id", "leave_type_id", "leave_type", "leave_type_code")):
+            raise AcademicError(409, "Cannot modify dates or type after leave is finalized")
 
     raw_student_id = data.pop("student_id", None)
     if raw_student_id is not None:
@@ -1738,8 +1905,13 @@ def update_leave(db: Session, school_id: int, row_id: int, body: dict) -> dict:
         row.from_date = data["from_date"]
     if "to_date" in data and data["to_date"] is not None:
         row.to_date = data["to_date"]
-    if "status" in data and data["status"] is not None:
-        row.status = int(data["status"])
+    # Status changes only via dedicated approve/reject/cancel — never silently ignore.
+    if "status" in data:
+        raise AcademicError(
+            422,
+            "Leave status cannot be changed via PATCH. "
+            "Use POST /academics/leaves/{id}/approve, /reject, or /cancel.",
+        )
     if "session_year_id" in data and data["session_year_id"] is not None:
         _same_school(db, SessionYear, int(data["session_year_id"]), school_id, "Session year")
         row.session_year_id = int(data["session_year_id"])
@@ -1753,11 +1925,118 @@ def update_leave(db: Session, school_id: int, row_id: int, body: dict) -> dict:
 
     if row.to_date < row.from_date:
         raise AcademicError(422, "Leave end date must be on or after the start date")
+    if int(row.status) == LEAVE_STATUS_PENDING:
+        _assert_no_leave_overlap(
+            db, school_id, row.user_id, row.from_date, row.to_date, exclude_id=row.id
+        )
 
     row.updated_at = _now()
     _commit(db)
     db.refresh(row)
     return _leave_dict(db, school_id, row)
+
+
+def approve_leave(
+    db: Session,
+    school_id: int,
+    row_id: int,
+    *,
+    actor_user_id: int | None = None,
+    actor_v1: str | None = None,
+) -> dict:
+    row = _owned(db, Leave, row_id, school_id)
+    if int(row.status) != LEAVE_STATUS_PENDING:
+        raise AcademicError(409, "Only pending leave can be approved")
+    _assert_leave_type_applies_to(db, school_id, row.user_id, row.leave_type_id)
+    _assert_no_leave_overlap(
+        db, school_id, row.user_id, row.from_date, row.to_date, exclude_id=row.id
+    )
+    _assert_leave_balance_allows(
+        db,
+        school_id,
+        row.user_id,
+        row.leave_type_id,
+        row.from_date,
+        row.to_date,
+        exclude_id=row.id,
+    )
+    row.status = LEAVE_STATUS_APPROVED
+    _record_leave_decision(row, actor_user_id=actor_user_id, actor_v1=actor_v1)
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    result = _leave_dict(db, school_id, row)
+    result["action"] = "approved"
+    result["actor_user_id"] = actor_user_id
+    result["actor_v1"] = actor_v1
+    try:
+        from app.services.v1 import notification_delivery as notif
+
+        queued = notif.enqueue_leave_decision(db, school_id, row, decision="approved")
+        result["notification_id"] = queued.get("id")
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("leave_approve_notification_failed leave_id=%s", row.id)
+        result["notification_id"] = None
+    return result
+
+
+def reject_leave(
+    db: Session,
+    school_id: int,
+    row_id: int,
+    *,
+    actor_user_id: int | None = None,
+    actor_v1: str | None = None,
+) -> dict:
+    row = _owned(db, Leave, row_id, school_id)
+    if int(row.status) != LEAVE_STATUS_PENDING:
+        raise AcademicError(409, "Only pending leave can be rejected")
+    row.status = LEAVE_STATUS_REJECTED
+    _record_leave_decision(row, actor_user_id=actor_user_id, actor_v1=actor_v1)
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    result = _leave_dict(db, school_id, row)
+    result["action"] = "rejected"
+    result["actor_user_id"] = actor_user_id
+    result["actor_v1"] = actor_v1
+    try:
+        from app.services.v1 import notification_delivery as notif
+
+        queued = notif.enqueue_leave_decision(db, school_id, row, decision="rejected")
+        result["notification_id"] = queued.get("id")
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("leave_reject_notification_failed leave_id=%s", row.id)
+        result["notification_id"] = None
+    return result
+
+
+def cancel_leave(
+    db: Session,
+    school_id: int,
+    row_id: int,
+    *,
+    actor_user_id: int | None = None,
+    actor_v1: str | None = None,
+) -> dict:
+    """Cancel pending leave (status=3). Approved leave cannot be cancelled here."""
+    row = _owned(db, Leave, row_id, school_id)
+    if int(row.status) != LEAVE_STATUS_PENDING:
+        raise AcademicError(409, "Only pending leave can be cancelled")
+    row.status = LEAVE_STATUS_CANCELLED
+    _record_leave_decision(row, actor_user_id=actor_user_id, actor_v1=actor_v1)
+    row.updated_at = _now()
+    _commit(db)
+    db.refresh(row)
+    result = _leave_dict(db, school_id, row)
+    result["action"] = "cancelled"
+    result["actor_user_id"] = actor_user_id
+    result["actor_v1"] = actor_v1
+    return result
 
 
 def list_people(db: Session, school_id: int, kind: str, q: str, page: int, page_size: int) -> dict:

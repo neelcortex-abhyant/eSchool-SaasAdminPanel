@@ -583,10 +583,12 @@ def list_leave_balances(
                 ):
                     continue
             days = _overlap_days(lv)
-            if int(lv.status or 0) == 1:
+            st = int(lv.status or 0)
+            if st == 1:
                 used += days
-            elif int(lv.status or 0) == 0:
+            elif st == 0:
                 pending += days
+            # status 2 rejected / 3 cancelled ignored
         allowed = lt.days_per_year
         remaining = None if allowed is None else max(0, int(allowed) - used)
         items.append(

@@ -226,11 +226,120 @@ async def stub_get_api_staff_id_card(request: Request):
 
 @router.post('/staff/leave-approve')
 async def stub_post_api_staff_leave_approve(request: Request):
-    return _stub(request)
+    """Approve a pending leave (same school). Self-approval blocked."""
+    from app.core.responses import ok, validation_error, fail
+    from app.core.database import session_factory
+    from app.models.tables import Leave
+    from app.services.mobile_auth import find_token_user, find_school, is_staff
+    from app.services.v1 import school_academics as academics
+    from app.services.v1.school_academics import AcademicError
+
+    form = await request.form()
+    leave_id = form.get("leave_id") or form.get("id")
+    if leave_id is None:
+        return validation_error("The leave id field is required.")
+    db = session_factory()()
+    try:
+        school_code = request.headers.get("school-code") or ""
+        school = find_school(db, school_code) if school_code else None
+        bearer = (request.headers.get("authorization") or "").replace("Bearer ", "").strip()
+        user = find_token_user(db, bearer) if bearer else None
+        if user is None or school is None or not is_staff(db, user):
+            return fail("Unauthenticated.", code=401)
+        leave = db.get(Leave, int(leave_id))
+        if leave is not None and leave.user_id == user.id:
+            return fail("Cannot approve your own leave request", code=403)
+        try:
+            item = academics.approve_leave(
+                db, school.id, int(leave_id), actor_user_id=user.id
+            )
+        except AcademicError as exc:
+            return fail(exc.detail, code=exc.status_code)
+        return ok("Leave approved successfully", item)
+    finally:
+        db.close()
 
 @router.get('/staff/leave-request')
 async def stub_get_api_staff_leave_request(request: Request):
-    return _stub(request)
+    """List leave requests for the authenticated staff user."""
+    from app.core.responses import ok, fail
+    from app.core.database import session_factory
+    from app.services.mobile_auth import find_token_user, find_school, is_staff, default_session_year
+    from app.models.tables import Leave
+    from app.services.v1 import school_academics as academics
+
+    db = session_factory()()
+    try:
+        school_code = request.headers.get("school-code") or ""
+        school = find_school(db, school_code) if school_code else None
+        bearer = (request.headers.get("authorization") or "").replace("Bearer ", "").strip()
+        user = find_token_user(db, bearer) if bearer else None
+        if user is None or school is None or not is_staff(db, user):
+            return fail("Unauthenticated.", code=401)
+        rows = (
+            db.query(Leave)
+            .filter(Leave.school_id == school.id, Leave.user_id == user.id)
+            .order_by(Leave.id.desc())
+            .all()
+        )
+        items = [academics._leave_dict(db, school.id, r) for r in rows]
+        return ok("Leave requests fetched successfully", items)
+    finally:
+        db.close()
+
+
+@router.post('/staff/leave-request')
+async def post_api_staff_leave_request(request: Request):
+    """Staff self-service leave submission (overlap + balance + applies_to)."""
+    from app.core.responses import ok, fail, validation_error
+    from app.core.database import session_factory
+    from app.services.mobile_auth import find_token_user, find_school, is_staff, default_session_year
+    from app.services.v1 import school_academics as academics
+    from app.services.v1.school_academics import AcademicError
+    from datetime import date as Date
+
+    db = session_factory()()
+    try:
+        school_code = request.headers.get("school-code") or ""
+        school = find_school(db, school_code) if school_code else None
+        bearer = (request.headers.get("authorization") or "").replace("Bearer ", "").strip()
+        user = find_token_user(db, bearer) if bearer else None
+        if user is None or school is None or not is_staff(db, user):
+            return fail("Unauthenticated.", code=401)
+        form = await request.form()
+        reason = form.get("reason")
+        from_date = form.get("from_date")
+        to_date = form.get("to_date")
+        leave_type_id = form.get("leave_type_id")
+        leave_type = form.get("leave_type")
+        if not reason:
+            return validation_error("The reason field is required.")
+        if not from_date or not to_date:
+            return validation_error("from_date and to_date are required.")
+        try:
+            parsed_from = Date.fromisoformat(str(from_date)[:10])
+            parsed_to = Date.fromisoformat(str(to_date)[:10])
+        except ValueError:
+            return validation_error("Invalid date format; use YYYY-MM-DD.")
+        sy = default_session_year(db, school.id)
+        if sy is None:
+            return fail("Session year not found", code=422)
+        body = {
+            "user_id": user.id,
+            "reason": str(reason),
+            "from_date": parsed_from,
+            "to_date": parsed_to,
+            "session_year_id": sy.id,
+            "leave_type_id": int(leave_type_id) if leave_type_id else None,
+            "leave_type": str(leave_type) if leave_type else None,
+        }
+        try:
+            item = academics.create_leave(db, school.id, body)
+        except AcademicError as exc:
+            return fail(exc.detail, code=exc.status_code)
+        return ok("Leave submitted successfully", item)
+    finally:
+        db.close()
 
 @router.get('/staff/my-payroll')
 async def stub_get_api_staff_my_payroll(request: Request):

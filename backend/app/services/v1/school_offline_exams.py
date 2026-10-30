@@ -390,11 +390,27 @@ def update_exam(db: Session, school_id: int, exam_id: int, body: dict) -> dict:
         cs = _same_school(db, ClassSection, int(data["class_section_id"]), school_id, "Class section")
         row.class_section_id = cs.id
         row.class_id = cs.class_id
+    became_published = False
     if "publish" in data:
-        row.publish = 1 if data["publish"] in (True, 1, "1", "true") else 0
+        new_pub = 1 if data["publish"] in (True, 1, "1", "true") else 0
+        became_published = new_pub == 1 and int(row.publish or 0) != 1
+        row.publish = new_pub
     row.updated_at = _now()
     _commit(db)
     db.refresh(row)
+    if became_published:
+        try:
+            from app.services.v1 import notification_delivery as notif
+
+            notif.enqueue_exam_announcement(
+                db, school_id, exam_id=row.id, exam_name=row.name or f"Exam {row.id}"
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "exam_publish_notification_failed exam_id=%s", row.id
+            )
     return _exam_item(row)
 
 
@@ -1078,6 +1094,18 @@ def process_results(db: Session, school_id: int, exam_id: int) -> dict:
     exam.results_processed_at = now
     exam.updated_at = now
     _commit(db)
+    try:
+        from app.services.v1 import notification_delivery as notif
+
+        notif.enqueue_exam_results(
+            db, school_id, exam_id=exam_id, exam_name=exam.name or f"Exam {exam_id}"
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "exam_results_notification_failed exam_id=%s", exam_id
+        )
     return {
         "exam_id": exam_id,
         "processed_students": processed,

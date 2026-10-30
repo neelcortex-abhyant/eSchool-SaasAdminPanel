@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -25,8 +25,11 @@ def _school_id(auth: AuthContext) -> int:
 
 
 def _admin_legacy_user_id(db: Session, auth: AuthContext) -> int:
-    """School-admin v1 UUID → legacy users.id for messaging FKs / unread."""
-    return messaging.resolve_legacy_user_id(
+    """School-admin v1 UUID → legacy users.id for messaging FKs / unread.
+
+    Ensures a dedicated school actor; never spoofs a teacher/staff identity.
+    """
+    return messaging.ensure_school_admin_actor(
         db, _school_id(auth), email=getattr(auth.user, "email", None)
     )
 
@@ -104,6 +107,12 @@ class MessageCreateBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     body: str = Field(..., min_length=1, max_length=2000)
+    attachments: list[dict[str, Any]] | None = None
+
+
+class UnreadCountOut(_Out):
+    unread: int = 0
+    conversations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ConversationCreateBody(BaseModel):
@@ -134,6 +143,16 @@ class OkReadOut(_Out):
     last_read_at: str | None = None
 
 
+class AttachmentUploadOut(_Out):
+    original_filename: str | None = None
+    content_type: str | None = None
+    size_bytes: int | None = None
+    storage_key: str | None = None
+    name: str | None = None
+    size: int | None = None
+    download_path: str | None = None
+
+
 @router.get("/messaging/policy", responses=json_response(MessagingPolicyOut))
 def get_messaging_policy(
     auth: Annotated[AuthContext, Depends(require_school)],
@@ -151,6 +170,21 @@ def put_messaging_policy(
     return _run(
         lambda: messaging.put_messaging_policy(
             db, _school_id(auth), body.model_dump(exclude_unset=True)
+        )
+    )
+
+
+@router.get("/conversations/unread-count", responses=json_response(UnreadCountOut))
+def conversations_unread_count(
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: messaging.unread_count(
+            db,
+            _school_id(auth),
+            role="admin",
+            user_id=_admin_legacy_user_id(db, auth),
         )
     )
 
@@ -243,6 +277,52 @@ def send_message(
             user_id=_admin_legacy_user_id(db, auth),
         )
     )
+
+
+@router.post(
+    "/conversations/attachments/upload",
+    status_code=status.HTTP_201_CREATED,
+    responses=json_response(AttachmentUploadOut, status_code=201),
+)
+async def upload_conversation_attachment(
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+    file: UploadFile = File(...),
+):
+    data = await file.read()
+    return _run(
+        lambda: messaging.upload_message_attachment(
+            db,
+            _school_id(auth),
+            role="admin",
+            user_id=_admin_legacy_user_id(db, auth),
+            data=data,
+            filename=file.filename,
+        )
+    )
+
+
+@router.get("/messages/{message_id}/attachments")
+def download_message_attachment(
+    message_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+    storage_key: str = Query(..., min_length=1),
+):
+    from fastapi.responses import Response
+
+    payload, content_type, filename = _run(
+        lambda: messaging.download_message_attachment(
+            db,
+            _school_id(auth),
+            message_id,
+            storage_key,
+            role="admin",
+            user_id=_admin_legacy_user_id(db, auth),
+        )
+    )
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(content=payload, media_type=content_type, headers=headers)
 
 
 @router.post("/conversations/{conversation_id}/read", responses=json_response(OkReadOut))

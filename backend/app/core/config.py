@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     # Transport GPS breadcrumb hint for expires_at on new points. No auto-purge cron yet.
     gps_retention_days: int = 90
 
+    # Firebase Cloud Messaging (HTTP v1). Prefer FIREBASE_SERVICE_ACCOUNT_JSON
+    # (full service-account JSON). Alternately set project/client/private_key.
+    # system_settings.firebase_private_key is only a short configured flag (255 chars).
+    firebase_service_account_json: str = ""
+    firebase_project_id: str = ""
+    firebase_client_email: str = ""
+    firebase_private_key: SecretStr = SecretStr("")
+
     @property
     def mail_configured(self) -> bool:
         return bool(self.smtp_host.strip() and self.smtp_from.strip() and self.admin_reset_url.strip())

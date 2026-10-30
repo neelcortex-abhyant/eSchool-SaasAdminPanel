@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
+from app.core.database import session_factory
+from app.services.v1 import notification_delivery as notif_delivery
 from app.api.v1.deps import AuthContext, require_school_permission
 from app.schemas.v1 import school_admin_erp as erp_schemas
 from app.schemas.v1 import school_admin_mgmt as mgmt_schemas
@@ -597,6 +599,18 @@ def fees_outstanding(
 
 
 @router.post(
+    "/fees/send-reminders",
+    responses=mgmt_out.json_response(mgmt_out.FeeRemindersOut),
+)
+def send_fee_reminders(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    limit: int = Query(100, ge=1, le=200),
+):
+    return _run(lambda: mgmt.send_fee_reminders(db, _school_id(auth), limit=limit))
+
+
+@router.post(
     "/fees/collect",
     status_code=status.HTTP_201_CREATED,
     responses=json_response(FeePaymentOut, status_code=201),
@@ -878,9 +892,22 @@ def staff_attendance_reports(
     db: Annotated[Session, Depends(central_db)],
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
+    staff_id: int | None = Query(None, ge=1),
+    department: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=50),
 ):
     return _run(
-        lambda: mgmt.staff_attendance_report(db, _school_id(auth), from_date=from_date, to_date=to_date)
+        lambda: mgmt.staff_attendance_report(
+            db,
+            _school_id(auth),
+            from_date=from_date,
+            to_date=to_date,
+            staff_id=staff_id,
+            department=department,
+            page=page,
+            page_size=page_size,
+        )
     )
 
 
@@ -1081,7 +1108,17 @@ def list_payroll_runs(
     return _run(lambda: mgmt.list_payroll_runs(db, _school_id(auth), page=page, page_size=page_size))
 
 
-@router.post("/payroll-runs", status_code=status.HTTP_201_CREATED, responses=mgmt_out.json_response(mgmt_out.PayrollRunOut, status_code=201))
+@router.post(
+    "/payroll-runs",
+    status_code=status.HTTP_201_CREATED,
+    responses=mgmt_out.json_response(mgmt_out.PayrollRunOut, status_code=201),
+    deprecated=True,
+    summary="Create draft payroll run (legacy, non-authoritative)",
+    description=(
+        "Deprecated. Accepts client-supplied amounts for draft bookkeeping only. "
+        "Use POST /payroll/process as the authoritative structure-driven path."
+    ),
+)
 def create_payroll_run(
     body: mgmt_schemas.PayrollRunCreateBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
@@ -1225,10 +1262,17 @@ def list_salary_assignments(
     db: Annotated[Session, Depends(central_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
+    include_history: bool = Query(False),
+    staff_id: int | None = Query(default=None, ge=1),
 ):
     return _run(
         lambda: erp_payroll.list_salary_assignments(
-            db, _school_id(auth), page=page, page_size=page_size
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            include_history=include_history,
+            staff_id=staff_id,
         )
     )
 
@@ -1253,8 +1297,45 @@ def payroll_preview(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
     month: str = Query(..., min_length=7, max_length=7),
+    department: str | None = Query(default=None),
 ):
-    return _run(lambda: erp_payroll.payroll_preview(db, _school_id(auth), month))
+    return _run(
+        lambda: erp_payroll.payroll_preview(
+            db, _school_id(auth), month, department=department
+        )
+    )
+
+
+@router.post("/payroll-runs/{run_id}/mark-paid", responses=mgmt_out.json_response(mgmt_out.PayrollRunOut))
+def mark_payroll_paid(
+    run_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: erp_payroll.mark_payroll_paid(
+            db,
+            _school_id(auth),
+            run_id,
+            actor_user_id=None,
+            actor_v1=str(auth.user.id),
+        )
+    )
+
+
+@router.get("/payroll/audit-events", responses=mgmt_out.json_response(mgmt_out.PayrollAuditEventListOut))
+def list_payroll_audit_events(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    run_id: int | None = Query(default=None, ge=1),
+):
+    return _run(
+        lambda: erp_payroll.list_payroll_audit_events(
+            db, _school_id(auth), page=page, page_size=page_size, run_id=run_id
+        )
+    )
 
 
 @router.post("/payroll/process", responses=mgmt_out.json_response(mgmt_out.PayrollProcessOut))
@@ -1270,7 +1351,8 @@ def payroll_process(
             _school_id(auth),
             _mgmt_body(body),
             idempotency_key=idempotency_key,
-            actor_user_id=int(auth.user.id) if getattr(auth.user, "id", None) else None,
+            actor_user_id=None,
+            actor_v1=str(auth.user.id),
         )
     )
 
@@ -1295,6 +1377,7 @@ def list_payslips(
     month: str | None = Query(default=None),
     staff_id: int | None = Query(default=None, ge=1),
     status: str | None = Query(default=None),
+    department: str | None = Query(default=None),
 ):
     return _run(
         lambda: erp_payroll.list_payslips(
@@ -1303,6 +1386,7 @@ def list_payslips(
             month=month,
             staff_id=staff_id,
             status_filter=status,
+            department=department,
             page=page,
             page_size=page_size,
         )
@@ -1794,17 +1878,43 @@ def list_notifications(
     )
 
 
+@router.get("/notifications/{row_id}", responses=mgmt_out.json_response(mgmt_out.NotificationOut))
+def get_notification(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.get_notification(db, _school_id(auth), row_id))
+
+
+@router.post(
+    "/notifications/{row_id}/cancel",
+    responses=mgmt_out.json_response(mgmt_out.NotificationOut),
+)
+def cancel_notification(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.cancel_notification(db, _school_id(auth), row_id))
+
+
 @router.post("/notifications", status_code=status.HTTP_201_CREATED, responses=mgmt_out.json_response(mgmt_out.NotificationOut, status_code=201))
 def create_notification(
     body: mgmt_schemas.NotificationCreateBody,
     auth: Annotated[AuthContext, Depends(require_school)],
     db: Annotated[Session, Depends(central_db)],
+    background: BackgroundTasks,
 ):
-    return _run(
+    item = _run(
         lambda: mgmt.create_notification(
             db, _school_id(auth), _mgmt_body(body), created_by=str(auth.user.id)
         )
     )
+    notif_delivery.schedule_delivery_background(
+        background, session_factory(), int(item["id"])
+    )
+    return item
 
 
 @router.get("/announcements", responses=mgmt_out.json_response(mgmt_out.AnnouncementListOut))

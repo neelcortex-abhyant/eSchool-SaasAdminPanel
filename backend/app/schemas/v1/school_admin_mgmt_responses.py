@@ -56,6 +56,8 @@ __all__ = [
     "PayrollSettingsOut",
     "PayrollRunOut",
     "PayrollRunListOut",
+    "PayrollAuditEventOut",
+    "PayrollAuditEventListOut",
     "SalaryStructureOut",
     "SalaryStructureListOut",
     "SalaryAssignmentOut",
@@ -377,6 +379,9 @@ class StaffAttendanceReportOut(_Out):
     items: list[StaffAttendanceOut]
     total: int
     summary: dict[str, int]
+    page: int | None = None
+    page_size: int | None = None
+    by_month: list[dict[str, Any]] | None = None
 
 
 class StaffQrSettingsOut(_Out):
@@ -461,6 +466,8 @@ class PayrollSettingsOut(_Out):
     pay_day: int | None = None
     currency: str = "INR"
     notes: str | None = None
+    apply_unpaid_leave_adjustment: int = 0
+    working_days_per_month: int | None = 30
     deleted_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -470,9 +477,10 @@ class PayrollRunOut(_Out):
     id: int
     school_id: int
     period_label: str
-    run_date: str
+    run_date: str | None = None
     status: str
     total_amount: float
+    processed_at: str | None = None
     deleted_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -480,6 +488,22 @@ class PayrollRunOut(_Out):
 
 class PayrollRunListOut(_Out):
     items: list[PayrollRunOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class PayrollAuditEventOut(_Out):
+    id: int
+    run_id: int | None = None
+    actor_user_id: int | None = None
+    action: str
+    detail_json: str | None = None
+    created_at: str | None = None
+
+
+class PayrollAuditEventListOut(_Out):
+    items: list[PayrollAuditEventOut]
     total: int
     page: int
     page_size: int
@@ -762,6 +786,12 @@ class NotificationListOut(_Out):
     total: int
     page: int
     page_size: int
+
+
+class FeeRemindersOut(_Out):
+    queued: int = 0
+    skipped_duplicate: int = 0
+    considered: int = 0
 
 
 class AnnouncementOut(_Out):

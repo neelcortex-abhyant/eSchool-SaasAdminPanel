@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Form, Header, Query, Request
@@ -35,6 +36,7 @@ from app.services.mobile_auth import (
     user_roles,
     validation_error,
 )
+from app.services.v1.school_academic_mgmt import _lazy_publish_announcement
 
 
 def _dt(value):
@@ -231,6 +233,49 @@ def _announcement_payload(row: Announcement) -> dict:
         "updated_at": _dt(row.updated_at),
         "file": [],
     }
+
+
+def _audience_matches(audience_json: str | None, role: str) -> bool:
+    """Portal recipients: published rows for ``all`` or matching audience role."""
+    if not audience_json:
+        return True
+    try:
+        data = json.loads(audience_json)
+    except (TypeError, ValueError):
+        return True
+    if not isinstance(data, list) or not data:
+        return True
+    normalized = {str(x).strip().lower() for x in data}
+    if "all" in normalized:
+        return True
+    return role in normalized
+
+
+def _portal_announcements(
+    db: Session, school_id: int, *, role: str, session_year_id: int | None
+) -> list[Announcement]:
+    q = select(Announcement).where(
+        Announcement.school_id == school_id,
+        Announcement.deleted_at.is_(None),
+    )
+    if session_year_id is not None:
+        q = q.where(Announcement.session_year_id == session_year_id)
+    rows = list(db.scalars(q.order_by(Announcement.id.desc())))
+    dirty = False
+    visible: list[Announcement] = []
+    for row in rows:
+        before = row.status
+        _lazy_publish_announcement(db, row)
+        if row.status != before:
+            dirty = True
+        if row.status != "published":
+            continue
+        if not _audience_matches(getattr(row, "audience_json", None), role):
+            continue
+        visible.append(row)
+    if dirty:
+        db.commit()
+    return visible
 
 
 def _paginate(items: List[dict], page: int = 1, per_page: int = 15) -> dict:
@@ -631,10 +676,9 @@ async def student_announcements(
 ):
     db, user, school = tenant
     sy = default_session_year(db, school.id)
-    q = select(Announcement).where(Announcement.school_id == school.id)
-    if sy is not None:
-        q = q.where(Announcement.session_year_id == sy.id)
-    rows = list(db.scalars(q.order_by(Announcement.id.desc())))
+    rows = _portal_announcements(
+        db, school.id, role="students", session_year_id=sy.id if sy else None
+    )
     items = [_announcement_payload(r) for r in rows]
     return ok("Announcement Details Fetched Successfully", _paginate(items, page=page or 1))
 
@@ -733,10 +777,9 @@ async def parent_announcements(
         if child is None:
             return fail("Child's Account is not Active.Contact School Support", code=INACTIVE_CHILD)
     sy = default_session_year(db, school.id)
-    q = select(Announcement).where(Announcement.school_id == school.id)
-    if sy is not None:
-        q = q.where(Announcement.session_year_id == sy.id)
-    rows = list(db.scalars(q.order_by(Announcement.id.desc())))
+    rows = _portal_announcements(
+        db, school.id, role="parents", session_year_id=sy.id if sy else None
+    )
     items = [_announcement_payload(r) for r in rows]
     return ok("Announcement Details Fetched Successfully", _paginate(items, page=page or 1))
 

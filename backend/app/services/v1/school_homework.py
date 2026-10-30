@@ -493,6 +493,24 @@ def create_homework(db: Session, school_id: int, body: dict) -> dict:
     db.add(row)
     _commit(db)
     db.refresh(row)
+    try:
+        from app.services.v1 import notification_delivery as notif
+
+        notif.enqueue_event(
+            db,
+            school_id,
+            event_type="homework_created",
+            title=f"New homework: {title[:80]}",
+            body=f"Homework assigned (deadline {deadline_at.isoformat()}).",
+            audience=["students", "parents"],
+            idempotency_key=f"homework_created:{school_id}:{row.id}",
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "homework_notification_enqueue_failed homework_id=%s", row.id
+        )
     return _homework_item(db, row)
 
 

@@ -674,6 +674,18 @@ class TeacherMessageCreateBody(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
 
 
+@router.get("/teacher/conversations/unread-count")
+def teacher_conversations_unread_count(
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.services.v1 import school_messaging as messaging
+
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.unread_count(db, school.id, role="teacher", user_id=user.id)
+    )
+
+
 @router.get("/teacher/conversations")
 def teacher_list_conversations(
     tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
@@ -767,3 +779,87 @@ def teacher_mark_read(
             db, school.id, conversation_id, role="teacher", user_id=user.id
         )
     )
+
+
+# ---- Teacher self-service leave ----
+
+
+@router.get("/teacher/leave-requests")
+def teacher_list_leave_requests(
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.models.tables import Leave
+    from app.services.v1 import school_academics as academics
+
+    db, user, school = tenant
+
+    def _action():
+        rows = (
+            db.query(Leave)
+            .filter(Leave.school_id == school.id, Leave.user_id == user.id)
+            .order_by(Leave.id.desc())
+            .all()
+        )
+        return {"items": [academics._leave_dict(db, school.id, r) for r in rows], "total": len(rows)}
+
+    return _run(_action)
+
+
+@router.post("/teacher/leave-requests", status_code=201)
+def teacher_create_leave_request(
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+    reason: str = Form(...),
+    from_date: str = Form(...),
+    to_date: str = Form(...),
+    leave_type_id: int | None = Form(default=None),
+    leave_type: str | None = Form(default=None),
+    session_year_id: int | None = Form(default=None),
+):
+    from datetime import date as Date
+
+    from app.services.mobile_auth import default_session_year
+    from app.services.v1 import school_academics as academics
+
+    db, user, school = tenant
+
+    def _action():
+        sy_id = session_year_id
+        if sy_id is None:
+            sy = default_session_year(db, school.id)
+            if sy is None:
+                raise academics.AcademicError(422, "Session year not found")
+            sy_id = sy.id
+        return academics.create_leave(
+            db,
+            school.id,
+            {
+                "user_id": user.id,
+                "reason": reason,
+                "from_date": Date.fromisoformat(str(from_date)[:10]),
+                "to_date": Date.fromisoformat(str(to_date)[:10]),
+                "session_year_id": int(sy_id),
+                "leave_type_id": leave_type_id,
+                "leave_type": leave_type,
+            },
+        )
+
+    return _run(_action)
+
+
+@router.post("/teacher/leave-requests/{leave_id}/cancel")
+def teacher_cancel_leave_request(
+    leave_id: int,
+    tenant: Tuple[Session, User, School] = Depends(require_teacher_user),
+):
+    from app.models.tables import Leave
+    from app.services.v1 import school_academics as academics
+
+    db, user, school = tenant
+
+    def _action():
+        row = db.get(Leave, leave_id)
+        if row is None or row.school_id != school.id or row.user_id != user.id:
+            raise academics.AcademicError(404, "Leave not found")
+        return academics.cancel_leave(db, school.id, leave_id, actor_user_id=user.id)
+
+    return _run(_action)

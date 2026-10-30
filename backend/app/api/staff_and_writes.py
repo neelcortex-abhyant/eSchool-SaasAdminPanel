@@ -306,6 +306,8 @@ async def create_leave(
     reason: Optional[str] = Form(default=None),
     from_date: Optional[str] = Form(default=None),
     to_date: Optional[str] = Form(default=None),
+    leave_type_id: Optional[int] = Form(default=None),
+    leave_type: Optional[str] = Form(default=None),
     tenant: Tuple[Session, User, School] = Depends(require_tenant_user),
 ):
     db, user, school = tenant
@@ -322,21 +324,27 @@ async def create_leave(
     sy = default_session_year(db, school.id)
     if sy is None:
         return fail("Session year not found", code=VALIDATION_ERROR)
-    row = Leave(
-        user_id=user.id,
-        reason=str(reason)[:255],
-        from_date=parsed_from,
-        to_date=parsed_to,
-        status=0,
-        school_id=school.id,
-        session_year_id=sy.id,
-        created_at=utcnow(),
-        updated_at=utcnow(),
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return ok("Leave submitted successfully", _leave_payload(row))
+    from app.services.v1 import school_academics as academics
+    from app.services.v1.school_academics import AcademicError
+
+    try:
+        item = academics.create_leave(
+            db,
+            school.id,
+            {
+                "user_id": user.id,
+                "reason": reason,
+                "from_date": parsed_from,
+                "to_date": parsed_to,
+                "session_year_id": sy.id,
+                "leave_type_id": leave_type_id,
+                "leave_type": leave_type,
+            },
+        )
+    except AcademicError as exc:
+        return fail(exc.detail, code=exc.status_code)
+    row = db.get(Leave, item["id"])
+    return ok("Leave submitted successfully", _leave_payload(row) if row else item)
 
 
 @router.post("/parent/store-fees")

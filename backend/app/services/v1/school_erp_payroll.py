@@ -3,7 +3,9 @@
 Formula (deterministic, no statutory tax/PF invented):
   gross = basic + sum(earning lines)
   deductions = sum(deduction lines)
-  attendance_adjustment = 0 (default; school setting may enable a simple rule later)
+  attendance_adjustment = 0 by default; when payroll_settings.apply_unpaid_leave_adjustment=1:
+    unpaid_days = approved leave days in month where leave type is_paid=0
+    attendance_adjustment = -(gross / working_days_per_month) * unpaid_days  (2dp)
   net = gross - deductions + attendance_adjustment
 
 Jurisdiction limitation: amounts are structure-driven only — not India PF/ESI/TDS.
@@ -13,18 +15,23 @@ non-authoritative; ``POST /payroll/process`` is the authoritative path.
 
 from __future__ import annotations
 
+import calendar
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from fpdf import FPDF
 from sqlalchemy.orm import Session
 
 from app.models.tables import (
+    Leave,
+    LeaveType,
     PayrollAuditEvent,
     PayrollItem,
     PayrollRun,
+    PayrollSetting,
     SalaryAssignment,
     SalaryStructure,
     SalaryStructureLine,
@@ -32,6 +39,7 @@ from app.models.tables import (
     User,
 )
 from app.services.v1.school_academics import (
+    LEAVE_STATUS_APPROVED,
     AcademicError,
     _commit,
     _envelope,
@@ -43,6 +51,11 @@ from app.services.v1.school_academics import (
 )
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_MONEY_Q = Decimal("0.01")
+
+
+def _money(value) -> float:
+    return float(Decimal(str(value or 0)).quantize(_MONEY_Q, rounding=ROUND_HALF_UP))
 
 
 def _parse_month(month: str | None) -> str:
@@ -50,6 +63,12 @@ def _parse_month(month: str | None) -> str:
     if not _MONTH_RE.match(label):
         raise AcademicError(422, "month must be YYYY-MM")
     return label
+
+
+def _month_bounds(period: str) -> tuple[date, date]:
+    y, m = map(int, period.split("-"))
+    last = calendar.monthrange(y, m)[1]
+    return date(y, m, 1), date(y, m, last)
 
 
 def _structure_lines(db: Session, school_id: int, structure_id: int) -> list[SalaryStructureLine]:
@@ -65,31 +84,44 @@ def _structure_lines(db: Session, school_id: int, structure_id: int) -> list[Sal
     )
 
 
-def _calc_from_structure(structure: SalaryStructure, lines: list[SalaryStructureLine]) -> dict:
-    basic = float(structure.basic or 0)
+def _calc_from_structure(
+    structure: SalaryStructure,
+    lines: list[SalaryStructureLine],
+    *,
+    attendance_adjustment: float = 0.0,
+) -> dict:
+    basic = _money(structure.basic or 0)
     earnings = []
     deductions = []
-    earn_sum = 0.0
-    ded_sum = 0.0
+    earn_sum = Decimal("0")
+    ded_sum = Decimal("0")
     for line in lines:
-        amount = float(line.amount or 0)
+        amount = _money(line.amount or 0)
         item = {"name": line.name, "amount": amount, "kind": line.kind}
         if line.kind == "deduction":
+            if amount < 0:
+                raise AcademicError(422, "Deduction amounts must be non-negative")
             deductions.append(item)
-            ded_sum += amount
+            ded_sum += Decimal(str(amount))
         else:
+            if amount < 0:
+                raise AcademicError(422, "Earning amounts must be non-negative")
             earnings.append(item)
-            earn_sum += amount
-    attendance_adjustment = 0.0
-    gross = basic + earn_sum
-    net = gross - ded_sum + attendance_adjustment
+            earn_sum += Decimal(str(amount))
+    adj = _money(attendance_adjustment)
+    gross = _money(Decimal(str(basic)) + earn_sum)
+    if basic < 0:
+        raise AcademicError(422, "basic must be non-negative")
+    net = _money(Decimal(str(gross)) - ded_sum + Decimal(str(adj)))
+    if net < 0:
+        raise AcademicError(422, "Net payable cannot be negative")
     return {
         "basic": basic,
         "allowances": earnings,
-        "allowances_total": earn_sum,
+        "allowances_total": _money(earn_sum),
         "deductions": deductions,
-        "deductions_total": ded_sum,
-        "attendance_adjustment": attendance_adjustment,
+        "deductions_total": _money(ded_sum),
+        "attendance_adjustment": adj,
         "gross": gross,
         "net": net,
     }
@@ -268,16 +300,29 @@ def _assignment_item(db: Session, row: SalaryAssignment) -> dict:
         "structure_id": row.structure_id,
         "structure_name": structure.name if structure else None,
         "effective_from": row.effective_from.isoformat() if row.effective_from else None,
+        "effective_to": row.effective_to.isoformat() if getattr(row, "effective_to", None) else None,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
 
-def list_salary_assignments(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
+def list_salary_assignments(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    include_history: bool = False,
+    staff_id: int | None = None,
+) -> dict:
     page, page_size = _page(page, page_size)
-    query = db.query(SalaryAssignment).filter(
-        SalaryAssignment.school_id == school_id,
-        SalaryAssignment.deleted_at.is_(None),
-    )
+    query = db.query(SalaryAssignment).filter(SalaryAssignment.school_id == school_id)
+    if not include_history:
+        query = query.filter(
+            SalaryAssignment.deleted_at.is_(None),
+            SalaryAssignment.effective_to.is_(None),
+        )
+    if staff_id is not None:
+        query = query.filter(SalaryAssignment.staff_id == int(staff_id))
     total = query.count()
     rows = query.order_by(SalaryAssignment.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return _envelope([_assignment_item(db, r) for r in rows], total, page, page_size)
@@ -308,31 +353,33 @@ def create_salary_assignments(db: Session, school_id: int, body: dict) -> dict:
     for raw_id in staff_ids:
         staff_id = int(raw_id)
         _same_school(db, Staff, staff_id, school_id, "Staff")
-        existing = (
+        current = (
             db.query(SalaryAssignment)
             .filter(
                 SalaryAssignment.school_id == school_id,
                 SalaryAssignment.staff_id == staff_id,
                 SalaryAssignment.deleted_at.is_(None),
+                SalaryAssignment.effective_to.is_(None),
             )
             .first()
         )
-        if existing:
-            existing.structure_id = structure_id
-            existing.effective_from = effective_from
-            existing.updated_at = now
-            created.append(existing)
-        else:
-            row = SalaryAssignment(
-                school_id=school_id,
-                staff_id=staff_id,
-                structure_id=structure_id,
-                effective_from=effective_from,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(row)
-            created.append(row)
+        if current is not None:
+            # Soft-close prior assignment (history retained).
+            current.effective_to = effective_from - timedelta(days=1)
+            if current.effective_to < current.effective_from:
+                current.effective_to = current.effective_from
+            current.updated_at = now
+        row = SalaryAssignment(
+            school_id=school_id,
+            staff_id=staff_id,
+            structure_id=structure_id,
+            effective_from=effective_from,
+            effective_to=None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+        created.append(row)
     _commit(db)
     for row in created:
         db.refresh(row)
@@ -344,6 +391,30 @@ def create_salary_assignments(db: Session, school_id: int, body: dict) -> dict:
     }
 
 
+def _assignment_for_month(
+    db: Session, school_id: int, staff_id: int, period: str
+) -> SalaryAssignment | None:
+    """Resolve structure assignment effective on the last day of the payroll month."""
+    _start, month_end = _month_bounds(period)
+    rows = (
+        db.query(SalaryAssignment)
+        .filter(
+            SalaryAssignment.school_id == school_id,
+            SalaryAssignment.staff_id == staff_id,
+            SalaryAssignment.deleted_at.is_(None),
+            SalaryAssignment.effective_from <= month_end,
+        )
+        .order_by(SalaryAssignment.effective_from.desc(), SalaryAssignment.id.desc())
+        .all()
+    )
+    for row in rows:
+        if row.effective_to is None or row.effective_to >= month_end:
+            return row
+        if row.effective_from <= month_end <= row.effective_to:
+            return row
+    return None
+
+
 def _active_assignment(db: Session, school_id: int, staff_id: int) -> SalaryAssignment | None:
     return (
         db.query(SalaryAssignment)
@@ -351,28 +422,70 @@ def _active_assignment(db: Session, school_id: int, staff_id: int) -> SalaryAssi
             SalaryAssignment.school_id == school_id,
             SalaryAssignment.staff_id == staff_id,
             SalaryAssignment.deleted_at.is_(None),
+            SalaryAssignment.effective_to.is_(None),
         )
         .first()
     )
 
 
-def _processed_run_for_period(db: Session, school_id: int, period: str) -> PayrollRun | None:
+def _processed_or_paid_run(db: Session, school_id: int, period: str) -> PayrollRun | None:
     return (
         db.query(PayrollRun)
         .filter(
             PayrollRun.school_id == school_id,
             PayrollRun.period_label == period,
             PayrollRun.deleted_at.is_(None),
-            PayrollRun.status == "processed",
+            PayrollRun.status.in_(["processed", "paid"]),
         )
         .first()
     )
 
 
-def _preview_line(db: Session, school_id: int, staff: Staff) -> dict:
+def _processed_run_for_period(db: Session, school_id: int, period: str) -> PayrollRun | None:
+    return _processed_or_paid_run(db, school_id, period)
+
+
+def _payroll_settings(db: Session, school_id: int) -> PayrollSetting | None:
+    return (
+        db.query(PayrollSetting)
+        .filter(PayrollSetting.school_id == school_id, PayrollSetting.deleted_at.is_(None))
+        .first()
+    )
+
+
+def _unpaid_leave_days(db: Session, school_id: int, user_id: int, period: str) -> int:
+    start, end = _month_bounds(period)
+    leaves = (
+        db.query(Leave)
+        .filter(
+            Leave.school_id == school_id,
+            Leave.user_id == user_id,
+            Leave.status == LEAVE_STATUS_APPROVED,
+            Leave.from_date <= end,
+            Leave.to_date >= start,
+        )
+        .all()
+    )
+    days = 0
+    for lv in leaves:
+        unpaid = True
+        if lv.leave_type_id:
+            lt = db.get(LeaveType, lv.leave_type_id)
+            if lt is not None and lt.school_id == school_id and int(lt.is_paid or 0) == 1:
+                unpaid = False
+        if not unpaid:
+            continue
+        a = max(lv.from_date, start)
+        b = min(lv.to_date, end)
+        if b >= a:
+            days += (b - a).days + 1
+    return days
+
+
+def _preview_line(db: Session, school_id: int, staff: Staff, period: str) -> dict:
     user = db.get(User, staff.user_id)
     name = _user_name(user) if user else f"Staff {staff.id}"
-    assignment = _active_assignment(db, school_id, staff.id)
+    assignment = _assignment_for_month(db, school_id, staff.id, period)
     if assignment is None:
         return {
             "staff_id": staff.id,
@@ -391,7 +504,18 @@ def _preview_line(db: Session, school_id: int, staff: Staff) -> dict:
         }
     structure = _owned(db, SalaryStructure, assignment.structure_id, school_id)
     lines = _structure_lines(db, school_id, structure.id)
-    calc = _calc_from_structure(structure, lines)
+    settings = _payroll_settings(db, school_id)
+    adj = 0.0
+    working_days = int(settings.working_days_per_month) if settings and settings.working_days_per_month else 30
+    unpaid_days = 0
+    base = _calc_from_structure(structure, lines, attendance_adjustment=0)
+    if settings and int(getattr(settings, "apply_unpaid_leave_adjustment", 0) or 0) == 1:
+        unpaid_days = _unpaid_leave_days(db, school_id, staff.user_id, period)
+        if unpaid_days and working_days > 0:
+            daily = Decimal(str(base["gross"])) / Decimal(str(working_days))
+            adj = _money(-(daily * Decimal(str(unpaid_days))))
+    calc = _calc_from_structure(structure, lines, attendance_adjustment=adj)
+    paid_days = max(0, working_days - unpaid_days) if settings and int(getattr(settings, "apply_unpaid_leave_adjustment", 0) or 0) else None
     return {
         "staff_id": staff.id,
         "name": name,
@@ -401,8 +525,9 @@ def _preview_line(db: Session, school_id: int, staff: Staff) -> dict:
         "allowances": calc["allowances_total"],
         "deductions": calc["deductions_total"],
         "attendance_adjustment": calc["attendance_adjustment"],
-        "working_days": None,
-        "paid_days": None,
+        "working_days": working_days if paid_days is not None else None,
+        "paid_days": paid_days,
+        "unpaid_leave_days": unpaid_days if paid_days is not None else 0,
         "gross": calc["gross"],
         "net": calc["net"],
         "eligible": True,
@@ -411,11 +536,20 @@ def _preview_line(db: Session, school_id: int, staff: Staff) -> dict:
     }
 
 
-def payroll_preview(db: Session, school_id: int, month: str) -> dict:
+def payroll_preview(
+    db: Session,
+    school_id: int,
+    month: str,
+    *,
+    department: str | None = None,
+) -> dict:
     period = _parse_month(month)
-    staff_rows = db.query(Staff).filter(Staff.school_id == school_id).order_by(Staff.id.asc()).all()
-    items = [_preview_line(db, school_id, s) for s in staff_rows]
-    total_net = sum(float(i.get("net") or 0) for i in items if i.get("eligible"))
+    q = db.query(Staff).filter(Staff.school_id == school_id)
+    if department and department.strip():
+        q = q.filter(Staff.department.ilike(department.strip()))
+    staff_rows = q.order_by(Staff.id.asc()).all()
+    items = [_preview_line(db, school_id, s, period) for s in staff_rows]
+    total_net = _money(sum(float(i.get("net") or 0) for i in items if i.get("eligible")))
     already = _processed_run_for_period(db, school_id, period) is not None
     return {
         "month": period,
@@ -425,14 +559,26 @@ def payroll_preview(db: Session, school_id: int, month: str) -> dict:
     }
 
 
-def _audit(db: Session, school_id: int, run_id: int | None, actor_user_id: int | None, action: str, detail: dict | None = None) -> None:
+def _audit(
+    db: Session,
+    school_id: int,
+    run_id: int | None,
+    actor_user_id: int | None,
+    action: str,
+    detail: dict | None = None,
+    *,
+    actor_v1: str | None = None,
+) -> None:
+    payload = dict(detail or {})
+    if actor_v1:
+        payload["actor_v1"] = str(actor_v1)
     db.add(
         PayrollAuditEvent(
             school_id=school_id,
             run_id=run_id,
             actor_user_id=actor_user_id,
             action=action,
-            detail_json=json.dumps(detail) if detail is not None else None,
+            detail_json=json.dumps(payload) if payload else None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -446,7 +592,16 @@ def process_payroll(
     *,
     idempotency_key: str | None = None,
     actor_user_id: int | None = None,
+    actor_v1: str | None = None,
 ) -> dict:
+    # Client-supplied line amounts are never accepted — process is structure-driven only.
+    forbidden = [k for k in ("items", "total_amount", "gross", "net", "deductions") if k in body and body.get(k) is not None]
+    if forbidden:
+        raise AcademicError(
+            422,
+            "Client-supplied payroll amounts are not accepted. "
+            "Send only {month}; amounts come from salary structures and preview.",
+        )
     period = _parse_month(body.get("month") or body.get("period_label"))
     if idempotency_key:
         existing_key = (
@@ -467,78 +622,93 @@ def process_payroll(
 
     preview = payroll_preview(db, school_id, period)
     now = _now()
-    run = PayrollRun(
-        school_id=school_id,
-        period_label=period,
-        run_date=date.today(),
-        status="processed",
-        total_amount=0,
-        processed_at=now,
-        idempotency_key=idempotency_key,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(run)
-    db.flush()
+    try:
+        run = PayrollRun(
+            school_id=school_id,
+            period_label=period,
+            run_date=date.today(),
+            status="processed",
+            total_amount=0,
+            processed_at=now,
+            idempotency_key=idempotency_key,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(run)
+        db.flush()
 
-    processed = 0
-    failed = 0
-    total = 0.0
-    for line in preview["items"]:
-        staff_id = int(line["staff_id"])
-        if not line.get("eligible"):
-            failed += 1
+        processed = 0
+        failed = 0
+        total = 0.0
+        for line in preview["items"]:
+            staff_id = int(line["staff_id"])
+            if not line.get("eligible"):
+                failed += 1
+                db.add(
+                    PayrollItem(
+                        school_id=school_id,
+                        run_id=run.id,
+                        staff_id=staff_id,
+                        gross=0,
+                        deductions=0,
+                        net=0,
+                        breakdown_json=json.dumps(line),
+                        payslip_ref=None,
+                        status="failed",
+                        failure_reason=line.get("problem") or "Ineligible",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                continue
+            breakdown = line.get("breakdown") or {}
+            # Always take server-calculated breakdown; never trust client body amounts.
+            gross = _money(breakdown.get("gross") or line.get("gross") or 0)
+            deductions = _money(breakdown.get("deductions_total") or line.get("deductions") or 0)
+            net = _money(breakdown.get("net") or line.get("net") or 0)
+            total = _money(total + net)
+            processed += 1
+            ref = f"PS-{school_id}-{period}-{staff_id}-{run.id}"
             db.add(
                 PayrollItem(
                     school_id=school_id,
                     run_id=run.id,
                     staff_id=staff_id,
-                    gross=0,
-                    deductions=0,
-                    net=0,
-                    breakdown_json=json.dumps(line),
-                    payslip_ref=None,
-                    status="failed",
-                    failure_reason=line.get("problem") or "Ineligible",
+                    gross=gross,
+                    deductions=deductions,
+                    net=net,
+                    breakdown_json=json.dumps(breakdown),
+                    payslip_ref=ref,
+                    status="processed",
                     created_at=now,
                     updated_at=now,
                 )
             )
-            continue
-        breakdown = line.get("breakdown") or {}
-        gross = float(breakdown.get("gross") or line.get("gross") or 0)
-        deductions = float(breakdown.get("deductions_total") or line.get("deductions") or 0)
-        net = float(breakdown.get("net") or line.get("net") or 0)
-        total += net
-        processed += 1
-        ref = f"PS-{school_id}-{period}-{staff_id}-{run.id}"
-        db.add(
-            PayrollItem(
-                school_id=school_id,
-                run_id=run.id,
-                staff_id=staff_id,
-                gross=gross,
-                deductions=deductions,
-                net=net,
-                breakdown_json=json.dumps(breakdown),
-                payslip_ref=ref,
-                status="processed",
-                created_at=now,
-                updated_at=now,
-            )
+        run.total_amount = _money(total)
+        _audit(
+            db,
+            school_id,
+            run.id,
+            actor_user_id,
+            "process",
+            {"month": period, "processed": processed, "failed": failed},
+            actor_v1=actor_v1,
         )
-    run.total_amount = total
-    _audit(
-        db,
-        school_id,
-        run.id,
-        actor_user_id,
-        "process",
-        {"month": period, "processed": processed, "failed": failed},
-    )
-    _commit(db)
-    db.refresh(run)
-    return {"processed": processed, "failed": failed, "run_id": run.id, "month": period, "total_net": total}
+        _commit(db)
+        db.refresh(run)
+        return {
+            "processed": processed,
+            "failed": failed,
+            "run_id": run.id,
+            "month": period,
+            "total_net": _money(total),
+        }
+    except AcademicError:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _process_result(db: Session, school_id: int, run: PayrollRun) -> dict:
@@ -598,13 +768,81 @@ def payroll_summary(db: Session, school_id: int, year: int) -> list[dict]:
             )
             .all()
         )
-        if run.status == "processed":
+        if run.status in ("processed", "paid"):
             bucket["processed"] = sum(1 for i in items if i.status == "processed")
             bucket["failed"] = sum(1 for i in items if i.status == "failed")
-            bucket["total_net"] = float(run.total_amount or 0)
+            bucket["total_net"] = _money(run.total_amount or 0)
+            if run.status == "paid":
+                bucket["paid"] = 1
         else:
             bucket["pending"] = len(items) or 1
     return [by_month[f"{yr}-{m:02d}"] for m in range(1, 13)]
+
+
+def mark_payroll_paid(
+    db: Session,
+    school_id: int,
+    run_id: int,
+    *,
+    actor_user_id: int | None = None,
+    actor_v1: str | None = None,
+) -> dict:
+    run = _owned(db, PayrollRun, run_id, school_id)
+    if run.status == "paid":
+        return _row_run(run)
+    if run.status != "processed":
+        raise AcademicError(409, "Only processed payroll runs can be marked paid")
+    run.status = "paid"
+    run.updated_at = _now()
+    _audit(
+        db,
+        school_id,
+        run.id,
+        actor_user_id,
+        "mark_paid",
+        {"month": run.period_label},
+        actor_v1=actor_v1,
+    )
+    _commit(db)
+    db.refresh(run)
+    return _row_run(run)
+
+
+def _row_run(run: PayrollRun) -> dict:
+    return {
+        "id": run.id,
+        "school_id": run.school_id,
+        "period_label": run.period_label,
+        "run_date": run.run_date.isoformat() if run.run_date else None,
+        "status": run.status,
+        "total_amount": _money(run.total_amount or 0),
+        "processed_at": run.processed_at.isoformat() if run.processed_at else None,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "updated_at": run.updated_at.isoformat() if run.updated_at else None,
+    }
+
+
+def list_payroll_audit_events(
+    db: Session, school_id: int, *, page: int = 1, page_size: int = 20, run_id: int | None = None
+) -> dict:
+    page, page_size = _page(page, page_size)
+    q = db.query(PayrollAuditEvent).filter(PayrollAuditEvent.school_id == school_id)
+    if run_id is not None:
+        q = q.filter(PayrollAuditEvent.run_id == int(run_id))
+    total = q.count()
+    rows = q.order_by(PayrollAuditEvent.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    items = [
+        {
+            "id": r.id,
+            "run_id": r.run_id,
+            "actor_user_id": r.actor_user_id,
+            "action": r.action,
+            "detail_json": r.detail_json,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+    return _envelope(items, total, page, page_size)
 
 
 def _payslip_item(db: Session, item: PayrollItem, run: PayrollRun | None = None) -> dict:
@@ -648,6 +886,7 @@ def list_payslips(
     month: str | None = None,
     staff_id: int | None = None,
     status_filter: str | None = None,
+    department: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> dict:
@@ -660,6 +899,19 @@ def list_payslips(
         query = query.filter(PayrollItem.staff_id == int(staff_id))
     if status_filter:
         query = query.filter(PayrollItem.status == status_filter)
+    if department and department.strip():
+        staff_ids = [
+            s.id
+            for s in db.query(Staff)
+            .filter(
+                Staff.school_id == school_id,
+                Staff.department.ilike(department.strip()),
+            )
+            .all()
+        ]
+        if not staff_ids:
+            return _envelope([], 0, page, page_size)
+        query = query.filter(PayrollItem.staff_id.in_(staff_ids))
     if month:
         period = _parse_month(month)
         run_ids = [

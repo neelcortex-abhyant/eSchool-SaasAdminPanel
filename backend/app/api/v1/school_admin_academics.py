@@ -5,12 +5,14 @@ from __future__ import annotations
 from datetime import date as Date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
 from app.api.v1.deps import AuthContext, assert_school_permission, require_school_admin
+from app.core.database import session_factory
+from app.services.v1 import notification_delivery as notif_delivery
 from app.models.tables import (
     Announcement,
     Attendance,
@@ -84,6 +86,9 @@ class WriteBody(BaseModel):
     status: int | None = None
     default: int | None = None
     include_semesters: int | None = None
+    leave_type_id: int | None = Field(default=None, ge=1)
+    leave_type: str | None = Field(default=None, max_length=128)
+    leave_type_code: str | None = Field(default=None, max_length=64)
 
 
 def _school_id(auth: AuthContext) -> int:
@@ -178,6 +183,70 @@ def get_teacher_assignment(
 ):
     assert_school_permission(auth, db, rbac.PERM_TEACHERS)
     return _run(lambda: academics.get_teacher_assignment(db, _school_id(auth), row_id))
+
+
+@router.post("/leaves/{row_id}/approve", responses=core_out.json_response(core_out.AcademicResourceOut))
+def approve_leave(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    background: BackgroundTasks,
+):
+    assert_school_permission(auth, db, rbac.PERM_TEACHERS)
+    result = _run(
+        lambda: academics.approve_leave(
+            db,
+            _school_id(auth),
+            row_id,
+            actor_user_id=None,
+            actor_v1=str(auth.user.id),
+        )
+    )
+    nid = result.get("notification_id")
+    if nid:
+        notif_delivery.schedule_delivery_background(background, session_factory(), int(nid))
+    return result
+
+
+@router.post("/leaves/{row_id}/reject", responses=core_out.json_response(core_out.AcademicResourceOut))
+def reject_leave(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    background: BackgroundTasks,
+):
+    assert_school_permission(auth, db, rbac.PERM_TEACHERS)
+    result = _run(
+        lambda: academics.reject_leave(
+            db,
+            _school_id(auth),
+            row_id,
+            actor_user_id=None,
+            actor_v1=str(auth.user.id),
+        )
+    )
+    nid = result.get("notification_id")
+    if nid:
+        notif_delivery.schedule_delivery_background(background, session_factory(), int(nid))
+    return result
+
+
+@router.post("/leaves/{row_id}/cancel", responses=core_out.json_response(core_out.AcademicResourceOut))
+def cancel_leave(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    assert_school_permission(auth, db, rbac.PERM_TEACHERS)
+    return _run(
+        lambda: academics.cancel_leave(
+            db,
+            _school_id(auth),
+            row_id,
+            actor_user_id=None,
+            actor_v1=str(auth.user.id),
+        )
+    )
 
 
 @router.get("/{resource}", responses=core_out.json_response(core_out.AcademicListOut))

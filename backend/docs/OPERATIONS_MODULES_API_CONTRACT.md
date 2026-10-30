@@ -13,27 +13,27 @@ General rules (same as the other v1 school-admin routes):
 - Lists return `{items, total, page, page_size}`; `page_size` max 50.
 - 422 `detail` lists or sentences for validation, 409 sentences for conflicts.
 
-## Status (checked 29 Oct 2026 against Render after 28063f7)
+## Status (checked 30 Oct 2026 — four-modules backend wave)
 
-Now used from the server: trips (`/transport-trips`, start/complete, board/drop events, `/transport/reports/trips`),
-vehicle driver/helper (`driver_staff_id`, `helper_staff_id`), fee installments, receipts and receipt PDF, payment
-cancel, fee collection report, salary components, report-card PDF, timetable `room`, public `/public/schools/by-host`.
+Backend now includes (migration `0044` authored, Neon apply **UNVERIFIED**): staff attendance status enum + enriched
+reports; leave approve/reject/cancel + `leave_type_id` on academics WriteBody; salary assignment history /
+unpaid-leave payroll adjustment / mark-paid / dept filters; portal announcement audience filters; notification
+get/cancel + BackgroundTasks delivery (queued without FCM); messaging unread-count + safer admin actor +
+storage-gated attachments. See `school-admin-four-modules-implementation-report.md`.
 
-Still needed (sections below): an admin read of GPS positions (`GET /transport/vehicle-locations`, or latest GPS on
-trips), payroll preview/process/payslips and salary structures with assignments, announcement/notification
-audience, status and delivery, the messaging routes, `leave_type` on leaves, staff certificates and ID-card QR.
-Note: the students list schema lists `user_id`, but the list rows don't include it yet (`_student_list_row`).
+Earlier live on Render (post six-features): trips, GPS locations, fee installments/receipts, salary components,
+report-card PDF, certificates, messaging base routes, leave-types/balances.
 
 ## 0. Already used from the server (no change needed)
 
 | Area | Routes |
 |---|---|
 | Vehicles, routes, stops, student transport | `/vehicles`, `/transport-routes`, `/transport-stops`, `/student-transport-assignments` |
-| Staff attendance | `POST /staff-attendance` (upserts the day: status, check_in, check_out, remark), `GET /staff-attendance/register?attendance_date=`, `/today`, `/reports?from_date=&to_date=` |
-| Leave | `GET/POST /academics/leaves`, `PATCH /academics/leaves/{id}` `{status: 0 pending, 1 approved, 2 rejected}` |
-| Leave types | `GET/PUT /leave-settings` — admin-web stores `policy.types = [{key, name, days_per_year, applies_to}]` |
-| Payroll (simple) | `/payroll-runs`, `/payroll-settings`, salary on `PATCH /teachers/{id}` and `/staff/{id}` |
-| Announcements / notifications | `GET/POST /announcements` (title, description, session_year_id), `GET/POST /notifications` (title, body, status) |
+| Staff attendance | `POST /staff-attendance` (status enum present/absent/late/half_day/leave), `GET /staff-attendance/register`, `/today`, `/reports?from_date=&to_date=` (counts late/half_day/leave) |
+| Leave | `GET/POST /academics/leaves` (`leave_type_id`/`leave_type`), `POST /academics/leaves/{id}/approve\|reject\|cancel` (status 0/1/2/3); overlap + balance gate on approve |
+| Leave types | `GET/POST/PATCH/DELETE /leave-types`, `GET /leave-balances`, `GET/PUT /leave-settings` |
+| Payroll | `/salary-structures*`, `/salary-assignments`, `/payroll/preview\|process\|summary`, `/payslips*`, `POST /payroll-runs/{id}/mark-paid`, `/payroll/audit-events`; legacy `POST /payroll-runs` deprecated |
+| Announcements / notifications | announcements audience/status/publish_at; notifications audience + delivery queued; `GET/POST …/notifications/{id}/cancel` |
 | Certificates and ID cards | `/certificate-templates`, `POST /certificates/issue`, `GET /students/{id}/id-card`, `GET /staff/{id}/id-card`, `/id-card-settings` |
 
 Small additions that would remove workarounds:
@@ -78,12 +78,15 @@ Permission: fees (or a payroll permission). **The server calculates every amount
 |---|---|---|
 | GET/POST | `/salary-structures` | `{name, basic, allowances:[{name, amount}], deductions:[{name, amount}]}`; response adds `gross`, `net`, `assigned` |
 | PATCH/DELETE | `/salary-structures/{id}` | 409 when employees are on it |
-| GET/POST | `/salary-assignments` | POST `{staff_ids:[...], structure_id, effective_from}` |
-| GET | `/payroll/preview?month=YYYY-MM` | `{items: PreviewLine[], total_net, already_processed}` |
-| POST | `/payroll/process` | `{month}` + `Idempotency-Key` header; 409 if the month is already processed; returns `{processed, failed}` |
+| GET/POST | `/salary-assignments` | POST `{staff_ids:[...], structure_id, effective_from}` soft-closes prior assignment; GET `?include_history=&staff_id=` |
+| GET | `/payroll/preview?month=YYYY-MM&department=` | `{items: PreviewLine[], total_net, already_processed}` |
+| POST | `/payroll/process` | `{month}` + `Idempotency-Key`; 409 if processed/paid; authoritative structure path |
+| POST | `/payroll-runs/{id}/mark-paid` | Only from `processed` → `paid` |
+| GET | `/payroll/audit-events?run_id=&page=` | Process / mark-paid audit trail |
 | GET | `/payslips?month=&staff_id=&status=&department=&page=` | |
 | GET | `/payslips/{id}` (and `/payslips/{id}/pdf` if available) | |
-| GET | `/payroll/summary?year=` | `[{month, processed, pending, failed, total_net}]` |
+| GET | `/payroll/summary?year=` | `[{month, processed, pending, failed, total_net, paid?}]` |
+| GET/PUT | `/payroll-settings` | Includes `apply_unpaid_leave_adjustment`, `working_days_per_month` |
 
 ```json
 PreviewLine = { "staff_id": 5, "name": "...", "department": "...", "structure_name": "...|null", "basic": 30000,
@@ -97,22 +100,23 @@ Payslip = { "id": 1, "month": "2026-10", "staff_id": 5, "name": "...", "employee
 
 ## 3. Announcements and notifications (`notices`)
 
-Extend the existing routes:
-- `POST /announcements` and new `PATCH/DELETE /announcements/{id}` accept `audience: ["all"|"students"|"parents"|"teachers"|"staff"]`,
-  `publish_at` (ISO, optional; future = scheduled) and `status: "draft"|"scheduled"|"published"`. Lists return the same fields and support `?status=&q=&from_date=&to_date=`.
-- `POST /notifications` accepts `audience`; lists return `audience`, `delivery: "queued"|"sent"|"partial"|"failed"`,
-  `recipients`, `delivered`, `failed`, `failure_reason`, and support `?q=&from_date=&to_date=&delivery=`.
-
-Until then admin-web saves to the existing routes and keeps audience, publish date, drafts and sample delivery figures in the browser.
+- `POST/PATCH/DELETE /announcements/{id}` accept `audience: ["all"|"students"|"parents"|"teachers"|"staff"]`,
+  `publish_at` and `status: "draft"|"scheduled"|"published"|"archived"`. Lists support `?status=&q=`.
+- Portal student/parent announcement lists return **published** rows only, matching audience (`all` or role), excluding soft-deleted.
+- `POST /notifications` accepts `audience`; delivery starts `queued`; BackgroundTasks attempts FCM only when
+  `firebase_private_key` is configured (otherwise remains queued — never fake `sent`).
+- `GET /notifications/{id}`, `POST /notifications/{id}/cancel` (queued/partial only).
+- Domain events enqueue rows: leave approve/reject, homework create (at minimum).
 
 ## 4. Teacher–parent messages (`messaging`)
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/messaging/policy` | `{can_view, can_send, can_moderate, poll_seconds}` for this admin, from school policy |
+| GET | `/conversations/unread-count` | Aggregate `{unread, conversations:[{conversation_id, unread}]}` |
 | GET | `/conversations?q=&unread=&flagged=&page=` | Only conversations this admin may see |
 | GET | `/conversations/{id}/messages?page=` | 403 if the policy doesn't allow it |
-| POST | `/conversations/{id}/messages` | `{body}` (max 2000), sent as the school |
+| POST | `/conversations/{id}/messages` | `{body, attachments?}`; attachments require document storage; sent as school-admin actor (not teacher) |
 | POST | `/conversations/{id}/read` | Clears unread for this admin |
 | PATCH | `/conversations/{id}` | `{flagged}` (moderators) |
 | PATCH | `/messages/{id}` | `{hidden}` (moderators); hidden messages return `hidden: true` and moderators still see the text |
