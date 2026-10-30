@@ -335,6 +335,39 @@ class PayrollRunCreateBody(_MgmtBase):
     items: list[PayrollRunItemIn] = Field(..., min_length=1)
 
 
+class SalaryLineIn(_MgmtBase):
+    name: str = Field(..., min_length=1)
+    amount: float = 0
+    component_id: int | None = Field(default=None, ge=1)
+
+
+class SalaryStructureCreateBody(_MgmtBase):
+    name: str = Field(..., min_length=1)
+    basic: float = 0
+    allowances: list[SalaryLineIn] = Field(default_factory=list)
+    deductions: list[SalaryLineIn] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class SalaryStructurePatchBody(_MgmtBase):
+    name: str | None = Field(default=None, min_length=1)
+    basic: float | None = None
+    allowances: list[SalaryLineIn] | None = None
+    deductions: list[SalaryLineIn] | None = None
+    is_active: bool | None = None
+
+
+class SalaryAssignmentCreateBody(_MgmtBase):
+    structure_id: int = Field(..., ge=1)
+    staff_ids: list[int] = Field(default_factory=list)
+    staff_id: int | None = Field(default=None, ge=1)
+    effective_from: Date | None = None
+
+
+class PayrollProcessBody(_MgmtBase):
+    month: str = Field(..., min_length=7, max_length=7, description="YYYY-MM")
+
+
 # ---- Certificates / ID cards ----
 
 
@@ -352,7 +385,15 @@ class CertificateTemplatePatchBody(_MgmtBase):
 
 class CertificateIssueBody(_MgmtBase):
     template_id: int = Field(..., ge=1)
-    student_id: int = Field(..., ge=1)
+    student_id: int | None = Field(default=None, ge=1)
+    staff_id: int | None = Field(default=None, ge=1)
+    certificate_no: str | None = None
+    data: dict[str, Any] | list[Any] | None = None
+
+
+class CertificateIssueStaffBody(_MgmtBase):
+    template_id: int = Field(..., ge=1)
+    staff_id: int = Field(..., ge=1)
     certificate_no: str | None = None
     data: dict[str, Any] | list[Any] | None = None
 
@@ -383,6 +424,7 @@ class NotificationCreateBody(_MgmtBase):
     title: str = Field(..., min_length=1)
     body: str | None = None
     status: int = 1
+    audience: list[str] | None = None
 
 
 class AnnouncementCreateBody(_MgmtBase):
@@ -390,6 +432,19 @@ class AnnouncementCreateBody(_MgmtBase):
     session_year_id: int = Field(..., ge=1)
     description: str | None = None
     body: str | None = Field(default=None, description="Alias for description")
+    audience: list[str] | None = None
+    publish_at: str | None = None
+    status: str | None = Field(default=None, description="draft|scheduled|published|archived")
+
+
+class AnnouncementPatchBody(_MgmtBase):
+    title: str | None = Field(default=None, min_length=1)
+    session_year_id: int | None = Field(default=None, ge=1)
+    description: str | None = None
+    body: str | None = None
+    audience: list[str] | None = None
+    publish_at: str | None = None
+    status: str | None = None
 
 
 class SliderCreateBody(_MgmtBase):

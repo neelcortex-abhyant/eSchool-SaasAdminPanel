@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -19,6 +20,7 @@ from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
 from app.api.v1 import school_admin_erp as erp_routes
+from app.api.v1 import school_admin_messaging as messaging_routes
 from app.api.v1 import school_admin_mgmt as mgmt_routes
 from app.api.v1 import school_admin_settings as settings_routes
 from app.services.v1 import person_documents as docs_svc
@@ -64,6 +66,7 @@ router.include_router(academics_routes.router)
 router.include_router(mgmt_routes.router)
 router.include_router(erp_routes.router)
 router.include_router(settings_routes.router)
+router.include_router(messaging_routes.router)
 
 
 class ClassWriteBody(BaseModel):
@@ -459,7 +462,7 @@ def _timetable_write_body(body) -> dict:
     return data
 
 
-async def _read_upload(file: UploadFile) -> tuple[bytes, str | None]:
+async def _read_upload(file: UploadFile, *, too_large_status: int = 422) -> tuple[bytes, str | None]:
     settings = get_settings()
     limit = max(settings.document_max_image_bytes, settings.document_max_file_bytes)
     chunks: list[bytes] = []
@@ -470,9 +473,27 @@ async def _read_upload(file: UploadFile) -> tuple[bytes, str | None]:
             break
         total += len(chunk)
         if total > limit:
-            raise HTTPException(status_code=422, detail="File exceeds maximum allowed size")
+            raise HTTPException(status_code=too_large_status, detail="File exceeds maximum allowed size")
         chunks.append(chunk)
     return b"".join(chunks), file.filename
+
+
+_PRIVATE_FILE_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+
+
+def _download_response(data: bytes, content_type: str, filename: str | None) -> Response:
+    """Private attachment response. Headers are latin-1, so the plain filename is ASCII-only."""
+    safe_name = (filename or "download").replace('"', "").replace("\r", "").replace("\n", "")
+    ascii_name = safe_name.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(safe_name)}',
+        **_PRIVATE_FILE_HEADERS,
+    }
+    return Response(content=data, media_type=content_type, headers=headers)
+
+
+def _private_image_response(data: bytes, content_type: str) -> Response:
+    return Response(content=data, media_type=content_type, headers=dict(_PRIVATE_FILE_HEADERS))
 
 
 @router.get("/me", response_model=UserResponse)
@@ -840,7 +861,7 @@ async def upload_student_photo(
     db: Annotated[Session, Depends(central_db)],
     file: UploadFile = File(...),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     result = _run(
         lambda: docs_svc.upload_photo(
             db, _school_id(auth), "student", student_id, data=data, filename=filename
@@ -858,7 +879,7 @@ def get_student_photo(
     data, content_type = _run(
         lambda: docs_svc.get_profile_photo_bytes(db, _school_id(auth), "student", student_id)
     )
-    return Response(content=data, media_type=content_type, headers={"X-Content-Type-Options": "nosniff"})
+    return _private_image_response(data, content_type)
 
 
 @router.post("/students/{student_id}/documents", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.PersonDocumentOut, status_code=201))
@@ -870,7 +891,7 @@ async def upload_student_document(
     title: str = Form(default=""),
     category: str = Form(default="other"),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     return _run(
         lambda: docs_svc.upload_document(
             db,
@@ -947,10 +968,7 @@ def download_student_document(
             db, _school_id(auth), "student", student_id, document_id
         )
     )
-    headers = {"X-Content-Type-Options": "nosniff"}
-    if filename:
-        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return Response(content=data, media_type=content_type, headers=headers)
+    return _download_response(data, content_type, filename)
 
 
 @router.get("/parents", responses=core_out.json_response(core_out.ParentListOut))
@@ -1120,7 +1138,7 @@ async def upload_teacher_document(
     category: str = Form(default="other"),
     title: str = Form(default=""),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     return _run(
         lambda: docs_svc.upload_document(
             db,
@@ -1183,10 +1201,7 @@ def download_teacher_document(
             db, _school_id(auth), "teacher", teacher_id, document_id
         )
     )
-    headers = {}
-    if filename:
-        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return Response(content=data, media_type=content_type, headers=headers)
+    return _download_response(data, content_type, filename)
 
 
 @router.delete("/teachers/{teacher_id}/documents/{document_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
@@ -1210,7 +1225,7 @@ async def upload_teacher_photo(
     db: Annotated[Session, Depends(central_db)],
     file: UploadFile = File(...),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     result = _run(
         lambda: docs_svc.upload_photo(
             db, _school_id(auth), "teacher", teacher_id, data=data, filename=filename
@@ -1230,7 +1245,7 @@ def get_teacher_photo(
             db, _school_id(auth), "teacher", teacher_id
         )
     )
-    return Response(content=data, media_type=content_type)
+    return _private_image_response(data, content_type)
 
 
 # --- Module 2: Teacher timetable views (read-only; writes stay on /timetable-entries) ---
@@ -1411,7 +1426,7 @@ async def upload_staff_document(
     category: str = Form(default="other"),
     title: str = Form(default=""),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     return _run(
         lambda: docs_svc.upload_document(
             db,
@@ -1474,10 +1489,7 @@ def download_staff_document(
             db, _school_id(auth), "staff", staff_id, document_id
         )
     )
-    headers = {}
-    if filename:
-        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return Response(content=data, media_type=content_type, headers=headers)
+    return _download_response(data, content_type, filename)
 
 
 @router.delete("/staff/{staff_id}/documents/{document_id}", responses=core_out.json_response(core_out.SoftDeletedOut))
@@ -1501,7 +1513,7 @@ async def upload_staff_photo(
     db: Annotated[Session, Depends(central_db)],
     file: UploadFile = File(...),
 ) -> dict:
-    data, filename = await _read_upload(file)
+    data, filename = await _read_upload(file, too_large_status=413)
     result = _run(
         lambda: docs_svc.upload_photo(
             db, _school_id(auth), "staff", staff_id, data=data, filename=filename
@@ -1519,7 +1531,7 @@ def get_staff_photo(
     data, content_type = _run(
         lambda: docs_svc.get_profile_photo_bytes(db, _school_id(auth), "staff", staff_id)
     )
-    return Response(content=data, media_type=content_type)
+    return _private_image_response(data, content_type)
 
 
 @router.get("/people", responses=core_out.json_response(core_out.PeopleListOut))
@@ -1936,18 +1948,6 @@ class StudyMaterialUpdateBody(BaseModel):
 
 def _material_write_body(body) -> dict[str, Any]:
     return materials_svc.sanitize_material_body(body.model_dump(exclude_unset=True))
-
-
-def _download_response(data: bytes, content_type: str, filename: str | None) -> Response:
-    from urllib.parse import quote
-
-    safe_name = (filename or "download").replace('"', "")
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"; filename*=UTF-8\'\'{quote(safe_name)}',
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, no-store",
-    }
-    return Response(content=data, media_type=content_type, headers=headers)
 
 
 @router.post("/study-materials", status_code=status.HTTP_201_CREATED, responses=settings_out.json_response(settings_out.StudyMaterialOut, status_code=201))

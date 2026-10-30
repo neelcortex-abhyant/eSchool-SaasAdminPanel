@@ -1129,6 +1129,30 @@ class Staff(Base, TimestampMixin):
     designation: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
 
+class LeaveType(Base, TimestampMixin):
+    __tablename__ = "leave_types"
+    __table_args__ = (
+        Index(
+            "uq_leave_types_school_code_active",
+            "school_id",
+            "code",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_paid: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    days_per_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    applies_to: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class Leave(Base, TimestampMixin):
     __tablename__ = "leaves"
 
@@ -1140,16 +1164,27 @@ class Leave(Base, TimestampMixin):
     status: Mapped[int] = mapped_column(Integer, default=0)
     school_id: Mapped[int] = mapped_column(Integer)
     session_year_id: Mapped[int] = mapped_column(Integer)
+    leave_type_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("leave_types.id"), nullable=True, index=True
+    )
 
 
 class Announcement(Base, TimestampMixin):
     __tablename__ = "announcements"
+    __table_args__ = (Index("ix_announcements_school_status", "school_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(128))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     session_year_id: Mapped[int] = mapped_column(Integer)
     school_id: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="published", server_default="published"
+    )
+    audience_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    publish_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Package(Base, TimestampMixin):
@@ -1447,6 +1482,14 @@ class Notification(Base, TimestampMixin):
         Integer, ForeignKey("schools.id"), nullable=True, index=True
     )
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    audience_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="queued", server_default="queued"
+    )
+    recipients: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    delivered: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2100,9 +2143,69 @@ class SalaryComponent(Base, TimestampMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class SalaryStructure(Base, TimestampMixin):
+    __tablename__ = "salary_structures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    basic: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SalaryStructureLine(Base, TimestampMixin):
+    __tablename__ = "salary_structure_lines"
+    __table_args__ = (Index("ix_salary_structure_lines_structure", "school_id", "structure_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    structure_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("salary_structures.id"), nullable=False, index=True
+    )
+    component_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("salary_components.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # earning | deduction
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SalaryAssignment(Base, TimestampMixin):
+    __tablename__ = "salary_assignments"
+    __table_args__ = (
+        Index(
+            "uq_salary_assignments_staff_active",
+            "school_id",
+            "staff_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
+    structure_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("salary_structures.id"), nullable=False, index=True
+    )
+    effective_from: Mapped[DateType] = mapped_column(Date, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class PayrollRun(Base, TimestampMixin):
     __tablename__ = "payroll_runs"
-    __table_args__ = (Index("ix_payroll_runs_school_period", "school_id", "period_label"),)
+    __table_args__ = (
+        Index("ix_payroll_runs_school_period", "school_id", "period_label"),
+        Index(
+            "uq_payroll_runs_school_period_active",
+            "school_id",
+            "period_label",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND status = 'processed'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
@@ -2112,6 +2215,8 @@ class PayrollRun(Base, TimestampMixin):
         String(32), nullable=False, default="draft", server_default="draft"
     )
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -2127,7 +2232,105 @@ class PayrollItem(Base, TimestampMixin):
     deductions: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     net: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    breakdown_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payslip_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="processed", server_default="processed"
+    )
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class PayrollAuditEvent(Base, TimestampMixin):
+    __tablename__ = "payroll_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    run_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("payroll_runs.id"), nullable=True, index=True
+    )
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    detail_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class MessagingPolicy(Base, TimestampMixin):
+    __tablename__ = "messaging_policies"
+    __table_args__ = (
+        Index(
+            "uq_messaging_policies_school_active",
+            "school_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    can_view: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    can_send: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    can_moderate: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    poll_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=15, server_default="15")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class MessageConversation(Base, TimestampMixin):
+    __tablename__ = "message_conversations"
+    __table_args__ = (
+        Index(
+            "uq_message_conversations_parties",
+            "school_id",
+            "student_id",
+            "teacher_user_id",
+            "parent_user_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    teacher_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    parent_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    flagged: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_message_preview: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ConversationMessage(Base, TimestampMixin):
+    __tablename__ = "conversation_messages"
+    __table_args__ = (
+        Index("ix_conversation_messages_conversation", "school_id", "conversation_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("message_conversations.id"), nullable=False, index=True
+    )
+    sender_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    hidden: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ConversationRead(Base, TimestampMixin):
+    __tablename__ = "conversation_reads"
+    __table_args__ = (
+        Index("uq_conversation_reads_user", "conversation_id", "user_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("message_conversations.id"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_read_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class TransportVehicle(Base, TimestampMixin):
@@ -2318,6 +2521,12 @@ class CertificateIssue(Base, TimestampMixin):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "uq_certificate_issues_verification_token",
+            "verification_token",
+            unique=True,
+            postgresql_where=text("verification_token IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -2325,10 +2534,21 @@ class CertificateIssue(Base, TimestampMixin):
     template_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("certificate_templates.id"), nullable=False, index=True
     )
-    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    student_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("students.id"), nullable=True, index=True
+    )
+    staff_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("staffs.id"), nullable=True, index=True
+    )
     certificate_no: Mapped[str] = mapped_column(String(64), nullable=False)
     issued_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     data_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verification_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="issued", server_default="issued"
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 

@@ -70,9 +70,10 @@ from app.models.tables import (
 )
 from app.services.v1.document_storage import (
     ALLOWED_TYPES,
+    require_storage,
     sanitize_filename,
-    storage_configured,
     validate_upload,
+    discard,
     get_storage,
 )
 from app.services.v1.school_academics import (
@@ -1039,33 +1040,33 @@ def append_stored_attachment_to_homework(
     claimed_filename: str | None,
 ) -> dict:
     """Optional binary upload when document_storage is configured."""
-    if not storage_configured():
-        raise AcademicError(
-            503,
-            "Document storage is not configured. Set DOCUMENT_STORAGE_BACKEND=local "
-            "and DOCUMENT_STORAGE_PATH.",
-        )
+    require_storage()
     hw = _active_homework(db, school_id, homework_id)
     content_type, ext, filename = validate_upload(
         file_bytes, category="other", claimed_filename=claimed_filename
     )
-    storage = get_storage()
-    key = storage.build_key(school_id, hw.teacher_user_id, ext)
-    storage.put(key, file_bytes)
     current = _load_attachments_raw(hw.attachments_json)
     if len(current) >= MAX_ATTACHMENTS:
         raise AcademicError(422, f"at most {MAX_ATTACHMENTS} attachments allowed")
-    current.append(
-        {
-            "original_filename": filename,
-            "content_type": content_type,
-            "size_bytes": len(file_bytes),
-            "storage_key": key,
-        }
-    )
-    hw.attachments_json = _dump_attachments(current, keep_storage_key=True)
-    hw.updated_at = _now()
-    _commit(db)
+    storage = get_storage()
+    key = storage.build_key(school_id, hw.teacher_user_id, ext)
+    storage.put(key, file_bytes)
+    try:
+        current.append(
+            {
+                "original_filename": filename,
+                "content_type": content_type,
+                "size_bytes": len(file_bytes),
+                "storage_key": key,
+            }
+        )
+        hw.attachments_json = _dump_attachments(current, keep_storage_key=True)
+        hw.updated_at = _now()
+        _commit(db)
+    except Exception:
+        db.rollback()
+        discard(storage, key)
+        raise
     db.refresh(hw)
     return _homework_item(db, hw)
 
@@ -1084,12 +1085,7 @@ def append_stored_attachment_to_submission(
     Prerequisite: ``DOCUMENT_STORAGE_BACKEND=local`` and ``DOCUMENT_STORAGE_PATH``.
     Creates an ungraded submission if none exists; refuses graded submissions.
     """
-    if not storage_configured():
-        raise AcademicError(
-            503,
-            "Document storage is not configured. Set DOCUMENT_STORAGE_BACKEND=local "
-            "and DOCUMENT_STORAGE_PATH to a private directory (not a public web root).",
-        )
+    require_storage()
     student = _student_for_user(db, user, school_id)
     hw = _active_homework(db, school_id, homework_id)
     if (
@@ -1107,16 +1103,6 @@ def append_stored_attachment_to_submission(
     content_type, ext, filename = validate_upload(
         file_bytes, category="other", claimed_filename=claimed_filename
     )
-    storage = get_storage()
-    key = storage.build_key(school_id, student.user_id, ext)
-    storage.put(key, file_bytes)
-    entry = {
-        "original_filename": filename,
-        "content_type": content_type,
-        "size_bytes": len(file_bytes),
-        "storage_key": key,
-    }
-
     _acquire_submission_advisory_lock(db, hw.id, student.id)
     existing = (
         db.query(HomeworkSubmission)
@@ -1128,36 +1114,52 @@ def append_stored_attachment_to_submission(
         .with_for_update()
         .first()
     )
-
+    current: list = []
     if existing is not None:
         if existing.status == SUBMISSION_STATUS_GRADED:
             raise AcademicError(422, "Graded submissions cannot be modified by students")
         current = _load_attachments_raw(existing.attachments_json)
         if len(current) >= MAX_ATTACHMENTS:
             raise AcademicError(422, f"at most {MAX_ATTACHMENTS} attachments allowed")
-        current.append(entry)
-        existing.attachments_json = _dump_attachments(current, keep_storage_key=True)
-        existing.submitted_at = now
-        existing.is_late = is_late
-        existing.status = SUBMISSION_STATUS_SUBMITTED
-        existing.updated_at = now
-        _commit(db)
-        db.refresh(existing)
-        return _submission_item(db, existing, student_safe=True)
 
-    row = HomeworkSubmission(
-        school_id=school_id,
-        homework_id=hw.id,
-        student_id=student.id,
-        text_response=None,
-        submitted_at=now,
-        status=SUBMISSION_STATUS_SUBMITTED,
-        is_late=is_late,
-        attachments_json=_dump_attachments([entry], keep_storage_key=True),
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(row)
-    _commit(db)
-    db.refresh(row)
-    return _submission_item(db, row, student_safe=True)
+    # Write the file only after every check passes; remove it if the row is not saved.
+    storage = get_storage()
+    key = storage.build_key(school_id, student.user_id, ext)
+    storage.put(key, file_bytes)
+    entry = {
+        "original_filename": filename,
+        "content_type": content_type,
+        "size_bytes": len(file_bytes),
+        "storage_key": key,
+    }
+    try:
+        if existing is not None:
+            current.append(entry)
+            existing.attachments_json = _dump_attachments(current, keep_storage_key=True)
+            existing.submitted_at = now
+            existing.is_late = is_late
+            existing.status = SUBMISSION_STATUS_SUBMITTED
+            existing.updated_at = now
+            _commit(db)
+            saved = existing
+        else:
+            saved = HomeworkSubmission(
+                school_id=school_id,
+                homework_id=hw.id,
+                student_id=student.id,
+                text_response=None,
+                submitted_at=now,
+                status=SUBMISSION_STATUS_SUBMITTED,
+                is_late=is_late,
+                attachments_json=_dump_attachments([entry], keep_storage_key=True),
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(saved)
+            _commit(db)
+    except Exception:
+        db.rollback()
+        discard(storage, key)
+        raise
+    db.refresh(saved)
+    return _submission_item(db, saved, student_safe=True)

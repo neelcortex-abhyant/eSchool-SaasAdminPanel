@@ -27,7 +27,7 @@ def test_migration_0039_revises_0038():
     rev = script.get_revision("20261027_0039")
     assert rev is not None
     assert rev.down_revision == "20261025_0038"
-    assert script.get_heads() == ["20261029_0042"]
+    assert script.get_heads() == ["20261029_0043"]
 
 
 def test_key_wave_models_have_school_id():

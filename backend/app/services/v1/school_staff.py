@@ -32,6 +32,7 @@ from app.services.v1.school_academics import (
     _page,
     _user_name,
 )
+from app.services.v1.school_people import owner_documents
 from app.services.v1.school_teachers import (
     PASSWORD_MIN_LEN,
     TEACHER_ROLE_NAME,
@@ -327,7 +328,11 @@ def list_staff(
 
 def get_staff(db: Session, school_id: int, staff_user_id: int) -> dict:
     user, staff = _owned_non_teaching_staff(db, school_id, staff_user_id)
-    return _staff_item(user, staff)
+    item = _staff_item(user, staff)
+    item["documents"] = owner_documents(
+        db, school_id, owner_kind="staff", route_owner_id=user.id, user_id=user.id
+    )
+    return item
 
 
 def list_departments(db: Session, school_id: int) -> dict:

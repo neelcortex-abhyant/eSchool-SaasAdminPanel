@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,7 @@ from app.schemas.v1.school_admin_erp_responses import (
 )
 from app.services.v1 import rbac
 from app.services.v1 import school_academic_mgmt as mgmt
+from app.services.v1 import school_erp_payroll as erp_payroll
 from app.services.v1.school_academics import AcademicError
 
 router = APIRouter(prefix="")
@@ -1154,6 +1155,183 @@ def delete_salary_component(
     return _run(lambda: mgmt.soft_delete_salary_component(db, _school_id(auth), row_id))
 
 
+# ---- Salary structures / assignments / process / payslips ----
+
+
+@router.get("/salary-structures", responses=mgmt_out.json_response(mgmt_out.SalaryStructureListOut))
+def list_salary_structures(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+):
+    return _run(
+        lambda: erp_payroll.list_salary_structures(
+            db, _school_id(auth), page=page, page_size=page_size
+        )
+    )
+
+
+@router.post(
+    "/salary-structures",
+    status_code=status.HTTP_201_CREATED,
+    responses=mgmt_out.json_response(mgmt_out.SalaryStructureOut, status_code=201),
+)
+def create_salary_structure(
+    body: mgmt_schemas.SalaryStructureCreateBody,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: erp_payroll.create_salary_structure(db, _school_id(auth), _mgmt_body(body))
+    )
+
+
+@router.get("/salary-structures/{row_id}", responses=mgmt_out.json_response(mgmt_out.SalaryStructureOut))
+def get_salary_structure(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: erp_payroll.get_salary_structure(db, _school_id(auth), row_id))
+
+
+@router.patch("/salary-structures/{row_id}", responses=mgmt_out.json_response(mgmt_out.SalaryStructureOut))
+def patch_salary_structure(
+    row_id: int,
+    body: mgmt_schemas.SalaryStructurePatchBody,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: erp_payroll.update_salary_structure(
+            db, _school_id(auth), row_id, _mgmt_body(body)
+        )
+    )
+
+
+@router.delete("/salary-structures/{row_id}", responses=mgmt_out.json_response(DeletedOut))
+def delete_salary_structure(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: erp_payroll.soft_delete_salary_structure(db, _school_id(auth), row_id))
+
+
+@router.get("/salary-assignments", responses=mgmt_out.json_response(mgmt_out.SalaryAssignmentListOut))
+def list_salary_assignments(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+):
+    return _run(
+        lambda: erp_payroll.list_salary_assignments(
+            db, _school_id(auth), page=page, page_size=page_size
+        )
+    )
+
+
+@router.post(
+    "/salary-assignments",
+    status_code=status.HTTP_201_CREATED,
+    responses=mgmt_out.json_response(mgmt_out.SalaryAssignmentListOut, status_code=201),
+)
+def create_salary_assignments(
+    body: mgmt_schemas.SalaryAssignmentCreateBody,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(
+        lambda: erp_payroll.create_salary_assignments(db, _school_id(auth), _mgmt_body(body))
+    )
+
+
+@router.get("/payroll/preview", responses=mgmt_out.json_response(mgmt_out.PayrollPreviewOut))
+def payroll_preview(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    month: str = Query(..., min_length=7, max_length=7),
+):
+    return _run(lambda: erp_payroll.payroll_preview(db, _school_id(auth), month))
+
+
+@router.post("/payroll/process", responses=mgmt_out.json_response(mgmt_out.PayrollProcessOut))
+def payroll_process(
+    body: mgmt_schemas.PayrollProcessBody,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+):
+    return _run(
+        lambda: erp_payroll.process_payroll(
+            db,
+            _school_id(auth),
+            _mgmt_body(body),
+            idempotency_key=idempotency_key,
+            actor_user_id=int(auth.user.id) if getattr(auth.user, "id", None) else None,
+        )
+    )
+
+
+@router.get("/payroll/summary", responses=mgmt_out.json_response(mgmt_out.PayrollSummaryOut))
+def payroll_summary(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    year: int = Query(..., ge=2000, le=2100),
+):
+    return _run(
+        lambda: {"items": erp_payroll.payroll_summary(db, _school_id(auth), year)}
+    )
+
+
+@router.get("/payslips", responses=mgmt_out.json_response(mgmt_out.PayslipListOut))
+def list_payslips(
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    month: str | None = Query(default=None),
+    staff_id: int | None = Query(default=None, ge=1),
+    status: str | None = Query(default=None),
+):
+    return _run(
+        lambda: erp_payroll.list_payslips(
+            db,
+            _school_id(auth),
+            month=month,
+            staff_id=staff_id,
+            status_filter=status,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.get("/payslips/{row_id}", responses=mgmt_out.json_response(mgmt_out.PayslipOut))
+def get_payslip(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: erp_payroll.get_payslip(db, _school_id(auth), row_id))
+
+
+@router.get("/payslips/{row_id}/pdf")
+def payslip_pdf(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    payload = _run(lambda: erp_payroll.render_payslip_pdf(db, _school_id(auth), row_id))
+    return Response(
+        content=payload,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="payslip-{row_id}.pdf"'},
+    )
+
+
 # ---- Transport ----
 
 
@@ -1374,6 +1552,74 @@ def issue_certificate(
     return _run(lambda: mgmt.issue_certificate(db, _school_id(auth), _mgmt_body(body)))
 
 
+@router.post(
+    "/certificates/issue-staff",
+    status_code=status.HTTP_201_CREATED,
+    responses=mgmt_out.json_response(mgmt_out.CertificateIssueOut, status_code=201),
+)
+def issue_staff_certificate(
+    body: mgmt_schemas.CertificateIssueStaffBody,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.issue_staff_certificate(db, _school_id(auth), _mgmt_body(body)))
+
+
+@router.get("/certificates", responses=mgmt_out.json_response(mgmt_out.CertificateIssueListOut))
+def list_certificates(
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    student_id: int | None = Query(default=None, ge=1),
+    staff_id: int | None = Query(default=None, ge=1),
+    status: str | None = Query(default=None),
+):
+    return _run(
+        lambda: mgmt.list_certificates(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            student_id=student_id,
+            staff_id=staff_id,
+            status_filter=status,
+        )
+    )
+
+
+@router.get("/certificates/{row_id}", responses=mgmt_out.json_response(mgmt_out.CertificateIssueOut))
+def get_certificate(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.get_certificate(db, _school_id(auth), row_id))
+
+
+@router.get("/certificates/{row_id}/pdf")
+def certificate_pdf(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    payload = _run(lambda: mgmt.render_certificate_pdf(db, _school_id(auth), row_id))
+    return Response(
+        content=payload,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="certificate-{row_id}.pdf"'},
+    )
+
+
+@router.post("/certificates/{row_id}/revoke", responses=mgmt_out.json_response(mgmt_out.CertificateIssueOut))
+def revoke_certificate(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.revoke_certificate(db, _school_id(auth), row_id))
+
+
 @router.get("/id-card-settings", responses=mgmt_out.json_response(mgmt_out.IdCardSettingsOut))
 def get_id_card_settings(
     auth: Annotated[AuthContext, Depends(require_school)],
@@ -1538,8 +1784,14 @@ def list_notifications(
     db: Annotated[Session, Depends(central_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
+    q: str | None = Query(default=None),
+    delivery: str | None = Query(default=None),
 ):
-    return _run(lambda: mgmt.list_notifications(db, _school_id(auth), page=page, page_size=page_size))
+    return _run(
+        lambda: mgmt.list_notifications(
+            db, _school_id(auth), page=page, page_size=page_size, q=q, delivery=delivery
+        )
+    )
 
 
 @router.post("/notifications", status_code=status.HTTP_201_CREATED, responses=mgmt_out.json_response(mgmt_out.NotificationOut, status_code=201))
@@ -1561,8 +1813,19 @@ def list_announcements(
     db: Annotated[Session, Depends(central_db)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
 ):
-    return _run(lambda: mgmt.list_announcements(db, _school_id(auth), page=page, page_size=page_size))
+    return _run(
+        lambda: mgmt.list_announcements(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            status_filter=status,
+            q=q,
+        )
+    )
 
 
 @router.post("/announcements", status_code=status.HTTP_201_CREATED, responses=mgmt_out.json_response(mgmt_out.AnnouncementOut, status_code=201))
@@ -1572,6 +1835,34 @@ def create_announcement(
     db: Annotated[Session, Depends(central_db)],
 ):
     return _run(lambda: mgmt.create_announcement(db, _school_id(auth), _mgmt_body(body)))
+
+
+@router.get("/announcements/{row_id}", responses=mgmt_out.json_response(mgmt_out.AnnouncementOut))
+def get_announcement(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.get_announcement(db, _school_id(auth), row_id))
+
+
+@router.patch("/announcements/{row_id}", responses=mgmt_out.json_response(mgmt_out.AnnouncementOut))
+def patch_announcement(
+    row_id: int,
+    body: mgmt_schemas.AnnouncementPatchBody,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.update_announcement(db, _school_id(auth), row_id, _mgmt_body(body)))
+
+
+@router.delete("/announcements/{row_id}", responses=mgmt_out.json_response(DeletedOut))
+def delete_announcement(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_school)],
+    db: Annotated[Session, Depends(central_db)],
+):
+    return _run(lambda: mgmt.soft_delete_announcement(db, _school_id(auth), row_id))
 
 
 @router.get("/sliders", responses=mgmt_out.json_response(mgmt_out.SliderListOut))

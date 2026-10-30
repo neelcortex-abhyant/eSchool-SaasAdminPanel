@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_guardian_user, require_student_user
@@ -20,9 +21,24 @@ from app.schemas.v1.school_admin_erp_responses import (
 from app.services.v1 import school_erp_fees as erp_fees
 from app.services.v1 import school_erp_report_cards as erp_rc
 from app.services.v1 import school_erp_transport as erp_transport
+from app.services.v1 import school_messaging as messaging
 from app.services.v1.school_academics import AcademicError
 
 router = APIRouter(tags=["student-erp"])
+
+
+class ParentConversationCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    student_id: int = Field(ge=1)
+    teacher_user_id: int = Field(ge=1)
+    subject: str | None = Field(default=None, max_length=255)
+
+
+class ParentMessageCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=2000)
 
 _PDF_RESPONSE = {
     200: {
@@ -239,3 +255,91 @@ def parent_child_transport_live(
 ):
     db, user, school = tenant
     return _run(lambda: erp_transport.parent_child_bus_status(db, school.id, user, student_id))
+
+
+# ---- Parent messaging ----
+
+
+@router.get("/parent/conversations")
+def parent_list_conversations(
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    q: str | None = Query(default=None),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.list_conversations(
+            db, school.id, role="parent", user_id=user.id, q=q, page=page, page_size=page_size
+        )
+    )
+
+
+@router.post("/parent/conversations", status_code=201)
+def parent_create_conversation(
+    body: ParentConversationCreateBody,
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.create_conversation(
+            db,
+            school.id,
+            body.model_dump(exclude_unset=True),
+            role="parent",
+            user_id=user.id,
+        )
+    )
+
+
+@router.get("/parent/conversations/{conversation_id}/messages")
+def parent_list_messages(
+    conversation_id: int,
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=50),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.list_messages(
+            db,
+            school.id,
+            conversation_id,
+            role="parent",
+            user_id=user.id,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@router.post("/parent/conversations/{conversation_id}/messages", status_code=201)
+def parent_send_message(
+    conversation_id: int,
+    body: ParentMessageCreateBody,
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.send_message(
+            db,
+            school.id,
+            conversation_id,
+            body.model_dump(),
+            role="parent",
+            user_id=user.id,
+        )
+    )
+
+
+@router.post("/parent/conversations/{conversation_id}/read")
+def parent_mark_read(
+    conversation_id: int,
+    tenant: Tuple[Session, User, School] = Depends(require_guardian_user),
+):
+    db, user, school = tenant
+    return _run(
+        lambda: messaging.mark_conversation_read(
+            db, school.id, conversation_id, role="parent", user_id=user.id
+        )
+    )

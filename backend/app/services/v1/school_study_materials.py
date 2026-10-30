@@ -37,7 +37,9 @@ from app.models.tables import (
     User,
 )
 from app.services.v1.document_storage import (
+    discard,
     get_storage,
+    require_storage,
     sanitize_filename,
     storage_configured,
     validate_study_material_upload,
@@ -293,12 +295,7 @@ def create_material(
     external_url = None
 
     if resource_type == RESOURCE_FILE:
-        if not storage_configured():
-            raise AcademicError(
-                503,
-                "Document storage is not configured. Set DOCUMENT_STORAGE_BACKEND=local "
-                "and DOCUMENT_STORAGE_PATH to a private directory (not a public web root).",
-            )
+        require_storage()
         if not file_bytes:
             raise AcademicError(422, "file upload is required for resource_type=file")
         content_type, ext, original_filename = validate_study_material_upload(
@@ -335,7 +332,13 @@ def create_material(
         updated_at=_now(),
     )
     db.add(row)
-    _commit(db)
+    try:
+        _commit(db)
+    except Exception:
+        db.rollback()
+        if storage_key:
+            discard(get_storage(), storage_key)
+        raise
     db.refresh(row)
     return _material_item(db, row)
 
@@ -475,12 +478,7 @@ def update_material(
     if file_bytes is not None:
         if row.resource_type != RESOURCE_FILE:
             raise AcademicError(422, "file replacement is only allowed for file resources")
-        if not storage_configured():
-            raise AcademicError(
-                503,
-                "Document storage is not configured. Set DOCUMENT_STORAGE_BACKEND=local "
-                "and DOCUMENT_STORAGE_PATH.",
-            )
+        require_storage()
         content_type, ext, original_filename = validate_study_material_upload(
             file_bytes, claimed_filename=claimed_filename
         )
@@ -500,7 +498,14 @@ def update_material(
     if actor_v1_user_id:
         row.uploaded_by_v1_user_id = str(actor_v1_user_id)[:36]
     row.updated_at = _now()
-    _commit(db)
+    new_file_key = row.storage_key if file_bytes is not None else None
+    try:
+        _commit(db)
+    except Exception:
+        db.rollback()
+        if new_file_key and new_file_key != old_key:
+            discard(get_storage(), new_file_key)
+        raise
 
     if file_bytes is not None and old_key and old_key != row.storage_key:
         _safe_delete_storage_key(db, school_id, old_key)
@@ -527,12 +532,7 @@ def get_file_bytes(db: Session, school_id: int, material_id: int) -> tuple[bytes
         raise AcademicError(422, "Material is not a downloadable file")
     if not row.storage_key:
         raise AcademicError(404, "Document file not found")
-    if not storage_configured():
-        raise AcademicError(
-            503,
-            "Document storage is not configured. Set DOCUMENT_STORAGE_BACKEND=local "
-            "and DOCUMENT_STORAGE_PATH.",
-        )
+    require_storage()
     data = get_storage().get(row.storage_key)
     filename = row.original_filename or sanitize_filename(f"material-{row.id}")
     content_type = row.content_type or "application/octet-stream"

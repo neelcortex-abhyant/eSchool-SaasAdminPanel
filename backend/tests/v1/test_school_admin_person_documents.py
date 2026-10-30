@@ -192,3 +192,46 @@ def test_teacher_document_upload_list_download_and_isolation(
         ).status_code
         == 404
     )
+
+
+def test_teacher_profile_lists_persisted_documents(v1_client, v1_db, monkeypatch, tmp_path):
+    _enable_storage(monkeypatch, tmp_path)
+    sa = _super(v1_client, v1_db, "doc-sa2@eschool.com")
+    school_id = _school(v1_client, sa, "DOCP")
+    admin = _school_admin(v1_client, sa, school_id, "doc-ap@eschool.com")
+    teacher = v1_client.post(
+        TEACHERS,
+        headers=admin,
+        json={
+            "first_name": "T",
+            "last_name": "P",
+            "email": "doc-tp@eschool.com",
+            "password": "teacherpass1",
+            "employee_id": "DOCP-T",
+        },
+    )
+    assert teacher.status_code == 201
+    teacher_id = teacher.json()["id"]
+    ids = []
+    for name, data, mime in (("cv.pdf", PDF, "application/pdf"), ("id.png", PNG, "image/png")):
+        res = v1_client.post(
+            f"{TEACHERS}/{teacher_id}/documents",
+            headers=admin,
+            files={"file": (name, data, mime)},
+            data={"category": "other", "title": name},
+        )
+        assert res.status_code == 201, res.text
+        ids.append(res.json()["id"])
+    photo = v1_client.post(
+        f"{TEACHERS}/{teacher_id}/photo",
+        headers=admin,
+        files={"file": ("face.png", PNG, "image/png")},
+    )
+    assert photo.status_code == 201
+
+    profile = v1_client.get(f"{TEACHERS}/{teacher_id}", headers=admin)
+    assert profile.status_code == 200
+    body = profile.json()
+    assert body["photo_url"] == f"{TEACHERS}/{teacher_id}/photo"
+    assert [d["id"] for d in body["documents"]] == sorted(ids, reverse=True)
+    assert all("storage_key" not in d for d in body["documents"])
