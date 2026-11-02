@@ -214,9 +214,9 @@ export const liveTracking: TrackingService = {
     return { ...page, items: await withBoarded(page.items) };
   },
   async trip(id) {
-    const context = await liveContext();
-    const trip = (await allLiveTrips({}, context)).find((row) => row.id === id) ?? missing("Trip");
-    return (await withBoarded([trip]))[0];
+    // One trip from GET /transport-trips/{id} rather than reading every trip.
+    const [context, row] = await Promise.all([liveContext(), get(`${SA}/transport-trips/${id}`, {}, "Unable to load the trip.")]);
+    return (await withBoarded([tripFromServer(row, context)]))[0];
   },
   async attendance(query = {}) {
     const context = await liveContext();

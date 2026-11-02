@@ -7,9 +7,10 @@ import { useToast } from "@/components/academics/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
 import { Chip } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
-import { MAX_MESSAGE, messageProblem, messagingService } from "@/lib/operations/messaging";
+import { MAX_ATTACHMENTS, MAX_MESSAGE, messageProblem, messagingService } from "@/lib/operations/messaging";
 import { isOperationsLive, OPERATIONS_SAMPLE_NOTE } from "@/lib/operations/mode";
-import type { Conversation, Message, MessagingPolicy } from "@/lib/operations/types";
+import type { Attachment, Conversation, Message, MessagingPolicy } from "@/lib/operations/types";
+import { apiBlobUrl } from "@/lib/api";
 import { useSubmitOnce } from "@/lib/ops/submit";
 import { IconBell } from "@/lib/icons";
 
@@ -72,7 +73,20 @@ function Inbox({ policy }: { policy: MessagingPolicy }) {
   }, [reload, policy.poll_seconds]);
 
   const open = list.options.find((row) => row.id === openId) ?? null;
-  const unread = list.options.reduce((sum, row) => sum + row.unread, 0);
+  // The server's count covers every conversation, not only the ones the search shows.
+  const listed = list.options.reduce((sum, row) => sum + row.unread, 0);
+  const [total, setTotal] = useState<number | null>(null);
+  useEffect(() => {
+    let current = true;
+    messagingService()
+      .unreadCount()
+      .then((count) => current && setTotal(count))
+      .catch(() => current && setTotal(null));
+    return () => {
+      current = false;
+    };
+  }, [list.options]);
+  const unread = total ?? listed;
 
   return (
     <div className={`msg-layout${open ? " has-open" : ""}`}>
@@ -117,6 +131,41 @@ function Inbox({ policy }: { policy: MessagingPolicy }) {
   );
 }
 
+/** A message's file. Files on the server need the admin's sign-in, so they're fetched and then opened. */
+function AttachmentLink({ file }: { file: Attachment }) {
+  const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
+  const label = `📎 ${file.name}${file.size ? ` (${size(file.size)})` : ""}`;
+  if (!file.download_path) {
+    return file.url && file.url !== "#" ? (
+      <a href={file.url} target="_blank" rel="noopener noreferrer" className="msg-attachment">{label}</a>
+    ) : (
+      <span className="msg-attachment">{label}</span>
+    );
+  }
+  async function open(path: string) {
+    if (state === "loading") return;
+    setState("loading");
+    try {
+      const url = await apiBlobUrl(path);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setState("idle");
+    } catch {
+      setState("failed");
+    }
+  }
+  return (
+    <button type="button" className="link-btn msg-attachment" onClick={() => void open(file.download_path as string)}>
+      {state === "loading" ? `${label} …` : state === "failed" ? `${label}: couldn't download, try again` : label}
+    </button>
+  );
+}
+
 /** Who sent a message: the server marks senders only as "user", so match them to the conversation's teacher and parent. */
 export function senderRole(message: Message, conversation: Conversation): "teacher" | "parent" | "school_admin" {
   if (message.sender.user_id && message.sender.user_id === conversation.teacher.user_id) return "teacher";
@@ -130,6 +179,8 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
   const messages = useOptions(useCallback(() => messagingService().messages(conversation.id), [conversation.id]));
   const [draft, setDraft] = useState("");
   const [problem, setProblem] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
   const submit = useSubmitOnce();
   const end = useRef<HTMLDivElement>(null);
   const { reload } = messages;
@@ -157,8 +208,12 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
     if (found) return;
     await submit.run(async () => {
       try {
-        await messagingService().send(conversation.id, draft);
+        // Files go up first; the message then carries what the server returned for each.
+        const uploaded = [];
+        for (const file of files) uploaded.push(await messagingService().uploadAttachment(file));
+        await messagingService().send(conversation.id, draft, uploaded);
         setDraft("");
+        setFiles([]);
         void reload();
         onChanged();
       } catch (caught) {
@@ -202,8 +257,8 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
             {message.hidden ? <p className="muted"><em>Hidden by a moderator.</em>{policy.can_moderate ? ` ${message.body}` : ""}</p> : <p>{message.body}</p>}
             {!message.hidden && message.attachments.length ? (
               <p className="msg-attachments">
-                {message.attachments.map((file) => (
-                  <a key={file.name} href={file.url} target="_blank" rel="noopener noreferrer" className="msg-attachment">📎 {file.name}{file.size ? ` (${size(file.size)})` : ""}</a>
+                {message.attachments.map((file, index) => (
+                  <AttachmentLink key={`${file.name}-${index}`} file={file} />
                 ))}
               </p>
             ) : null}
@@ -234,6 +289,36 @@ function Thread({ conversation, policy, onBack, onChanged }: { conversation: Con
           <label className="acad-sr" htmlFor="msg-draft">Message</label>
           <textarea id="msg-draft" rows={2} maxLength={MAX_MESSAGE} placeholder="Write to the teacher and parent as the school…" value={draft} onChange={(event) => setDraft(event.target.value)} aria-invalid={Boolean(problem)} />
           <button className="btn-pill btn-pill-green" type="submit" disabled={submit.busy}>{submit.busy ? "Sending…" : "Send"}</button>
+          <div className="msg-files">
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              className="acad-sr"
+              id="msg-files"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              onChange={(event) => {
+                const chosen = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                setFiles((current) => {
+                  const next = [...current, ...chosen];
+                  if (next.length > MAX_ATTACHMENTS) setProblem(`Attach up to ${MAX_ATTACHMENTS} files.`);
+                  return next.slice(0, MAX_ATTACHMENTS);
+                });
+              }}
+            />
+            <button className="link-btn" type="button" disabled={submit.busy || files.length >= MAX_ATTACHMENTS} onClick={() => fileInput.current?.click()}>
+              📎 Attach a file
+            </button>
+            {files.map((file, index) => (
+              <span key={`${file.name}-${index}`} className="msg-file">
+                {file.name} ({size(file.size)})
+                <button className="link-btn" type="button" aria-label={`Remove ${file.name}`} disabled={submit.busy} onClick={() => setFiles((current) => current.filter((_, at) => at !== index))}>
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
           {problem ? <p className="field-error">{problem}</p> : null}
         </form>
       ) : (

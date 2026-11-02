@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateApiCache } from "@/lib/api";
 import { RecordForm, ResourcePage } from "@/components/extras/ResourcePage";
 import { summarise } from "@/components/extras/StaffAttendance";
-import { fillTemplate, payrollTotals } from "@/components/extras/Tools";
+import { auditDetail, fillTemplate } from "@/components/extras/Tools";
 import { csvRows, importErrors, parseCsv, STUDENT_IMPORT_COLUMNS } from "@/lib/extras/csv";
 import { initialValues, problems, toBody } from "@/lib/extras/form";
 import { EXTRA_PAGES } from "@/lib/extras/pages";
@@ -147,8 +147,9 @@ describe("helpers", () => {
     ]);
   });
 
-  it("works out net pay and fills certificate text", () => {
-    expect(payrollTotals([{ gross: "30000", deductions: "1500.5" }, { gross: "", deductions: "" }])).toEqual({ nets: [28499.5, 0], total: 28499.5 });
+  it("describes payroll history and fills certificate text", () => {
+    expect(auditDetail('{"month": "2026-10", "processed": 12, "failed": 1}')).toBe("12 processed, 1 failed");
+    expect(auditDetail({ month: "2026-10" })).toBe("");
     expect(fillTemplate("This is to certify that {student_name} ({ admission_no }) {unknown}", { student_name: "Diya", admission_no: "A1" })).toBe("This is to certify that Diya (A1) {unknown}");
   });
 });

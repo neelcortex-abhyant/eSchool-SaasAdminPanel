@@ -12,7 +12,7 @@ import { errorMessage } from "@/lib/academics";
 import { create, displayValue, listRows, remove, update, type Raw } from "@/lib/extras/api";
 import { initialValues, problems, toBody, type Values } from "@/lib/extras/form";
 import { refKey, refNames, type RefKind } from "@/lib/extras/refs";
-import type { ResourceConfig } from "@/lib/extras/types";
+import type { ResourceConfig, RowAction } from "@/lib/extras/types";
 import type { StudentRow } from "@/lib/people";
 import { num } from "@/lib/teaching/client";
 
@@ -78,6 +78,7 @@ function ResourceBody({
   const search = useDebounced(searchInput.trim().toLowerCase());
   const [page, setPage] = useState(1);
   const [removing, setRemoving] = useState<Row | null>(null);
+  const [acting, setActing] = useState<{ row: Row; action: RowAction } | null>(null);
   const [pending, setPending] = useState(false);
   const names = useRefNames(config, state.options);
 
@@ -118,11 +119,18 @@ function ResourceBody({
           loading={state.loading}
           emptyText={state.error ? "The list couldn't be loaded." : search ? "Nothing matches your search." : config.canCreate === false ? "Nothing to show yet." : `No ${config.noun} added yet.`}
           actions={
-            config.canEdit || config.canDelete || extraActions
+            config.canEdit || config.canDelete || extraActions || config.rowActions?.length
               ? (row) => (
                   <>
                     {extraActions?.(row, () => void state.reload())}
-                    {config.canEdit ? (
+                    {(config.rowActions ?? [])
+                      .filter((action) => action.show(row))
+                      .map((action) => (
+                        <button key={action.label} className={`link-btn${action.danger ? " danger" : ""}`} type="button" onClick={() => setActing({ row, action })}>
+                          {action.label}
+                        </button>
+                      ))}
+                    {config.canEdit && (!config.canEditRow || config.canEditRow(row)) ? (
                       <button className="link-btn" type="button" onClick={() => setEditing(row)}>
                         Edit
                       </button>
@@ -148,6 +156,30 @@ function ResourceBody({
             setEditing(null);
             toast("success", created ? `${capital(config.noun)} added.` : "Changes saved.");
             void state.reload();
+          }}
+        />
+      ) : null}
+      {acting ? (
+        <ConfirmDialog
+          title={acting.action.confirm}
+          body="The server records who made the change."
+          confirmLabel={acting.action.label}
+          tone={acting.action.danger ? "danger" : "default"}
+          pending={pending}
+          onCancel={() => setActing(null)}
+          onConfirm={async () => {
+            if (pending) return;
+            setPending(true);
+            try {
+              await create(acting.action.path(acting.row), {});
+              toast("success", acting.action.done);
+              void state.reload();
+            } catch (caught) {
+              toast("error", errorMessage(caught, "Unable to save."));
+            } finally {
+              setPending(false);
+              setActing(null);
+            }
           }}
         />
       ) : null}

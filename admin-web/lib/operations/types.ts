@@ -75,7 +75,8 @@ export type RouteAttendanceSummary = { route_id: number; route_name: string; tri
 
 export type LeaveType = { key: string; name: string; days_per_year: number; applies_to: "staff" | "student" | "all"; /** Server id (GET /leave-types). */ id?: number };
 
-export type LeaveStatus = 0 | 1 | 2;
+/** 0 pending, 1 approved, 2 rejected, 3 cancelled. */
+export type LeaveStatus = 0 | 1 | 2 | 3;
 
 export type LeaveRequest = {
   id: number;
@@ -183,7 +184,7 @@ export type Announcement = {
 
 export type AnnouncementInput = { title: string; description: string; session_year_id: number; audience: Audience[]; publish_at: string | null; draft: boolean };
 
-export type DeliveryStatus = "queued" | "sent" | "partial" | "failed";
+export type DeliveryStatus = "queued" | "sent" | "partial" | "failed" | "cancelled";
 
 export type NotificationRecord = {
   id: number;
@@ -202,7 +203,17 @@ export type NotificationRecord = {
 
 export type Participant = { user_id: number; name: string; role: "teacher" | "parent" | "school_admin" };
 
-export type Attachment = { name: string; url: string; size: number | null; content_type: string | null };
+export type Attachment = {
+  name: string;
+  url: string;
+  size: number | null;
+  content_type: string | null;
+  /** API path that serves the file to signed-in users (GET /messages/{id}/attachments?storage_key=). */
+  download_path: string | null;
+};
+
+/** A file uploaded for a message that hasn't been sent yet, as the server returned it. */
+export type UploadedAttachment = { original_filename: string; content_type: string; size_bytes: number; storage_key: string };
 
 export type Message = {
   id: number;

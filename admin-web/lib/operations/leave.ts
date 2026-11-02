@@ -1,7 +1,8 @@
 /**
  * Staff leave on the server's routes:
- *   GET/POST /school-admin/academics/leaves, PATCH /academics/leaves/{id} {status} (0 pending,
- *   1 approved, 2 rejected), DELETE /academics/leaves/{id}
+ *   GET/POST /school-admin/academics/leaves (new leave is always pending), DELETE /{id}, and
+ *   POST /academics/leaves/{id}/approve | reject | cancel for pending leave only (status 1, 2, 3;
+ *   PATCH refuses a status change). The server records who decided.
  *   GET/PUT  /school-admin/leave-settings {policy, notes}
  *   GET/POST/PATCH/DELETE /school-admin/leave-types, GET /school-admin/leave-balances
  * Leaves carry `leave_type_id`. Older leaves kept the type at the start of the reason
@@ -12,7 +13,16 @@ import type { LeaveRequest, LeaveStatus, LeaveType } from "@/lib/operations/type
 import { num, optStr, send, str, type Raw } from "@/lib/teaching/client";
 import { invalid } from "@/lib/ops/store";
 
-export const LEAVE_STATUS: Record<LeaveStatus, string> = { 0: "Pending", 1: "Approved", 2: "Rejected" };
+export const LEAVE_STATUS: Record<LeaveStatus, string> = { 0: "Pending", 1: "Approved", 2: "Rejected", 3: "Cancelled" };
+
+/**
+ * The server's applies_to (student(s), teacher(s), staff, all); teachers count as staff here.
+ * No value means everyone on the server's leave types, but staff in the old leave settings.
+ */
+function appliesTo(value: unknown, unset: LeaveType["applies_to"]): LeaveType["applies_to"] {
+  const text = str(value).toLowerCase();
+  return text.startsWith("student") ? "student" : text === "all" ? "all" : text === "" ? unset : "staff";
+}
 
 export const DEFAULT_LEAVE_TYPES: LeaveType[] = [
   { key: "casual", name: "Casual leave", days_per_year: 12, applies_to: "staff" },
@@ -30,7 +40,7 @@ export function typesFromPolicy(policy: unknown): LeaveType[] {
         key: str(row.key) || str(row.name).toLowerCase().replace(/[^a-z0-9]+/g, "_"),
         name: str(row.name),
         days_per_year: Math.max(0, num(row.days_per_year)),
-        applies_to: (["staff", "student", "all"].includes(str(row.applies_to)) ? str(row.applies_to) : "staff") as LeaveType["applies_to"],
+        applies_to: appliesTo(row.applies_to, "staff"),
       }))
       .filter((row) => row.name);
   }
@@ -134,7 +144,7 @@ export async function loadLeaveTypes(): Promise<LeaveType[]> {
       key: str(row.code) || str(row.name).toLowerCase().replace(/[^a-z0-9]+/g, "_"),
       name: str(row.name),
       days_per_year: num(row.days_per_year),
-      applies_to: (["staff", "student", "all"].includes(str(row.applies_to)) ? str(row.applies_to) : "staff") as LeaveType["applies_to"],
+      applies_to: appliesTo(row.applies_to, "all"),
       active: row.is_active !== false,
     }))
     .filter((row) => row.name && row.active)
@@ -173,14 +183,19 @@ export async function loadLeaves(types: LeaveType[]): Promise<LeaveRequest[]> {
         from_date: from,
         to_date: to,
         days: leaveDays(from, to),
-        status: (num(row.status) === 1 ? 1 : num(row.status) === 2 ? 2 : 0) as LeaveStatus,
+        status: ([1, 2, 3].includes(num(row.status)) ? num(row.status) : 0) as LeaveStatus,
       };
     })
     .sort((a, b) => a.status - b.status || b.from_date.localeCompare(a.from_date));
 }
 
-export async function setLeaveStatus(id: number, status: LeaveStatus): Promise<void> {
-  await send("PATCH", `/school-admin/academics/leaves/${id}`, { status }, status === 1 ? "Unable to approve the leave." : "Unable to reject the leave.");
+export type LeaveDecision = "approve" | "reject" | "cancel";
+
+const DECISION_ERROR: Record<LeaveDecision, string> = { approve: "Unable to approve the leave.", reject: "Unable to reject the leave.", cancel: "Unable to cancel the leave." };
+
+/** Approve, reject or cancel a pending leave. */
+export async function decideLeave(id: number, decision: LeaveDecision): Promise<void> {
+  await send("POST", `/school-admin/academics/leaves/${id}/${decision}`, undefined, DECISION_ERROR[decision]);
 }
 
 export type LeaveInput = { user_id: number; leave_type: string; leave_type_id?: number; reason: string; from_date: string; to_date: string; session_year_id: number };

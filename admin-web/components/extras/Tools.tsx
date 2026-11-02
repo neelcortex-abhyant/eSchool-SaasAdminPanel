@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { DataTable, type Column } from "@/components/academics/DataTable";
 import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { FormModal } from "@/components/academics/FormModal";
-import { SelectField, TextAreaField, TextField } from "@/components/academics/Fields";
+import { SelectField, TextField } from "@/components/academics/Fields";
 import { useFormErrors, useOptions } from "@/components/academics/hooks";
 import { useToast } from "@/components/academics/Toasts";
 import { ExtrasPage, StudentSearch } from "@/components/extras/Frame";
-import { Stat } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
 import { errorMessage } from "@/lib/academics";
 import { create, displayValue, getOne, listRows, replace, staffDirectory, update, type Raw, type StaffRef } from "@/lib/extras/api";
 import { CARD_PLACEHOLDERS, idCardBody, parseIdCardSettings, type CardKind, type IdCardSettings } from "@/lib/extras/idCards";
@@ -360,23 +361,32 @@ function RolesBody() {
 // ---------- Payroll ----------
 
 type PayrollRun = Raw & { id: number };
-type PayLine = { staff_id: number; name: string; gross: string; deductions: string };
 
+const RUN_STATUS: Record<string, { label: string; tone: ChipTone }> = {
+  draft: { label: "Draft", tone: "grey" },
+  processed: { label: "Processed", tone: "amber" },
+  paid: { label: "Paid", tone: "green" },
+};
+
+/**
+ * Payroll runs on the server: GET /payroll-runs, POST /payroll-runs/{id}/mark-paid for a
+ * processed run, and its history from GET /payroll/audit-events?run_id=. Runs are created by
+ * processing payroll (POST /payroll/process); the server no longer accepts amounts typed in here.
+ */
 export function PayrollPage() {
-  const [adding, setAdding] = useState(false);
   return (
     <ExtrasPage
-      title="Payroll"
-      description="Salary runs: what each staff member is paid for a period."
+      title="Payroll runs"
+      description="Each month's processed payroll, whether it has been paid, and who did what."
       icon={<IconFees width={18} height={18} />}
-      note="A run is saved as a record of what was paid. The server can't edit or delete a run."
+      note="Runs come from Process payroll, which works out pay from salary structures and attendance. Mark a run paid once salaries have gone out."
       actions={
-        <button className="btn-pill btn-pill-green" type="button" onClick={() => setAdding(true)}>
-          New payroll run
-        </button>
+        <Link className="btn-pill btn-pill-green" href="/school/payroll">
+          Process payroll
+        </Link>
       }
     >
-      <PayrollBody adding={adding} setAdding={setAdding} />
+      <PayrollBody />
     </ExtrasPage>
   );
 }
@@ -385,103 +395,111 @@ function rupees(value: number) {
   return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-function PayrollBody({ adding, setAdding }: { adding: boolean; setAdding: (value: boolean) => void }) {
+function PayrollBody() {
   const toast = useToast();
   const runs = useOptions(useCallback(() => listRows("/payroll-runs").then((rows) => (rows as PayrollRun[]).sort((a, b) => str(b.run_date).localeCompare(str(a.run_date)))), []));
+  const [paying, setPaying] = useState<PayrollRun | null>(null);
+  const [history, setHistory] = useState<PayrollRun | null>(null);
+  const [pending, setPending] = useState(false);
   const columns: Column<PayrollRun>[] = [
     { key: "period", label: "Period", render: (row) => <strong>{str(row.period_label)}</strong> },
     { key: "date", label: "Run date", render: (row) => displayValue(row.run_date) },
-    { key: "status", label: "Status", render: (row) => (str(row.status) === "paid" ? "Paid" : "Draft") },
+    { key: "status", label: "Status", render: (row) => {
+      const status = RUN_STATUS[str(row.status)] ?? { label: str(row.status) || "—", tone: "grey" as ChipTone };
+      return <Chip tone={status.tone}>{status.label}</Chip>;
+    } },
     { key: "total", label: "Total", render: (row) => rupees(num(row.total_amount)) },
   ];
   return (
     <>
       <ErrorAlert error={runs.error} onRetry={() => void runs.reload()} />
       <div className="resource-card">
-        <DataTable columns={columns} rows={runs.options} loading={runs.loading} emptyText="No payroll runs yet." />
+        <DataTable
+          columns={columns}
+          rows={runs.options}
+          loading={runs.loading}
+          emptyText="No payroll runs yet. Process payroll to create one."
+          actions={(row) => (
+            <>
+              {str(row.status) === "processed" ? (
+                <button className="link-btn" type="button" onClick={() => setPaying(row)}>Mark paid</button>
+              ) : null}
+              <button className="link-btn" type="button" onClick={() => setHistory(row)}>History</button>
+            </>
+          )}
+        />
       </div>
-      {adding ? (
-        <PayrollForm
-          onClose={() => setAdding(false)}
-          onSaved={() => {
-            setAdding(false);
-            toast("success", "Payroll run saved.");
-            void runs.reload();
+      {paying ? (
+        <ConfirmDialog
+          title={`Mark ${str(paying.period_label)} as paid?`}
+          body={`Total ${rupees(num(paying.total_amount))}. This records that salaries have gone out; it can't be undone here.`}
+          confirmLabel="Mark paid"
+          pending={pending}
+          onCancel={() => setPaying(null)}
+          onConfirm={async () => {
+            if (pending) return;
+            setPending(true);
+            try {
+              await create(`/payroll-runs/${paying.id}/mark-paid`, {});
+              toast("success", "Payroll run marked paid.");
+              void runs.reload();
+            } catch (caught) {
+              toast("error", errorMessage(caught, "Unable to mark the run paid."));
+            } finally {
+              setPending(false);
+              setPaying(null);
+            }
           }}
         />
       ) : null}
+      {history ? <RunHistory run={history} onClose={() => setHistory(null)} /> : null}
     </>
   );
 }
 
-/** Net pay per line and the run's total. */
-export function payrollTotals(lines: { gross: string; deductions: string }[]) {
-  const nets = lines.map((line) => Math.round(((Number(line.gross) || 0) - (Number(line.deductions) || 0)) * 100) / 100);
-  return { nets, total: Math.round(nets.reduce((sum, net) => sum + net, 0) * 100) / 100 };
+const AUDIT_ACTION: Record<string, string> = { process: "Processed", mark_paid: "Marked paid", create: "Created" };
+
+function RunHistory({ run, onClose }: { run: PayrollRun; onClose: () => void }) {
+  const events = useOptions(useCallback(() => listRows("/payroll/audit-events", { run_id: run.id }), [run.id]));
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="modal-card acad-modal" role="dialog" aria-modal="true" aria-labelledby="run-history-title">
+        <h2 id="run-history-title">{str(run.period_label)}: history</h2>
+        <ErrorAlert error={events.error} onRetry={() => void events.reload()} />
+        {events.loading ? <div className="skeleton" style={{ height: 80 }} /> : null}
+        {!events.loading && !events.error && !events.options.length ? <p className="muted">No recorded actions for this run.</p> : null}
+        <ol className="run-history">
+          {events.options.map((event) => (
+            <li key={num(event.id)}>
+              <strong>{AUDIT_ACTION[str(event.action)] ?? str(event.action)}</strong> · {displayValue(event.created_at)}
+              {auditDetail(event.detail_json) ? <div className="muted">{auditDetail(event.detail_json)}</div> : null}
+            </li>
+          ))}
+        </ol>
+        <div className="resource-actions acad-modal-actions">
+          <button className="btn-pill btn-pill-green-soft" type="button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function PayrollForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const people = useOptions(useCallback(() => staffDirectory(), []));
-  const [period, setPeriod] = useState(() => new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" }));
-  const [runDate, setRunDate] = useState(today());
-  const [status, setStatus] = useState("draft");
-  const [lines, setLines] = useState<PayLine[]>([]);
-  const [saving, setSaving] = useState(false);
-  const errors = useFormErrors();
-
-  useEffect(() => {
-    // Gross pay starts from each person's monthly salary in Salary structure.
-    if (people.options.length && !lines.length) setLines(people.options.map((row) => ({ staff_id: row.staff_id, name: row.name, gross: row.salary ? String(row.salary) : "", deductions: "" })));
-  }, [people.options, lines.length]);
-
-  const { nets, total } = payrollTotals(lines);
-  const paid = lines.map((line, index) => ({ line, net: nets[index] })).filter(({ line }) => Number(line.gross) > 0);
-
-  async function submit() {
-    const invalid: Record<string, string> = {};
-    if (!period.trim()) invalid.period = "Enter the period, e.g. October 2026.";
-    if (!paid.length) invalid.lines = "Enter the gross pay for at least one person.";
-    if (paid.some(({ net }) => net < 0)) invalid.lines = "Deductions can't be more than the gross pay.";
-    if (Object.keys(invalid).length) {
-      errors.setFieldErrors(invalid);
-      errors.setFormError(invalid.lines ?? "");
-      return;
-    }
-    errors.clear();
-    setSaving(true);
+/** "processed 12, failed 1" from the event's details, which arrive as JSON text or an object. */
+export function auditDetail(value: unknown): string {
+  let detail: unknown = value;
+  if (typeof value === "string") {
     try {
-      await create("/payroll-runs", {
-        period_label: period.trim(),
-        run_date: runDate,
-        status,
-        items: paid.map(({ line, net }) => ({ staff_id: line.staff_id, gross: Number(line.gross), deductions: Number(line.deductions) || 0, net })),
-      });
-      onSaved();
-    } catch (caught) {
-      errors.fromError(caught, "Unable to save the payroll run.");
-      setSaving(false);
+      detail = JSON.parse(value);
+    } catch {
+      return value;
     }
   }
-
-  return (
-    <FormModal title="New payroll run" description="Gross pay starts from each person's monthly salary (Salary structure). Add deductions, and clear anyone not paid in this run." error={errors.formError} saving={saving} submitLabel={`Save run (${rupees(total)})`} wide onSubmit={() => void submit()} onClose={onClose}>
-      <TextField id="pr-period" label="Period" required maxLength={64} value={period} onChange={setPeriod} error={errors.fieldErrors.period} />
-      <TextField id="pr-date" label="Run date" type="date" value={runDate} onChange={setRunDate} />
-      <SelectField id="pr-status" label="Status" value={status} onChange={setStatus} options={[{ value: "draft", label: "Draft" }, { value: "paid", label: "Paid" }]} />
-      <fieldset className="form-field field-span ops-lines">
-        <legend>Pay</legend>
-        {people.loading ? <p className="muted">Loading staff…</p> : null}
-        {lines.map((line, index) => (
-          <div key={line.staff_id} className="ops-line ops-line-3">
-            <span>{line.name}</span>
-            <input aria-label={`${line.name} gross pay`} type="number" min={0} step="0.01" placeholder="Gross (₹)" value={line.gross} onChange={(event) => setLines((list) => list.map((row, i) => (i === index ? { ...row, gross: event.target.value } : row)))} />
-            <input aria-label={`${line.name} deductions`} type="number" min={0} step="0.01" placeholder="Deductions (₹)" value={line.deductions} onChange={(event) => setLines((list) => list.map((row, i) => (i === index ? { ...row, deductions: event.target.value } : row)))} />
-            <span className="muted">{Number(line.gross) > 0 ? rupees(nets[index]) : ""}</span>
-          </div>
-        ))}
-      </fieldset>
-    </FormModal>
-  );
+  if (!detail || typeof detail !== "object") return "";
+  const parts: string[] = [];
+  const record = detail as Record<string, unknown>;
+  if (typeof record.processed === "number") parts.push(`${record.processed} processed`);
+  if (typeof record.failed === "number" && record.failed) parts.push(`${record.failed} failed`);
+  return parts.join(", ");
 }
 
 

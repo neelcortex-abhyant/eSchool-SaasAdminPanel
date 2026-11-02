@@ -49,6 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { href: "/reports", label: "Reports" },
       { href: "/audit-logs", label: "Audit logs" },
+      { href: "/backups", label: "Backups" },
     ],
   },
   {

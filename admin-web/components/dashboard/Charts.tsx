@@ -1,6 +1,6 @@
 import type { MonthPoint, PackageSlice } from "@/lib/dashboardData";
 
-export function RevenueChart({ points }: { points: MonthPoint[] }) {
+export function RevenueChart({ points, label = "Revenue overview chart" }: { points: MonthPoint[]; label?: string }) {
   const width = 640;
   const height = 260;
   const padX = 36;
@@ -19,7 +19,7 @@ export function RevenueChart({ points }: { points: MonthPoint[] }) {
 
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Revenue overview chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
           const y = height - padY - t * (height - padY * 2);
           return (
@@ -99,7 +99,7 @@ export function SubscriptionChart({ slices }: { slices: PackageSlice[] }) {
           {Math.round(total)}%
         </text>
         <text x="50%" y="58%" textAnchor="middle" fontSize="12" fill="#94a3b8">
-          coverage
+          with a plan
         </text>
       </svg>
       <div className="legend">

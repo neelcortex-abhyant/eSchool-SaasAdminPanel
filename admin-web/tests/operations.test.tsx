@@ -165,7 +165,7 @@ describe("module 2: staff attendance and leave", () => {
     expect(filterLeaves(rows, { status: "0", userId: "", type: "", q: "", from: "", to: "" }).map((row) => row.id)).toEqual([2]);
   });
 
-  it("approves a pending leave on the server after confirming", async () => {
+  it("approves a pending leave through the server's approve route after confirming", async () => {
     serve({
       "/school-admin/me": { id: 1 },
       "/school-admin/leave-types": [{ id: 2, code: "SL", name: "Sick leave", days_per_year: 10, applies_to: "staff", is_active: true }],
@@ -180,10 +180,11 @@ describe("module 2: staff attendance and leave", () => {
     // The confirm dialog's button is the last "Approve" on the page.
     await screen.findByText("Approve this leave?");
     fireEvent.click(screen.getAllByRole("button", { name: "Approve" }).at(-1) as HTMLElement);
-    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
-    const patch = calls.find((call) => call.method === "PATCH");
-    expect(patch?.url).toMatch(/\/school-admin\/academics\/leaves\/41$/);
-    expect(patch?.body).toEqual({ status: 1 });
+    // The server decides leave through its approve route; PATCH refuses a status change.
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    const post = calls.find((call) => call.method === "POST");
+    expect(post?.url).toMatch(/\/school-admin\/academics\/leaves\/41\/approve$/);
+    expect(calls.some((call) => call.method === "PATCH")).toBe(false);
   });
 });
 

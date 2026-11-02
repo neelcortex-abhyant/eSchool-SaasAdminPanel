@@ -65,6 +65,21 @@ export type ResourceConfig = {
   sort?: { key: string; desc?: boolean };
   /** Only rows that pass are shown (e.g. student leave out of all leave). */
   rowFilter?: (row: Raw) => boolean;
+  /** Edit is offered only on rows that pass (e.g. leave still pending). */
+  canEditRow?: (row: Raw) => boolean;
+  /** Extra buttons that POST to a row's route after a confirmation, e.g. approve or reject. */
+  rowActions?: RowAction[];
+};
+
+export type RowAction = {
+  label: string;
+  /** Shown only on rows that pass. */
+  show: (row: Raw) => boolean;
+  /** Relative to /school-admin, e.g. (row) => `/academics/leaves/${row.id}/approve`. */
+  path: (row: Raw) => string;
+  confirm: string;
+  done: string;
+  danger?: boolean;
 };
 
 /** A settings object read with GET and saved with PUT. */

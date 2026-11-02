@@ -7,7 +7,7 @@
  * /online-assessment-attempts/{id}. Publishing is validated by the server (questions exist,
  * marks add up to total_marks, each question has exactly one correct choice); its 422
  * sentences are shown as is. Correct answers only come back on these admin routes.
- * The question bank shared across exams is sample data only.
+ * The shared question bank is at /school-admin/question-bank (see below).
  */
 import { academicsService, listAll } from "@/lib/academics";
 import { AcademicApiError } from "@/lib/academics/errors";
@@ -378,7 +378,8 @@ export function examService(): ExamService {
 }
 
 // ---------- question bank ----------
-// Live: /school-admin/question-bank (GET ?q=, POST, PATCH/DELETE /{id}); the server files a
+// Live: /school-admin/question-bank (GET ?q=, POST, PATCH/DELETE /{id}) and
+// /online-assessments/{id}/questions/from-bank to copy into an exam; the server files a
 // question under a subject id. Sample: kept in this browser by subject name.
 
 async function subjectsByName() {
@@ -444,8 +445,16 @@ export async function removeBankQuestion(id: number): Promise<void> {
   save();
 }
 
-/** Copies bank questions into an exam through the exam client (live or sample). Returns failures. */
+/**
+ * Copies bank questions into an exam. Live: one POST /online-assessments/{id}/questions/from-bank
+ * {question_ids}, which copies them all or none. Sample: one by one. Returns failures.
+ */
 export async function copyBankQuestionsToExam(examId: number, questions: BankQuestion[]): Promise<string[]> {
+  if (isLive("exams")) {
+    // All or none: an error reaches the picker, which keeps the dialog open to try again.
+    await send("POST", `/school-admin/online-assessments/${examId}/questions/from-bank`, { question_ids: questions.map((question) => question.id) }, "Unable to add questions from the bank.");
+    return [];
+  }
   const service = examService();
   const results = await settleLimited(
     questions.map((question, index) => () =>

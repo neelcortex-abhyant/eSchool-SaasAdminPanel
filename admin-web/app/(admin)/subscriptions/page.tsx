@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
 import { PageHeading } from "@/components/dashboard/StatCard";
 import { IconFees } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
@@ -51,6 +52,10 @@ export default function SubscriptionsPage() {
     });
   }, []);
 
+  const [confirmExpire, setConfirmExpire] = useState(false);
+  const [expiring, setExpiring] = useState(false);
+  const [expireNotice, setExpireNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -84,10 +89,38 @@ export default function SubscriptionsPage() {
     <div>
       <PageHeading title="School subscriptions" description="Plans assigned to schools" icon={<IconFees width={20} height={20} />} />
       <div className="page-actions">
+        <button className="btn-pill btn-pill-green-soft" type="button" disabled={expiring} onClick={() => setConfirmExpire(true)}>
+          Expire ended subscriptions
+        </button>
         <Link className="btn-pill btn-pill-green" href="/subscriptions/assign">
           Assign plan
         </Link>
       </div>
+      {expireNotice ? <div className={`alert ${expireNotice.ok ? "alert-success" : "alert-danger"}`} role="status">{expireNotice.text}</div> : null}
+      {confirmExpire ? (
+        <ConfirmDialog
+          title="Expire ended subscriptions?"
+          body="Every active subscription whose end date is before today becomes expired. Nothing runs this automatically, so do it after renewals are recorded."
+          confirmLabel="Expire them"
+          tone="danger"
+          pending={expiring}
+          onCancel={() => setConfirmExpire(false)}
+          onConfirm={async () => {
+            if (expiring) return;
+            setExpiring(true);
+            const result = await api<{ expired?: number }>("/super-admin/subscriptions/expire-due", { method: "POST" });
+            setExpiring(false);
+            setConfirmExpire(false);
+            if (!result.ok) {
+              setExpireNotice({ ok: false, text: apiErrorMessage(result.data, "Unable to expire subscriptions.") });
+              return;
+            }
+            const count = result.data.expired ?? 0;
+            setExpireNotice({ ok: true, text: count ? `${count} subscription${count === 1 ? "" : "s"} marked expired.` : "No active subscription had ended." });
+            void load();
+          }}
+        />
+      ) : null}
       <div className="school-filters">
         <input
           type="search"

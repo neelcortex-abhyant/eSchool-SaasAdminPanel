@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ActivityItem, TransactionRow } from "@/lib/dashboardData";
+import type { ActivityItem, RecentSchool, TransactionRow } from "@/lib/dashboardData";
 import {
   IconBell,
   IconBuilding,
@@ -16,7 +16,7 @@ function statusClass(status: TransactionRow["status"]) {
 
 export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
   if (!rows.length) {
-    return <div className="empty-state">No fee records</div>;
+    return <div className="empty-state">No payments yet</div>;
   }
 
   return (
@@ -24,28 +24,28 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Fee</th>
-            <th>Scope</th>
-            <th>Name</th>
-            <th>Due charges</th>
+            <th>School</th>
+            <th>Plan</th>
+            <th>Amount</th>
             <th>Status</th>
-            <th>Due date</th>
-            <th>Actions</th>
+            <th>Date</th>
+            <th>
+              <span className="acad-sr">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              <td className="mono">{row.id}</td>
-              <td>{row.school}</td>
-              <td>{row.plan}</td>
-              <td>{row.amount}</td>
-              <td>
+              <td data-label="School">{row.school}</td>
+              <td data-label="Plan">{row.plan}</td>
+              <td data-label="Amount">{row.amount}</td>
+              <td data-label="Status">
                 <span className={`status-badge ${statusClass(row.status)}`}>{row.status}</span>
               </td>
-              <td>{row.date}</td>
+              <td data-label="Date">{row.date}</td>
               <td>
-                <Link href="/fees" className="link-btn">
+                <Link href={`/payments/${encodeURIComponent(row.id)}`} className="link-btn">
                   View
                 </Link>
               </td>
@@ -57,9 +57,32 @@ export function RecentTransactions({ rows }: { rows: TransactionRow[] }) {
   );
 }
 
+export function RecentSchools({ rows }: { rows: RecentSchool[] }) {
+  if (!rows.length) {
+    return <div className="empty-state">No schools yet</div>;
+  }
+  return (
+    <div className="activity-list">
+      {rows.map((row) => (
+        <Link key={row.id} href={`/schools/${row.id}`} className="activity-item">
+          <div className="activity-icon">
+            <IconBuilding width={16} height={16} />
+          </div>
+          <div>
+            <p className="activity-title">{row.name}</p>
+            <p className="activity-meta">
+              {[row.code, row.plan ?? "No plan", row.active ? "Active" : "Inactive", row.created_at ? new Date(row.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : null].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export function RecentActivity({ items }: { items: ActivityItem[] }) {
   if (!items.length) {
-    return <div className="empty-state">No announcements</div>;
+    return <div className="empty-state">No recent activity</div>;
   }
 
   return (

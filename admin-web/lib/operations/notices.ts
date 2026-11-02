@@ -8,7 +8,7 @@
  * Sample: the server still saves every published announcement and sent notification; the extra
  * details (audience, publish date, drafts, delivery counts) are kept in this browser.
  */
-import { listRows, staffDirectory } from "@/lib/extras/api";
+import { create, getOne, listRows, staffDirectory } from "@/lib/extras/api";
 import { isOperationsLive } from "@/lib/operations/mode";
 import type { Announcement, AnnouncementInput, Audience, DeliveryStatus, NoticeStatus, NotificationRecord } from "@/lib/operations/types";
 import { peopleService } from "@/lib/people";
@@ -52,7 +52,7 @@ function audienceOf(value: unknown): Audience[] {
 /** Published, or scheduled when the publish time is still ahead. */
 // Values the pages know how to show; anything else from the server is worked out here instead.
 const NOTICE_STATUSES: NoticeStatus[] = ["draft", "scheduled", "published"];
-const DELIVERY_STATUSES: DeliveryStatus[] = ["queued", "sent", "partial", "failed"];
+const DELIVERY_STATUSES: DeliveryStatus[] = ["queued", "sent", "partial", "failed", "cancelled"];
 
 export function noticeStatus(publishAt: string | null, now = Date.now()): NoticeStatus {
   return publishAt && new Date(publishAt).getTime() > now ? "scheduled" : "published";
@@ -165,26 +165,43 @@ export async function audienceSize(audience: Audience[]): Promise<number> {
 export async function listNotifications(): Promise<NotificationRecord[]> {
   const rows = await listRows("/notifications");
   const meta = readMeta();
-  return rows
-    .map((row): NotificationRecord => {
-      const extra = meta.notifications[String(num(row.id))];
-      const recipients = live() ? num(row.recipients) : extra?.recipients ?? 0;
-      const delivered = live() ? num(row.delivered) : extra?.delivered ?? 0;
-      const failed = live() ? num(row.failed) : extra?.failed ?? 0;
-      return {
-        id: num(row.id),
-        title: str(row.title),
-        body: str(row.body),
-        audience: live() ? audienceOf(row.audience) : extra?.audience ?? ["all"],
-        created_at: optStr(row.created_at),
-        delivery: live() && DELIVERY_STATUSES.includes(str(row.delivery) as DeliveryStatus) ? (str(row.delivery) as DeliveryStatus) : extra ? deliveryOf(recipients, delivered, failed) : num(row.status) === 1 ? "sent" : "queued",
-        recipients,
-        delivered,
-        failed,
-        failure_reason: live() ? optStr(row.failure_reason) : failed ? "Some people have no app sign-in or notifications are turned off." : null,
-      };
-    })
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+  return rows.map((row) => notificationOf(row, meta)).sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+}
+
+/** One notification as the server has it now (GET /notifications/{id}), e.g. after delivery ran. */
+export async function getNotification(id: number): Promise<NotificationRecord> {
+  return notificationOf(await getOne(`/notifications/${id}`), readMeta());
+}
+
+/**
+ * Stops a notification that hasn't gone out yet (POST /notifications/{id}/cancel). Only queued
+ * notifications on the server can be cancelled.
+ */
+export async function cancelNotification(id: number): Promise<NotificationRecord> {
+  return notificationOf(await create(`/notifications/${id}/cancel`, {}), readMeta());
+}
+
+export function canCancel(row: NotificationRecord): boolean {
+  return live() && row.delivery === "queued";
+}
+
+function notificationOf(row: Raw, meta: ReturnType<typeof readMeta>): NotificationRecord {
+  const extra = meta.notifications[String(num(row.id))];
+  const recipients = live() ? num(row.recipients) : extra?.recipients ?? 0;
+  const delivered = live() ? num(row.delivered) : extra?.delivered ?? 0;
+  const failed = live() ? num(row.failed) : extra?.failed ?? 0;
+  return {
+    id: num(row.id),
+    title: str(row.title),
+    body: str(row.body),
+    audience: live() ? audienceOf(row.audience) : extra?.audience ?? ["all"],
+    created_at: optStr(row.created_at),
+    delivery: live() && DELIVERY_STATUSES.includes(str(row.delivery) as DeliveryStatus) ? (str(row.delivery) as DeliveryStatus) : extra ? deliveryOf(recipients, delivered, failed) : num(row.status) === 1 ? "sent" : "queued",
+    recipients,
+    delivered,
+    failed,
+    failure_reason: live() ? optStr(row.failure_reason) : failed ? "Some people have no app sign-in or notifications are turned off." : null,
+  };
 }
 
 export function notificationProblems(input: { title: string; body: string; audience: Audience[] }): Record<string, string> {

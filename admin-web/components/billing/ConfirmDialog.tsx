@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export function ConfirmDialog({
   title,
   body,
@@ -8,7 +10,8 @@ export function ConfirmDialog({
   onCancel,
 }: {
   title: string;
-  body: string;
+  /** Text, or content such as a confirmation field. */
+  body: ReactNode;
   confirmLabel: string;
   pending: boolean;
   tone?: "default" | "danger";
@@ -19,7 +22,7 @@ export function ConfirmDialog({
     <div className="modal-backdrop" role="presentation">
       <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <h2 id="confirm-title">{title}</h2>
-        <p>{body}</p>
+        {typeof body === "string" ? <p>{body}</p> : <div className="confirm-body">{body}</div>}
         <div className="page-actions">
           <button className={`btn-pill ${tone === "danger" ? "btn-pill-danger" : "btn-pill-green"}`} type="button" disabled={pending} onClick={onConfirm}>
             {pending ? "Saving…" : confirmLabel}

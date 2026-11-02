@@ -13,11 +13,11 @@ import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { staffDirectory } from "@/lib/extras/api";
-import { balances, createLeave, LEAVE_STATUS, leaveDays, loadLeaves, loadLeaveTypes, serverBalances, setLeaveStatus } from "@/lib/operations/leave";
+import { balances, createLeave, LEAVE_STATUS, leaveDays, loadLeaves, loadLeaveTypes, serverBalances, decideLeave, type LeaveDecision } from "@/lib/operations/leave";
 import type { LeaveRequest, LeaveStatus, LeaveType } from "@/lib/operations/types";
 import { IconCalendar } from "@/lib/icons";
 
-const STATUS_TONE: Record<LeaveStatus, ChipTone> = { 0: "amber", 1: "green", 2: "red" };
+const STATUS_TONE: Record<LeaveStatus, ChipTone> = { 0: "amber", 1: "green", 2: "red", 3: "grey" };
 const PAGE_SIZE = 20;
 
 export const LEAVE_TABS = [
@@ -25,6 +25,12 @@ export const LEAVE_TABS = [
   { href: "/school/leave-settings", label: "Leave types" },
   { href: "/school/leave-report", label: "Leave report" },
 ];
+
+const DECISION_COPY: Record<LeaveDecision, { title: string; label: string; done: string }> = {
+  approve: { title: "Approve this leave?", label: "Approve", done: "Leave approved." },
+  reject: { title: "Reject this leave?", label: "Reject", done: "Leave rejected." },
+  cancel: { title: "Cancel this leave request?", label: "Cancel leave", done: "Leave cancelled." },
+};
 
 function statusChip(status: LeaveStatus) {
   return <Chip tone={STATUS_TONE[status]}>{LEAVE_STATUS[status]}</Chip>;
@@ -71,7 +77,7 @@ function LeaveBody({ adding, setAdding }: { adding: boolean; setAdding: (value: 
   const people = useOptions(useCallback(() => staffDirectory(), []));
   const [filter, setFilter] = useState({ status: "0", userId: "", type: "", q: "", from: "", to: "" });
   const [page, setPage] = useState(1);
-  const [deciding, setDeciding] = useState<{ row: LeaveRequest; status: 1 | 2 } | null>(null);
+  const [deciding, setDeciding] = useState<{ row: LeaveRequest; decision: LeaveDecision } | null>(null);
   const [pending, setPending] = useState(false);
   const [history, setHistory] = useState<number | null>(null);
 
@@ -100,6 +106,7 @@ function LeaveBody({ adding, setAdding }: { adding: boolean; setAdding: (value: 
           <option value="0">Pending</option>
           <option value="1">Approved</option>
           <option value="2">Rejected</option>
+          <option value="3">Cancelled</option>
         </select>
         <select aria-label="Employee" value={filter.userId} onChange={(event) => set({ userId: event.target.value })}>
           <option value="">All employees</option>
@@ -126,33 +133,32 @@ function LeaveBody({ adding, setAdding }: { adding: boolean; setAdding: (value: 
           loading={leaves.loading || settings.loading}
           emptyText={filter.status === "0" ? "No leave is waiting for a decision." : "No leave matches these filters."}
           actions={(row) =>
+            // The server decides pending leave only; a decision can't be changed afterwards.
             row.status === 0 ? (
               <>
-                <button className="link-btn" type="button" onClick={() => setDeciding({ row, status: 1 })}>Approve</button>
-                <button className="link-btn danger" type="button" onClick={() => setDeciding({ row, status: 2 })}>Reject</button>
+                <button className="link-btn" type="button" onClick={() => setDeciding({ row, decision: "approve" })}>Approve</button>
+                <button className="link-btn danger" type="button" onClick={() => setDeciding({ row, decision: "reject" })}>Reject</button>
+                <button className="link-btn" type="button" onClick={() => setDeciding({ row, decision: "cancel" })}>Cancel</button>
               </>
-            ) : (
-              <button className="link-btn" type="button" onClick={() => setDeciding({ row, status: row.status === 1 ? 2 : 1 })}>
-                {row.status === 1 ? "Reject instead" : "Approve instead"}
-              </button>
-            )
+            ) : null
           }
         />
         <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} />
       </div>
       {deciding ? (
         <ConfirmDialog
-          title={deciding.status === 1 ? "Approve this leave?" : "Reject this leave?"}
+          title={DECISION_COPY[deciding.decision].title}
           body={`${deciding.row.person_name}: ${deciding.row.leave_type ?? "Leave"}, ${deciding.row.from_date}${deciding.row.to_date !== deciding.row.from_date ? ` to ${deciding.row.to_date}` : ""} (${deciding.row.days} day${deciding.row.days === 1 ? "" : "s"}).`}
-          confirmLabel={deciding.status === 1 ? "Approve" : "Reject"}
-          tone={deciding.status === 2 ? "danger" : "default"}
+          confirmLabel={DECISION_COPY[deciding.decision].label}
+          tone={deciding.decision === "approve" ? "default" : "danger"}
           pending={pending}
           onCancel={() => setDeciding(null)}
           onConfirm={async () => {
+            if (pending) return;
             setPending(true);
             try {
-              await setLeaveStatus(deciding.row.id, deciding.status);
-              toast("success", deciding.status === 1 ? "Leave approved." : "Leave rejected.");
+              await decideLeave(deciding.row.id, deciding.decision);
+              toast("success", DECISION_COPY[deciding.decision].done);
               void leaves.reload();
             } catch (caught) {
               toast("error", errorMessage(caught, "Unable to change the leave."));

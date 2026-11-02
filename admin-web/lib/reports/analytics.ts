@@ -373,7 +373,7 @@ async function staffReport(filter: ReportFilter): Promise<Report> {
     row.days += leave.days;
     if (leave.status === 1) row.approved += 1;
     else if (leave.status === 2) row.rejected += 1;
-    else row.pending += 1;
+    else if (leave.status === 0) row.pending += 1;
     leaveTypes.set(key, row);
   }
   const departments = countBy(staff, (person) => person.department || (person.kind === "teacher" ? "Teaching" : "Unassigned"));

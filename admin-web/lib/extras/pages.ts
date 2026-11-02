@@ -3,6 +3,7 @@
  * (/school/{slug}). Fields and columns follow the server: a field the server's PATCH ignores is
  * `createOnly`, and edit/delete appear only where the server has PATCH/DELETE.
  */
+import type { Raw } from "@/lib/extras/api";
 import type { ExtraConfig, FieldDef, ResourceConfig, SettingsConfig } from "@/lib/extras/types";
 
 const money = (value: unknown) => (value === null || value === undefined || value === "" ? "—" : `₹${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
@@ -86,7 +87,10 @@ const LEAVE_STATUS = [
   { value: "0", label: "Pending" },
   { value: "1", label: "Approved" },
   { value: "2", label: "Rejected" },
+  { value: "3", label: "Cancelled" },
 ];
+
+const pendingLeave = (row: Raw) => Number(row.status ?? 0) === 0;
 
 const leaveColumns = [
   { key: "user_id", label: "Person", ref: "staff-user" as const, format: undefined },
@@ -207,7 +211,6 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
       { key: "from_date", label: "From", type: "date", required: true },
       { key: "to_date", label: "To", type: "date", required: true },
       sessionField,
-      { key: "status", label: "Status", type: "select", options: LEAVE_STATUS, initial: "0", required: true },
     ],
     columns: [
       { key: "student_id", label: "Student", ref: "student" },
@@ -221,6 +224,14 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
     canDelete: true,
     sort: { key: "from_date", desc: true },
     rowFilter: (row) => row.student_id !== null && row.student_id !== undefined,
+    // New leave is pending; the server decides it only through approve/reject/cancel, and
+    // a decided leave can't be edited.
+    canEditRow: pendingLeave,
+    rowActions: [
+      { label: "Approve", show: pendingLeave, path: (row) => `/academics/leaves/${row.id}/approve`, confirm: "Approve this leave?", done: "Leave approved." },
+      { label: "Reject", show: pendingLeave, path: (row) => `/academics/leaves/${row.id}/reject`, confirm: "Reject this leave?", done: "Leave rejected.", danger: true },
+      { label: "Cancel leave", show: pendingLeave, path: (row) => `/academics/leaves/${row.id}/cancel`, confirm: "Cancel this leave request?", done: "Leave cancelled.", danger: true },
+    ],
   },
   "leave-report": {
     kind: "resource",
@@ -677,7 +688,7 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
       { key: "name", label: "Name", type: "text", required: true, maxLength: 120 },
       { key: "code", label: "Short code", type: "text", required: true, maxLength: 32, hint: "e.g. CL, SL." },
       { key: "days_per_year", label: "Days per year", type: "number", hint: "Leave empty for no yearly limit." },
-      { key: "applies_to", label: "For", type: "select", required: true, options: [{ value: "staff", label: "Staff" }, { value: "student", label: "Students" }, { value: "all", label: "Everyone" }], initial: "staff" },
+      { key: "applies_to", label: "For", type: "select", required: true, options: [{ value: "staff", label: "Staff" }, { value: "teacher", label: "Teachers" }, { value: "student", label: "Students" }, { value: "all", label: "Everyone" }], initial: "staff" },
       { key: "is_paid", label: "Paid leave", type: "checkbox", initial: "1" },
       { key: "is_active", label: "In use", type: "checkbox", initial: "1" },
       { key: "description", label: "Description", type: "textarea" },
@@ -686,7 +697,7 @@ export const EXTRA_PAGES: Record<string, ExtraConfig> = {
       { key: "name", label: "Leave type" },
       { key: "code", label: "Code" },
       { key: "days_per_year", label: "Days / year", format: (value) => (value === null || value === undefined ? "No limit" : String(value)) },
-      { key: "applies_to", label: "For", format: (value) => ({ staff: "Staff", student: "Students", all: "Everyone" })[String(value)] ?? String(value ?? "—") },
+      { key: "applies_to", label: "For", format: (value) => ({ staff: "Staff", teacher: "Teachers", teachers: "Teachers", student: "Students", students: "Students", all: "Everyone" })[String(value)] ?? String(value ?? "—") },
       { key: "is_paid", label: "Paid", format: (value) => (value === true || Number(value) === 1 ? "Yes" : "No") },
       { key: "is_active", label: "In use", format: (value) => (value === true || Number(value) === 1 ? "Yes" : "No") },
     ],

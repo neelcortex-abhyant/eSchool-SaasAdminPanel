@@ -15,22 +15,28 @@
  */
 import { staffDirectory } from "@/lib/extras/api";
 import { isOperationsLive } from "@/lib/operations/mode";
-import type { Attachment, Conversation, ConversationQuery, Message, MessagingPolicy, Participant } from "@/lib/operations/types";
+import type { Attachment, Conversation, ConversationQuery, Message, MessagingPolicy, Participant, UploadedAttachment } from "@/lib/operations/types";
 import { peopleService } from "@/lib/people";
 import { invalid, later, missing } from "@/lib/ops/store";
-import { get, num, optStr, send, str, type Raw } from "@/lib/teaching/client";
+import { get, num, optStr, send, str, upload, type Raw } from "@/lib/teaching/client";
 
 export interface MessagingService {
   policy(): Promise<MessagingPolicy>;
   conversations(query?: ConversationQuery): Promise<Conversation[]>;
   messages(conversationId: number): Promise<Message[]>;
-  send(conversationId: number, body: string): Promise<Message>;
+  /** Files go up first (POST /conversations/attachments/upload) and are sent with the message. */
+  send(conversationId: number, body: string, attachments?: UploadedAttachment[]): Promise<Message>;
+  uploadAttachment(file: File): Promise<UploadedAttachment>;
+  /** Unread messages across the conversations this admin may see. */
+  unreadCount(): Promise<number>;
   markRead(conversationId: number): Promise<void>;
   flag(conversationId: number, flagged: boolean): Promise<void>;
   hide(messageId: number, hidden: boolean): Promise<void>;
 }
 
 export const MAX_MESSAGE = 2000;
+/** The server takes at most 3 files per message. */
+export const MAX_ATTACHMENTS = 3;
 
 export function messageProblem(body: string): string {
   const text = body.trim();
@@ -58,7 +64,13 @@ function participantOf(row: unknown): Participant {
 }
 
 function attachmentsOf(value: unknown): Attachment[] {
-  return Array.isArray(value) ? (value as Raw[]).map((row) => ({ name: str(row.name), url: str(row.url), size: row.size === undefined || row.size === null ? null : num(row.size), content_type: optStr(row.content_type) })) : [];
+  if (!Array.isArray(value)) return [];
+  return (value as Raw[]).map((row) => {
+    const size = row.size ?? row.size_bytes;
+    // The server's path starts with /api/v1; the API client adds its own base.
+    const path = optStr(row.download_path)?.replace(/^\/api\/v1(?=\/)/, "") ?? null;
+    return { name: str(row.name ?? row.original_filename, "file"), url: str(row.url), size: size === undefined || size === null ? null : num(size), content_type: optStr(row.content_type), download_path: path };
+  });
 }
 
 function conversationOf(row: Raw): Conversation {
@@ -104,10 +116,20 @@ export const liveMessaging: MessagingService = {
     const data = await get(`${M}/conversations/${conversationId}/messages`, { page_size: 50 }, "Unable to load messages.");
     return (Array.isArray(data.items) ? (data.items as Raw[]) : []).map(messageOf).sort((a, b) => a.sent_at.localeCompare(b.sent_at));
   },
-  async send(conversationId, body) {
+  async send(conversationId, body, attachments) {
     const problem = messageProblem(body);
     if (problem) invalid({ body: problem });
-    return messageOf(await send("POST", `${M}/conversations/${conversationId}/messages`, { body: body.trim() }, "Unable to send the message."));
+    const files = attachments ?? [];
+    return messageOf(await send("POST", `${M}/conversations/${conversationId}/messages`, files.length ? { body: body.trim(), attachments: files } : { body: body.trim() }, "Unable to send the message."));
+  },
+  async uploadAttachment(file) {
+    const form = new FormData();
+    form.append("file", file);
+    const row = await upload(`${M}/conversations/attachments/upload`, form, "Unable to upload the file.");
+    return { original_filename: str(row.original_filename ?? row.name, file.name), content_type: str(row.content_type, file.type), size_bytes: num(row.size_bytes ?? row.size ?? file.size), storage_key: str(row.storage_key) };
+  },
+  async unreadCount() {
+    return num((await get(`${M}/conversations/unread-count`, {}, "Unable to count unread messages.")).unread);
   },
   async markRead(conversationId) {
     await send("POST", `${M}/conversations/${conversationId}/read`, {}, "Unable to mark as read.");
@@ -162,7 +184,7 @@ async function build(): Promise<Store> {
     const second = new Date(now - (index * 26 + 2) * 3_600_000).toISOString();
     const [a, b] = opener.teacher && OPENERS[index].subject !== "Absent on Monday" && OPENERS[index].subject !== "Parent-teacher meeting" ? [teacher, parent] : [parent, teacher];
     const [textA, textB] = a.role === "teacher" ? [opener.teacher, opener.parent] : [opener.parent, opener.teacher];
-    messages.push({ id: id * 100 + 1, conversation_id: id, sender: a, body: textA, attachments: index === 2 ? [{ name: "project-groups.pdf", url: "#", size: 48_200, content_type: "application/pdf" }] : [], sent_at: first, hidden: false });
+    messages.push({ id: id * 100 + 1, conversation_id: id, sender: a, body: textA, attachments: index === 2 ? [{ name: "project-groups.pdf", url: "#", size: 48_200, content_type: "application/pdf", download_path: null }] : [], sent_at: first, hidden: false });
     messages.push({ id: id * 100 + 2, conversation_id: id, sender: b, body: textB, attachments: [], sent_at: second, hidden: false });
     conversations.push({ id, subject: opener.subject, student_id: student.id, student_name: student.name, class_name: `${student.class_name} ${student.section_name}`.trim(), teacher, parent, last_message: textB, last_message_at: second, unread: index < 2 ? 1 : 0, flagged: false });
   });
@@ -207,12 +229,19 @@ export const mockMessaging: MessagingService = {
     if (!db.conversations.some((row) => row.id === conversationId)) missing("Conversation");
     return later(db.messages.filter((row) => row.conversation_id === conversationId).sort((a, b) => a.sent_at.localeCompare(b.sent_at)));
   },
-  async send(conversationId, body) {
+  async uploadAttachment(file) {
+    // Sample data keeps only the file's name; nothing is uploaded.
+    return later({ original_filename: file.name, content_type: file.type || "application/octet-stream", size_bytes: file.size, storage_key: `sample/${file.name}` });
+  },
+  async unreadCount() {
+    return later((await store()).conversations.reduce((sum, row) => sum + row.unread, 0));
+  },
+  async send(conversationId, body, attachments = []) {
     const problem = messageProblem(body);
     if (problem) invalid({ body: problem });
     const db = await store();
     const conversation = db.conversations.find((row) => row.id === conversationId) ?? missing("Conversation");
-    const message: Message = { id: Math.max(0, ...db.messages.map((row) => row.id)) + 1, conversation_id: conversationId, sender: ADMIN, body: body.trim(), attachments: [], sent_at: new Date().toISOString(), hidden: false };
+    const message: Message = { id: Math.max(0, ...db.messages.map((row) => row.id)) + 1, conversation_id: conversationId, sender: ADMIN, body: body.trim(), attachments: attachments.map((file) => ({ name: file.original_filename, url: "#", size: file.size_bytes, content_type: file.content_type, download_path: null })), sent_at: new Date().toISOString(), hidden: false };
     db.messages.push(message);
     conversation.last_message = message.body;
     conversation.last_message_at = message.sent_at;

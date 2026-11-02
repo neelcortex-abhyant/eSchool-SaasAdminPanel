@@ -15,7 +15,7 @@ import { errorMessage } from "@/lib/academics";
 import { displayValue } from "@/lib/extras/api";
 import { refOptions } from "@/lib/extras/refs";
 import { isOperationsLive, OPERATIONS_SAMPLE_NOTE } from "@/lib/operations/mode";
-import { canChange, deleteAnnouncement, filterNotifications, listAnnouncements, listNotifications, saveAnnouncement, sendNotification } from "@/lib/operations/notices";
+import { canCancel, canChange, cancelNotification, deleteAnnouncement, filterNotifications, getNotification, listAnnouncements, listNotifications, saveAnnouncement, sendNotification } from "@/lib/operations/notices";
 import { AUDIENCES, type Announcement, type Audience, type DeliveryStatus, type NoticeStatus, type NotificationRecord } from "@/lib/operations/types";
 import { useSubmitOnce } from "@/lib/ops/submit";
 import { IconBell } from "@/lib/icons";
@@ -40,6 +40,7 @@ const DELIVERY: Record<DeliveryStatus, { label: string; tone: ChipTone }> = {
   sent: { label: "Delivered", tone: "green" },
   partial: { label: "Partly delivered", tone: "amber" },
   failed: { label: "Failed", tone: "red" },
+  cancelled: { label: "Cancelled", tone: "grey" },
 };
 
 export function audienceLabel(audience: Audience[]): string {
@@ -266,7 +267,22 @@ function NotificationsBody({ composing, setComposing }: { composing: boolean; se
   const [filter, setFilter] = useState({ q: "", from: "", to: "", delivery: "" });
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<NotificationRecord | null>(null);
+  const [checking, setChecking] = useState(false);
   const rows = filterNotifications(list.options, filter);
+  // Reads or changes the open notification on the server and shows the answer.
+  async function act(run: () => Promise<NotificationRecord>, done?: string) {
+    if (checking) return;
+    setChecking(true);
+    try {
+      setOpen(await run());
+      if (done) toast("success", done);
+      void list.reload();
+    } catch (caught) {
+      toast("error", errorMessage(caught, "Unable to reach the server."));
+    } finally {
+      setChecking(false);
+    }
+  }
   const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const set = (patch: Partial<typeof filter>) => {
     setFilter((current) => ({ ...current, ...patch }));
@@ -305,7 +321,7 @@ function NotificationsBody({ composing, setComposing }: { composing: boolean; se
           onClose={() => setComposing(false)}
           onSent={() => {
             setComposing(false);
-            toast("success", "Notification sent.");
+            toast("success", "Notification sent for delivery. Its status shows in the list.");
             void list.reload();
           }}
         />
@@ -323,6 +339,16 @@ function NotificationsBody({ composing, setComposing }: { composing: boolean; se
               {open.failure_reason ? <div><dt>Why some failed</dt><dd>{open.failure_reason}</dd></div> : null}
             </dl>
             <div className="resource-actions acad-modal-actions">
+              {canCancel(open) ? (
+                <button className="link-btn danger" type="button" disabled={checking} onClick={() => void act(() => cancelNotification(open.id), "Notification cancelled.")}>
+                  Cancel sending
+                </button>
+              ) : null}
+              {isOperationsLive("notices") ? (
+                <button className="link-btn" type="button" disabled={checking} onClick={() => void act(() => getNotification(open.id))}>
+                  {checking ? "Checking…" : "Refresh status"}
+                </button>
+              ) : null}
               <button className="btn-pill btn-pill-green-soft" type="button" onClick={() => setOpen(null)}>Close</button>
             </div>
           </div>
