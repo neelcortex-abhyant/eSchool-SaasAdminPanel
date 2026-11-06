@@ -7,7 +7,7 @@
  * in this browser. Verification never succeeds on sample data (there's no DNS to check).
  */
 import { api, apiErrorMessage } from "@/lib/api";
-import { customDomainProblem, rootDomain, schoolHost, schoolSiteUrl, slugAlternatives, slugProblem } from "@/lib/domains/core";
+import { customDomainProblem, displayRootDomain, rootDomain, schoolHost, schoolSiteUrl, slugAlternatives, slugProblem } from "@/lib/domains/core";
 import { domainsLive, domainsMode } from "@/lib/domains/mode";
 import { ownSchool, siteFromSchool, slugOf } from "@/lib/domains/school";
 import { SAMPLE_SITES, cleanSite } from "@/lib/domains/sites";
@@ -139,6 +139,17 @@ function saveMockSettings(settings: DomainSettings) {
   }
 }
 
+/**
+ * The school's default address: the full host the backend saved (it builds it from its
+ * SCHOOL_BASE_DOMAIN), else one built from a configured platform domain, else "" (never localhost).
+ */
+function defaultUrlFor(school: { domain?: string | null; domain_type?: string | null }, slug: string, here?: { protocol: string; port: string }): string {
+  const host = (school.domain || "").trim().toLowerCase();
+  if (school.domain_type !== "custom" && host.includes(".") && !host.endsWith(".localhost")) return `https://${host}`;
+  const root = displayRootDomain();
+  return slug && root ? schoolSiteUrl(slug, root, here) : "";
+}
+
 /** Settings from the school's own record (domain, domain_type, domain_verified) until the domain routes exist. */
 async function settingsFromSchool(): Promise<DomainSettings> {
   const school = await ownSchool();
@@ -147,7 +158,7 @@ async function settingsFromSchool(): Promise<DomainSettings> {
   const here = typeof window === "undefined" ? undefined : { protocol: window.location.protocol, port: window.location.port };
   return {
     slug,
-    default_url: slug ? schoolSiteUrl(slug, rootDomain(), here) : "",
+    default_url: defaultUrlFor(school, slug, here),
     domain_type: school.domain_type === "custom" ? "custom" : "default",
     custom_domain: site.custom_domain,
     domain_status: site.domain_status,

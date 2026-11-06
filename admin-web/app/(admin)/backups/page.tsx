@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { api, apiErrorMessage } from "@/lib/api";
 import { backupStatus, type Backup } from "@/lib/backups";
 import { IconSettings } from "@/lib/icons";

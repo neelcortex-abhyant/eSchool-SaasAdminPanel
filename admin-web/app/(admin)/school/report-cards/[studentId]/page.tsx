@@ -2,10 +2,11 @@
 
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { dayLabel } from "@/components/teaching/offline";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { gradingService } from "@/lib/ops/grading";

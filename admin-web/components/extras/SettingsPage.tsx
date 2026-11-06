@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage, FieldInput } from "@/components/extras/Frame";
-import { Chip, Stat } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import { displayValue, getOne, labelFor, replace } from "@/lib/extras/api";
 import { initialValues, problems, readPath, toBody, type Values } from "@/lib/extras/form";
 import type { ReportConfig, SettingsConfig } from "@/lib/extras/types";

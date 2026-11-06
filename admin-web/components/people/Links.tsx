@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { SelectField, StatusToggle } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { StatusBadge } from "@/components/academics/StatusBadge";
-import { useToast } from "@/components/academics/Toasts";
-import { useFormErrors } from "@/components/academics/hooks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SelectField, StatusToggle } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/ui/Toasts";
+import { useFormErrors } from "@/components/ui/hooks";
 import { ParentSearch, StudentSearch } from "@/components/people/Pickers";
 import { InfoCard } from "@/components/people/Profile";
 import { errorMessage, peopleService, RELATIONSHIPS, type ChildLink, type GuardianLink, type Parent, type Relationship, type Student, type StudentRow } from "@/lib/people";

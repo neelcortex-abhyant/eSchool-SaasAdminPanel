@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { SchoolForm } from "@/components/schools/SchoolForm";
 import { EMPTY_SCHOOL_FORM } from "@/lib/schoolForm";
 import { IconBuilding } from "@/lib/icons";

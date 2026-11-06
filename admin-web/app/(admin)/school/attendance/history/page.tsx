@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ATTENDANCE_LIVE_NOTE, ATTENDANCE_TABS, AttendanceChip, percentText, todayIso } from "@/components/teaching/attendance";
-import { formatDateTime, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { formatDateTime, TeachingPage } from "@/components/teaching/Frame";
+import { Stat } from "@/components/ui/Badge";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { attendanceRoster, attendanceService, attendanceSupport, STATUS_LABEL, tally } from "@/lib/teaching/attendance";
 import type { AttendanceRecord, AttendanceStatus } from "@/lib/teaching/types";

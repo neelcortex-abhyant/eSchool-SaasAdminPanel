@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
-import { Chip, FileButton, formatDateTime, TeachingPage } from "@/components/teaching/Frame";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
+import { FileButton, formatDateTime, TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { MATERIAL_TYPE_LABEL, MATERIALS_LIVE_NOTE, MaterialForm, ReplaceFileForm } from "@/components/teaching/materials";
 import { PlacementFilters, usePlacementFilter, useSubjects } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";

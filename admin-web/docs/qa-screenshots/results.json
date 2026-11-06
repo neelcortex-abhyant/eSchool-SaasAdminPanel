@@ -1,0 +1,87 @@
+[
+  {
+    "name": "BUG-01 registration preview has no .localhost",
+    "ok": true,
+    "detail": "green-valley-public-school — we'll confirm it's free when you submit."
+  },
+  {
+    "name": "BUG-02 registration Terms/Privacy links",
+    "ok": true,
+    "detail": "[\"/terms\",\"/privacy\"]"
+  },
+  {
+    "name": "BUG-02 /terms page opens (public)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "BUG-02 /privacy page opens (public)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "BUG-02 footer links",
+    "ok": true,
+    "detail": "[\"/privacy\",\"/terms\"]"
+  },
+  {
+    "name": "Signed-out protected URL redirects to login",
+    "ok": true,
+    "detail": "/login?next=%2Fschool%2Fstudents"
+  },
+  {
+    "name": "Expired session message on login",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "School dashboard shows students/teachers/fees",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Dashboard no longer says payments aren't stored",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Dashboard desktop: no horizontal scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Dashboard tablet: no horizontal scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Dashboard mobile: no horizontal scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "BUG-03 class/section errors clear after picking a class",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Fee assignment guidance matches the server rule",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "School sidebar routes open (3)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Browser back/forward",
+    "ok": true,
+    "detail": "/school/students → /school/teachers"
+  },
+  {
+    "name": "After logout, protected URL goes to login",
+    "ok": true,
+    "detail": "/login"
+  }
+]

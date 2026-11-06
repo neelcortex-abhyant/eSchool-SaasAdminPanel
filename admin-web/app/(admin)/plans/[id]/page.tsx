@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconPackage } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
 import { accessError, limitLabel, money, planStatusLabel, type Plan } from "@/lib/billing";

@@ -2,17 +2,18 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ConcessionForm, FEE_TABS, StudentPicker, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { isOpsLive } from "@/lib/ops/mode";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import type { StudentRow } from "@/lib/people";
 import { feeService } from "@/lib/ops/fees";
@@ -25,7 +26,11 @@ export default function FeeAssignmentsPage() {
     <TeachingPage
       module="fees"
       title="Assignments & concessions"
-      description="Students pay their class's fee structures automatically. Add extra fees (like transport) for individual students, and record discounts or exemptions."
+      description={
+        isOpsLive("fees")
+          ? "A student owes a fee structure only once it's assigned to them here. Assign each class's structure to its students, add extra fees (like transport), and record discounts or exemptions."
+          : "Students pay their class's fee structures automatically. Add extra fees (like transport) for individual students, and record discounts or exemptions."
+      }
       icon={<IconFees width={18} height={18} />}
       tabs={FEE_TABS}
       liveNote={OPS_LIVE_NOTE.fees}

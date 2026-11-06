@@ -16,6 +16,10 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/register-school" || pathname.startsWith("/register-school/")) {
     return true;
   }
+  // Platform legal pages, linked from registration and the site footer.
+  if (pathname === "/terms" || pathname === "/privacy") {
+    return true;
+  }
   // Public school websites (also reached through their own hosts, see schoolSite below).
   if (pathname === "/site" || pathname.startsWith("/site/")) {
     return true;

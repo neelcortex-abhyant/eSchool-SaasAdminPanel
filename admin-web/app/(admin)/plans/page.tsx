@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeading } from "@/components/dashboard/StatCard";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconPackage } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
 import { accessError, limitLabel, loadPlans, money, planStatusLabel, type Plan } from "@/lib/billing";

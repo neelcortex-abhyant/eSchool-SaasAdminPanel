@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeading } from "@/components/dashboard/StatCard";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconFees } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
 import { loadSchools, type SchoolRecord } from "@/lib/school";

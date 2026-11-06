@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { SelectField } from "@/components/academics/Fields";
-import { useOptions } from "@/components/academics/hooks";
+import { SelectField } from "@/components/ui/Fields";
+import { useOptions } from "@/components/ui/hooks";
 import { classLabel, sectionLabel, sessionLabel, useClassesFor, useSectionsFor, useSessions } from "@/components/people/academicOptions";
 import { academicsService, listAll } from "@/lib/academics";
 

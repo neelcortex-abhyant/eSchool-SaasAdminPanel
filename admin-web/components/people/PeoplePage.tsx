@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { AccessGate, useSchoolAdminAccess } from "@/components/academics/AcademicPage";
-import { ToastProvider, useToast } from "@/components/academics/Toasts";
+import { ToastProvider, useToast } from "@/components/ui/Toasts";
 import { LIVE_LIMITS_NOTE, peopleSource, type PeopleModule } from "@/lib/people";
 
 const FLASH_KEY = "people-flash";

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { EXAM_STATUS, EXAM_TABS, EXAMS_LIVE_NOTE, ExamForm, ExamStatusChip, examWindow } from "@/components/teaching/exams";
 import { PlacementFilters, usePlacementFilter, useSubjects } from "@/components/teaching/Pickers";

@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { useDebounced, useOptions } from "@/components/academics/hooks";
-import { SelectField } from "@/components/academics/Fields";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useDebounced, useOptions } from "@/components/ui/hooks";
+import { SelectField } from "@/components/ui/Fields";
+import { useToast } from "@/components/ui/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { EXAM_TABS, QuestionCard, QuestionForm } from "@/components/teaching/exams";
 import { useSubjects } from "@/components/teaching/Pickers";

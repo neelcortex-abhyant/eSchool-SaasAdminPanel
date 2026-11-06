@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { errorMessage, listAll } from "@/lib/academics";

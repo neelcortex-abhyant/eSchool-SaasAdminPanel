@@ -2,11 +2,12 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ATTENDANCE_LIVE_NOTE, ATTENDANCE_TABS, AttendanceChip, todayIso } from "@/components/teaching/attendance";
-import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import { EMPTY_PLACEMENT, PlacementFields, type PlacementValue } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { attendanceRoster, attendanceService, attendanceSupport, STATUS_LABEL, tally, type MarkResult } from "@/lib/teaching/attendance";

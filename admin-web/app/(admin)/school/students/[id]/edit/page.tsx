@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useToast } from "@/components/ui/Toasts";
 import { uploadFiles } from "@/components/people/Files";
 import { GuardianManager } from "@/components/people/Links";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";

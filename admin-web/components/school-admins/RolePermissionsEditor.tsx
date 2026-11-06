@@ -5,7 +5,7 @@ import { PERMISSION_MODULES, permissionKey, type PermissionAction } from "@/lib/
 import { loadSchoolAdminPermissions, loadSchoolAdminRoles, permissionsFollowRole, updateSchoolAdminRoles } from "@/lib/schoolAdminUsers/api";
 import type { SchoolAdminUser } from "@/lib/schoolAdminUsers/types";
 import { apiErrorMessage } from "@/lib/api";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const ACTIONS: PermissionAction[] = ["read", "write", "manage"];
 

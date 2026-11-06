@@ -8,6 +8,23 @@ export function rootDomain(): string {
   return (process.env.NEXT_PUBLIC_SCHOOL_ROOT_DOMAIN || "localhost").trim().toLowerCase().replace(/^\.+|\.+$/g, "");
 }
 
+/**
+ * The root domain to show people. The configured one; "localhost" only in development; "" in a
+ * production build without NEXT_PUBLIC_SCHOOL_ROOT_DOMAIN, so nobody is shown "school.localhost".
+ * It must match the backend's SCHOOL_BASE_DOMAIN, which builds the real address on registration.
+ */
+export function displayRootDomain(): string {
+  const configured = (process.env.NEXT_PUBLIC_SCHOOL_ROOT_DOMAIN || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+  if (configured) return configured;
+  return process.env.NODE_ENV === "production" ? "" : "localhost";
+}
+
+/** "greenvalley.example.com", or just "greenvalley" when the platform domain isn't known here. */
+export function schoolAddress(slug: string): string {
+  const root = displayRootDomain();
+  return root ? `${slug}.${root}` : slug;
+}
+
 /** Subdomains schools can't take: the platform's own hosts and common system names. */
 export const RESERVED_SLUGS = new Set([
   "www", "app", "admin", "api", "mail", "smtp", "imap", "pop", "ftp", "ns1", "ns2", "dns", "cdn", "static", "assets",

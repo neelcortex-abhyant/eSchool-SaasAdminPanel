@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { StatusBadge } from "@/components/academics/StatusBadge";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 /** Photo when there is one, otherwise the person's initials. */
 export function Avatar({ name, photoUrl, size = 40 }: { name: string; photoUrl: string | null; size?: number }) {

@@ -66,7 +66,7 @@ describe("middleware sign-in guard", () => {
   });
 
   it("leaves public pages and password reset open", async () => {
-    for (const path of ["/", "/login", "/login/reset", "/register-school"]) {
+    for (const path of ["/", "/login", "/login/reset", "/register-school", "/terms", "/privacy"]) {
       const response = await run(`http://localhost:3000${path}`, "localhost:3000");
       expect(response.headers.get("location")).toBeNull();
     }

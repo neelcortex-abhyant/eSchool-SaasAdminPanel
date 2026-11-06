@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useOptions } from "@/components/academics/hooks";
+import { useOptions } from "@/components/ui/hooks";
 import { peopleService } from "@/lib/people";
 import { staffDirectory } from "@/lib/extras/api";
 import { isOpsLive } from "@/lib/ops/mode";

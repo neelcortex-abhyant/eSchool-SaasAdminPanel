@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconUsers } from "@/lib/icons";
 import { SchoolAdminForm } from "@/components/school-admins/SchoolAdminForm";
 import { EMPTY_SCHOOL_ADMIN_FORM } from "@/lib/schoolAdminUsers/types";

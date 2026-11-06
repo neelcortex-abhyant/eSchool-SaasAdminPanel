@@ -2,15 +2,16 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { isOpsLive } from "@/lib/ops/mode";
 import { transportService } from "@/lib/ops/transport";

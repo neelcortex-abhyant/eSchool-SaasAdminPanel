@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { FEE_TABS, FeeTypeForm, categoryLabel } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { feeService } from "@/lib/ops/fees";
 import type { FeeType } from "@/lib/ops/types";

@@ -2,8 +2,8 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { PaymentChip, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { TeachingPage } from "@/components/teaching/Frame";

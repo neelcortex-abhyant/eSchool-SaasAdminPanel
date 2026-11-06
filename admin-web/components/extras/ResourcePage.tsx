@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { FormModal } from "@/components/academics/FormModal";
-import { useDebounced, useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { FormModal } from "@/components/ui/FormModal";
+import { useDebounced, useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage, FieldInput, type Tab } from "@/components/extras/Frame";
 import { errorMessage } from "@/lib/academics";
 import { create, displayValue, listRows, remove, update, type Raw } from "@/lib/extras/api";

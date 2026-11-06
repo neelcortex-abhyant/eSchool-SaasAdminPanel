@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useOptions } from "@/components/academics/hooks";
+import { useOptions } from "@/components/ui/hooks";
 import { ownSchool } from "@/lib/domains/school";
 import type { CardKind } from "@/lib/extras/idCards";
 

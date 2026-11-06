@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PaymentHistory } from "@/components/payments/PaymentHistory";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconFees } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";
 import type { SchoolRecord } from "@/lib/school";

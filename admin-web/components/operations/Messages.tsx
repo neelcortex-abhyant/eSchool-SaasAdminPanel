@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
-import { Chip } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { MAX_ATTACHMENTS, MAX_MESSAGE, messageProblem, messagingService } from "@/lib/operations/messaging";
 import { isOperationsLive, OPERATIONS_SAMPLE_NOTE } from "@/lib/operations/mode";

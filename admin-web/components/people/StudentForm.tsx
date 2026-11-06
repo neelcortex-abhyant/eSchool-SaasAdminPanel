@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { useFormErrors } from "@/components/academics/hooks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { useFormErrors } from "@/components/ui/hooks";
 import { classLabel, sectionLabel, sessionLabel, useClassesFor, useSectionsFor, useSessions } from "@/components/people/academicOptions";
 import { DocumentPicker, PhotoPicker, StoredDocuments, type PendingDocument } from "@/components/people/Files";
 import { PasswordField } from "@/components/people/PasswordField";
@@ -117,10 +117,12 @@ export function StudentForm({
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setValues((v) => ({ ...v, [key]: value }));
+    errors.clearField(String(key));
   }
 
   function setGuardianField<K extends keyof GuardianState>(key: K, value: GuardianState[K]) {
     setGuardian((g) => ({ ...g, [key]: value }));
+    errors.clearField(key === "parent" ? "guardian.parent_id" : `guardian.${String(key)}`);
   }
 
   // Inactive classes and sections can't take new students, but a student already in one keeps it.
@@ -264,7 +266,10 @@ export function StudentForm({
           placeholder="Choose a session"
           loading={sessions.loading}
           value={values.session_year_id}
-          onChange={(v) => setValues((current) => ({ ...current, session_year_id: v, class_id: "", class_section_id: "" }))}
+          onChange={(v) => {
+            setValues((current) => ({ ...current, session_year_id: v, class_id: "", class_section_id: "" }));
+            errors.clearField("session_year_id", "class_id", "class_section_id");
+          }}
           options={sessions.options.map((row) => ({ value: String(row.id), label: sessionLabel(row) }))}
           error={fe.session_year_id}
         />
@@ -276,7 +281,11 @@ export function StudentForm({
           loading={classes.loading}
           disabled={!values.session_year_id}
           value={values.class_id}
-          onChange={(v) => setValues((current) => ({ ...current, class_id: v, class_section_id: "" }))}
+          onChange={(v) => {
+            setValues((current) => ({ ...current, class_id: v, class_section_id: "" }));
+            // "Choose a class first" on the section no longer applies once a class is picked.
+            errors.clearField("class_id", "class_section_id");
+          }}
           options={classChoices.map((row) => ({ value: String(row.id), label: classLabel(row) }))}
           error={fe.class_id}
         />

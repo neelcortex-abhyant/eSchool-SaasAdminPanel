@@ -93,6 +93,7 @@ type Summary = {
   subjects?: number;
   exams?: number;
   fees?: number;
+  teachers?: number;
   attendance_today?: { present?: number; absent?: number };
   leaves_today?: { count?: number; items?: { id: number; reason: string | null }[] };
   finance_months?: { month: string; expenses: number; fee_charges: number }[];
@@ -139,6 +140,7 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
         students: Number(data.students ?? 0),
         classes: Number(data.classes ?? 0),
         subjects: Number(data.subjects ?? 0),
+        teachers: Number(data.teachers ?? 0),
         exams: Number(data.exams ?? 0),
         fees: Number(data.fees ?? 0),
       });
@@ -155,6 +157,26 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
       cancelled = true;
     };
   }, [schoolId, sessionId]);
+
+  // Fee totals from the fee routes: this month's collection, and what's still owed on assigned fees.
+  const [fees, setFees] = useState<{ collected: number; payments: number; pending: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const monthStart = `${today.slice(0, 8)}01`;
+    void Promise.all([
+      api<{ total_collected?: number; payment_count?: number }>(`/school-admin/fees/collection-report?from_date=${monthStart}&to_date=${today}`),
+      api<{ summary?: { outstanding?: number } }>("/school-admin/fees/outstanding?page=1&page_size=1"),
+    ]).then(([collection, outstanding]) => {
+      if (cancelled || !collection.ok || !outstanding.ok) return;
+      setFees({ collected: Number(collection.data.total_collected ?? 0), payments: Number(collection.data.payment_count ?? 0), pending: Number(outstanding.data.summary?.outstanding ?? 0) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolId]);
 
   const peak = Math.max(1, ...months.flatMap((month) => [month.expenses, month.fee_charges]));
 
@@ -173,7 +195,9 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
         <Stat href="/school/academics/classes" label="Total classes" value={counts?.classes} icon={<IconClasses width={18} height={18} />} tone="teal" />
         <Stat href="/school/academics/subjects" label="Total subjects" value={counts?.subjects} icon={<IconClasses width={18} height={18} />} tone="blue" />
         <Stat href="/school/offline-exams" label="Total exams" value={counts?.exams} icon={<IconExam width={18} height={18} />} tone="navy" />
-        <Stat href="/school/manage-fees" label="Fee definitions" value={counts?.fees} icon={<IconFees width={18} height={18} />} tone="slate" />
+        <Stat href="/school/teachers" label="Total teachers" value={counts?.teachers} icon={<IconUsers width={18} height={18} />} tone="blue" />
+        <Stat href="/school/fees/collection" label="Fees collected this month" value={fees ? rupees(fees.collected) : undefined} icon={<IconFees width={18} height={18} />} tone="green" />
+        <Stat href="/school/fees/outstanding" label="Fees pending" value={fees ? rupees(fees.pending) : undefined} icon={<IconFees width={18} height={18} />} tone="slate" />
       </section>
       <section className="school-dash-grid">
         <article className="panel-card school-chart-card">
@@ -205,7 +229,7 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
               ))}
             </div>
           )}
-          <p className="school-empty-note">Collected fee payments are not stored. Green bars are fee amounts due. Amber bars are expenses.</p>
+          <p className="school-empty-note">Green bars are fee amounts due on the school&apos;s fee definitions; amber bars are expenses. Collected fees are under Fees › Collection report.</p>
           {attendance ? <p className="school-empty-note">Today: {attendance.present} present, {attendance.absent} absent or late.</p> : null}
         </article>
         <article className="panel-card school-leave-card">
@@ -228,7 +252,11 @@ function SchoolDashboard({ schoolId }: { schoolId: number }) {
   );
 }
 
-function Stat({ href, label, value, icon, tone }: { href: string; label: string; value?: number; icon: ReactNode; tone: string }) {
+function rupees(value: number): string {
+  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function Stat({ href, label, value, icon, tone }: { href: string; label: string; value?: number | string; icon: ReactNode; tone: string }) {
   return (
     <Link className="school-stat" href={href}>
       <div>

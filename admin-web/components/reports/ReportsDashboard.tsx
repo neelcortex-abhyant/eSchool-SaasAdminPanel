@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ExtrasPage } from "@/components/extras/Frame";
 import { PlacementFilters, useCurrentSessionId } from "@/components/teaching/Pickers";
 import { downloadText } from "@/lib/operations/export";

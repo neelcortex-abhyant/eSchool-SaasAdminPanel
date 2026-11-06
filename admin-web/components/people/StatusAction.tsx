@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toasts";
 import { errorMessage, type RecordStatus } from "@/lib/people";
 
 /**

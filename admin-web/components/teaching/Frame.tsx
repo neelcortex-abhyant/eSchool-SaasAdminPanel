@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccessGate, useSchoolAdminAccess } from "@/components/academics/AcademicPage";
-import { ToastProvider, useToast } from "@/components/academics/Toasts";
+import { ToastProvider, useToast } from "@/components/ui/Toasts";
+
 import { openFile, safeFileUrl } from "@/components/people/Files";
 import type { FileMeta } from "@/lib/teaching/types";
 import { OPS_SAMPLE_NOTE } from "@/components/ops/notes";
@@ -85,23 +86,6 @@ export function TeachingPage({
   );
 }
 
-export type ChipTone = "green" | "amber" | "red" | "grey" | "blue";
-
-const TONE_CLASS: Record<ChipTone, string> = { green: "paid", amber: "pending", red: "failed", grey: "refunded", blue: "info" };
-
-export function Chip({ tone, children }: { tone: ChipTone; children: ReactNode }) {
-  return <span className={`status-badge ${TONE_CLASS[tone]}`}>{children}</span>;
-}
-
-/** A count card for summary rows (attendance, homework). */
-export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: ChipTone }) {
-  return (
-    <div className={`teach-stat${tone ? ` is-${tone}` : ""}`}>
-      <span className="teach-stat-value">{value}</span>
-      <span className="teach-stat-label">{label}</span>
-    </div>
-  );
-}
 
 /** "2026-10-23T18:00:00Z" → "23 Oct 2026, 11:30 pm" in the viewer's time zone. */
 export function formatDateTime(value: string | null | undefined): string {

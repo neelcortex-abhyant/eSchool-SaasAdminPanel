@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { useFormErrors } from "@/components/academics/hooks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { useFormErrors } from "@/components/ui/hooks";
 import { PasswordField } from "@/components/people/PasswordField";
 import { StudentSearch, useDuplicateParent } from "@/components/people/Pickers";
 import { FormSection } from "@/components/people/Profile";
@@ -109,16 +109,19 @@ export function ParentForm({
       ) : null}
 
       <FormSection title="Personal and contact details">
-        <TextField id="parent-first-name" label="First name" required maxLength={128} value={firstName} onChange={setFirstName} error={fe.first_name} />
-        <TextField id="parent-last-name" label="Last name" required maxLength={128} value={lastName} onChange={setLastName} error={fe.last_name} />
-        <TextField id="parent-email" label="Email" type="email" required autoComplete="off" value={emailValue} onChange={setEmail} error={fe.email} hint="Used to sign in to the parent app. Must be unique in your school." />
-        <TextField id="parent-mobile" label="Phone" type="tel" required value={mobile} onChange={setMobile} error={fe.mobile} />
+        <TextField id="parent-first-name" label="First name" required maxLength={128} value={firstName} onChange={(v) => { setFirstName(v); errors.clearField("first_name"); }} error={fe.first_name} />
+        <TextField id="parent-last-name" label="Last name" required maxLength={128} value={lastName} onChange={(v) => { setLastName(v); errors.clearField("last_name"); }} error={fe.last_name} />
+        <TextField id="parent-email" label="Email" type="email" required autoComplete="off" value={emailValue} onChange={(v) => { setEmail(v); errors.clearField("email"); }} error={fe.email} hint="Used to sign in to the parent app. Must be unique in your school." />
+        <TextField id="parent-mobile" label="Phone" type="tel" required value={mobile} onChange={(v) => { setMobile(v); errors.clearField("mobile"); }} error={fe.mobile} />
         {!parent && support.password ? (
           <PasswordField
             id="parent-password"
             label="Sign-in password"
             value={password}
-            onChange={setPassword}
+            onChange={(v) => {
+              setPassword(v);
+              errors.clearField("password");
+            }}
             error={fe.password}
             hint="At least 8 characters. Copy it and give it to the parent; they sign in to the parent app with their email and this password."
           />
@@ -135,8 +138,8 @@ export function ParentForm({
         ) : null}
         {support.details ? (
           <>
-            <TextField id="parent-occupation" label="Occupation" maxLength={255} value={occupation} onChange={setOccupation} error={fe.occupation} />
-            <TextAreaField id="parent-address" label="Address" span maxLength={512} value={address} onChange={setAddress} error={fe.current_address} />
+            <TextField id="parent-occupation" label="Occupation" maxLength={255} value={occupation} onChange={(v) => { setOccupation(v); errors.clearField("occupation"); }} error={fe.occupation} />
+            <TextAreaField id="parent-address" label="Address" span maxLength={512} value={address} onChange={(v) => { setAddress(v); errors.clearField("current_address"); }} error={fe.current_address} />
           </>
         ) : null}
         {support.status ? (

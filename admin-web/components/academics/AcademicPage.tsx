@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, apiErrorMessage, getAccessToken } from "@/lib/api";
 import { academicsSource, type AcademicFeature } from "@/lib/academics";
-import { ToastProvider } from "@/components/academics/Toasts";
+import { ToastProvider } from "@/components/ui/Toasts";
 
 export const ACADEMIC_TABS: { href: string; label: string; feature: AcademicFeature }[] = [
   { href: "/school/academics/sessions", label: "Sessions", feature: "sessions" },

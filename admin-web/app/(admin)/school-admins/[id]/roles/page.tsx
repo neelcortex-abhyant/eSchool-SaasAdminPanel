@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconUsers } from "@/lib/icons";
 import { RolePermissionsEditor } from "@/components/school-admins/RolePermissionsEditor";
 import { getSchoolAdminUser, schoolAdminDisplayName } from "@/lib/schoolAdminUsers/api";

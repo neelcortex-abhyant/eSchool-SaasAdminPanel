@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage } from "@/lib/api";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconPackage } from "@/lib/icons";
 
 export type Column = { key: string; label: string };

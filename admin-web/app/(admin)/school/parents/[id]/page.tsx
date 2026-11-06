@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ChildrenManager } from "@/components/people/Links";
 import { PeoplePage, routeId } from "@/components/people/PeoplePage";
 import { InfoCard, ProfileHeader, ProfileSkeleton, useRecord } from "@/components/people/Profile";

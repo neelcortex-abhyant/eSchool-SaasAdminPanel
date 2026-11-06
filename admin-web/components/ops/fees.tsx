@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useDebounced, useFormErrors, useOptions } from "@/components/academics/hooks";
+import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useDebounced, useFormErrors, useOptions } from "@/components/ui/hooks";
 import { classLabel, sessionLabel, useClassesFor, useSessions } from "@/components/people/academicOptions";
-import { Chip, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { peopleService, type StudentRow } from "@/lib/people";
 import { feeService, structureFormProblems } from "@/lib/ops/fees";
@@ -35,7 +35,7 @@ export const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: ChipTo
 };
 
 export function PaymentChip({ status }: { status: PaymentStatus }) {
-  return <Chip tone={PAYMENT_STATUS[status].tone}>{PAYMENT_STATUS[status].label}</Chip>;
+  return <StatusChip map={PAYMENT_STATUS} value={status} />;
 }
 
 export function categoryLabel(value: string): string {

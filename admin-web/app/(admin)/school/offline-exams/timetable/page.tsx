@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { OFFLINE_LIVE_NOTE, OFFLINE_TABS, dayLabel, paperTime } from "@/components/teaching/offline";
 import { PlacementFilters, usePlacementFilter, useTeachers } from "@/components/teaching/Pickers";

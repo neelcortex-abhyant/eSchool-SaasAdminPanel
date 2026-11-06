@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { FormModal } from "@/components/academics/FormModal";
-import { SelectField, TextAreaField, TextField } from "@/components/academics/Fields";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { FormModal } from "@/components/ui/FormModal";
+import { SelectField, TextAreaField, TextField } from "@/components/ui/Fields";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
-import { Chip, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, type ChipTone } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { create, displayValue, getOne, listRows, replace, update, type Raw } from "@/lib/extras/api";
 import { str } from "@/lib/teaching/client";

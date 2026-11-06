@@ -97,6 +97,20 @@ export function useFormErrors() {
     setFormError("");
   }, []);
 
+  /**
+   * Removes the errors of fields the user just changed. When none are left, the form-level
+   * "check the highlighted fields" message goes too.
+   */
+  const clearField = useCallback((...keys: string[]) => {
+    setFieldErrors((current) => {
+      if (!keys.some((key) => key in current)) return current;
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      if (Object.keys(next).length === 0) setFormError("");
+      return next;
+    });
+  }, []);
+
   const fromError = useCallback((error: unknown, fallback: string) => {
     if (error instanceof AcademicApiError) {
       setFieldErrors(error.fieldErrors);
@@ -107,5 +121,5 @@ export function useFormErrors() {
     }
   }, []);
 
-  return { fieldErrors, formError, setFieldErrors, setFormError, clear, fromError };
+  return { fieldErrors, formError, setFieldErrors, setFormError, clear, clearField, fromError };
 }

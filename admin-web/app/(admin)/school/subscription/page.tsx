@@ -2,11 +2,12 @@
 
 import { useCallback, useState } from "react";
 import { AccessGate, useSchoolAdminAccess } from "@/components/academics/AcademicPage";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { ToastProvider, useToast } from "@/components/academics/Toasts";
-import { Chip, formatDateTime, Stat, type ChipTone } from "@/components/teaching/Frame";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { ToastProvider, useToast } from "@/components/ui/Toasts";
+import { formatDateTime } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { money } from "@/lib/billing";
 import { downloadSchoolInvoice, loadSchoolBilling, ownSchoolId, type SchoolInvoice, type SchoolPayment } from "@/lib/schoolBilling";
 import { IconFees } from "@/lib/icons";
@@ -81,7 +82,7 @@ function BillingBody() {
     { key: "amount", label: "Amount", render: (row) => money(row.amount, row.currency) },
     { key: "gateway", label: "Gateway", render: (row) => row.gateway || "—" },
     { key: "reference", label: "Reference", render: (row) => row.reference ?? "—" },
-    { key: "status", label: "Status", render: (row) => <Chip tone={STATUS[row.status].tone}>{STATUS[row.status].label}</Chip> },
+    { key: "status", label: "Status", render: (row) => <StatusChip map={STATUS} value={row.status} /> },
   ];
 
   return (

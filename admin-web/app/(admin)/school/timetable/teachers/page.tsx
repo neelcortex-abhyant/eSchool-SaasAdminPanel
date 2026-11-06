@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { TextField } from "@/components/academics/Fields";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { TextField } from "@/components/ui/Fields";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { sessionLabel, useSessions } from "@/components/people/academicOptions";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { useCurrentSessionId, useTeachers } from "@/components/teaching/Pickers";
 import {
   DAY_LABEL,

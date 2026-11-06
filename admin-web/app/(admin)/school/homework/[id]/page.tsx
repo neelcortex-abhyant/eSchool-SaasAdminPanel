@@ -2,11 +2,12 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
-import { FileButton, formatDateTime, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
+import { FileButton, formatDateTime, TeachingPage } from "@/components/teaching/Frame";
+import { Stat } from "@/components/ui/Badge";
 import { EvaluationForm, HOMEWORK_LIVE_NOTE, HomeworkForm, SUBMISSION_STATUS, SubmissionChip } from "@/components/teaching/homework";
 import { homeworkService } from "@/lib/teaching/homework";
 import type { AssignmentStatus, Homework, Submission } from "@/lib/teaching/types";

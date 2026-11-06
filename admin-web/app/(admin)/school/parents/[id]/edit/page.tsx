@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { ChildrenManager } from "@/components/people/Links";
 import { ParentForm } from "@/components/people/ParentForm";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";

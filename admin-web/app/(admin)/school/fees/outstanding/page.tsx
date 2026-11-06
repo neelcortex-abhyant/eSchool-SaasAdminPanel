@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, useOptions } from "@/components/academics/hooks";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, useOptions } from "@/components/ui/hooks";
 import { FEE_TABS, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { feeService } from "@/lib/ops/fees";
 import { paise } from "@/lib/ops/fees-math";

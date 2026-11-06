@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, useOptions } from "@/components/academics/hooks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, useOptions } from "@/components/ui/hooks";
 import { useSessions } from "@/components/people/academicOptions";
-import { useToast } from "@/components/academics/Toasts";
+import { useToast } from "@/components/ui/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { OFFLINE_LIVE_NOTE, OFFLINE_TABS, OfflineExamForm, PublishChip, dayLabel } from "@/components/teaching/offline";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";

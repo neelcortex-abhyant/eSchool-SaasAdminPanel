@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
 import { useCardSchool } from "@/components/extras/IdCard";
-import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { staffDirectory } from "@/lib/extras/api";
 import { downloadText, toCsv } from "@/lib/operations/export";
@@ -443,7 +443,7 @@ function PayslipsBody() {
     { key: "department", label: "Department", render: (row) => row.department || "—" },
     { key: "gross", label: "Gross", render: (row) => money(row.gross) },
     { key: "net", label: "Net", render: (row) => <strong>{money(row.net)}</strong> },
-    { key: "status", label: "Status", render: (row) => <div><Chip tone={STATUS[row.status].tone}>{STATUS[row.status].label}</Chip>{row.failure_reason ? <div className="muted">{row.failure_reason}</div> : null}</div> },
+    { key: "status", label: "Status", render: (row) => <div><StatusChip map={STATUS} value={row.status} />{row.failure_reason ? <div className="muted">{row.failure_reason}</div> : null}</div> },
   ];
   const reset = () => setPage(1);
   return (
@@ -487,7 +487,7 @@ export function PayslipView({ payslip, schoolName }: { payslip: Payslip; schoolN
           <h2>{schoolName}</h2>
           <p className="muted">Payslip for {monthLabel(payslip.month)}</p>
         </div>
-        <Chip tone={STATUS[payslip.status].tone}>{STATUS[payslip.status].label}</Chip>
+        <StatusChip map={STATUS} value={payslip.status} />
       </header>
       <dl className="teach-facts">
         <div><dt>Employee</dt><dd>{payslip.name}</dd></div>

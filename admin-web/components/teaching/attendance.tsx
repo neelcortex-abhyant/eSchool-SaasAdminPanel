@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, type ChipTone } from "@/components/ui/Badge";
 import { STATUS_LABEL } from "@/lib/teaching/attendance";
 import type { AttendanceStatus } from "@/lib/teaching/types";
 

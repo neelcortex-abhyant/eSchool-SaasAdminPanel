@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { classLabel, sessionLabel, useClassesFor, useSessions } from "@/components/people/academicOptions";
 import { FEE_TABS, StructureForm, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { isOpsLive } from "@/lib/ops/mode";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { feeService } from "@/lib/ops/fees";

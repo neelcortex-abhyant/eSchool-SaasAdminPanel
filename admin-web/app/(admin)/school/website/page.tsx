@@ -2,11 +2,12 @@
 
 import { useCallback, useState } from "react";
 import { AccessGate, useSchoolAdminAccess } from "@/components/academics/AcademicPage";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { TextField } from "@/components/academics/Fields";
-import { useOptions } from "@/components/academics/hooks";
-import { ToastProvider, useToast } from "@/components/academics/Toasts";
-import { Chip, formatDateTime, type ChipTone } from "@/components/teaching/Frame";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { TextField } from "@/components/ui/Fields";
+import { useOptions } from "@/components/ui/hooks";
+import { ToastProvider, useToast } from "@/components/ui/Toasts";
+import { formatDateTime } from "@/components/teaching/Frame";
+import { Chip, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { domainSettings, mySite, setCustomDomain, verifyDomain } from "@/lib/domains/client";
 import { customDomainProblem } from "@/lib/domains/core";
 import { domainsLive, domainsMock, domainsMode } from "@/lib/domains/mode";
@@ -144,7 +145,7 @@ function WebsiteBody() {
 
       <section className="resource-card" aria-labelledby="domain-title">
         <h2 id="domain-title" className="teach-section-title">
-          Custom domain {settings.custom_domain ? <Chip tone={STATUS[settings.domain_status].tone}>{STATUS[settings.domain_status].label}</Chip> : null}
+          Custom domain {settings.custom_domain ? <StatusChip map={STATUS} value={settings.domain_status} /> : null}
         </h2>
         {settings.custom_domain ? (
           <>

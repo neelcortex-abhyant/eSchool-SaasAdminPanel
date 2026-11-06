@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextField } from "@/components/academics/Fields";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextField } from "@/components/ui/Fields";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage, StudentSearch } from "@/components/extras/Frame";
 import { IdCardView, useCardSchool, type CardData } from "@/components/extras/IdCard";
 import { cardOf, fillTemplate } from "@/components/extras/Tools";
@@ -13,9 +13,9 @@ import { errorMessage, listAll } from "@/lib/academics";
 import { create, displayValue, getOne, listRows, staffDirectory, type Raw, type StaffRef } from "@/lib/extras/api";
 import { peopleService, type StudentRow } from "@/lib/people";
 import { num, optNum, optStr, settleLimited, str } from "@/lib/teaching/client";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { Chip } from "@/components/teaching/Frame";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { Chip } from "@/components/ui/Badge";
 import { PdfDownload } from "@/components/operations/PdfDownload";
 import { refNames } from "@/lib/extras/refs";
 import { IconBook } from "@/lib/icons";

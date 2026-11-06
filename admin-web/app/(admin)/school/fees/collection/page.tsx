@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { FEE_TABS, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Stat } from "@/components/ui/Badge";
 import { listAll, academicsService } from "@/lib/academics";
 import { downloadText, toCsv } from "@/lib/operations/export";
 import { feeService } from "@/lib/ops/fees";

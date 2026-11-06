@@ -2,14 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextAreaField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextAreaField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage, StudentSearch } from "@/components/extras/Frame";
-import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { downloadText, toCsv } from "@/lib/operations/export";
 import { isOperationsLive, OPERATIONS_SAMPLE_NOTE, TRACKING_LIVE_NOTE } from "@/lib/operations/mode";
 import { ageLabel, boardingRate, freshness, trackingService, type Freshness } from "@/lib/operations/tracking";
@@ -188,11 +188,11 @@ function TrackingBody() {
                   <button type="button" className={`bus-row${selected === row.vehicle_id ? " is-selected" : ""}`} onClick={() => setSelected(row.vehicle_id)} aria-pressed={selected === row.vehicle_id}>
                     <span className="bus-row-head">
                       <strong>{row.registration_no}</strong>
-                      <Chip tone={FRESHNESS[fresh].tone}>{FRESHNESS[fresh].label}</Chip>
+                      <StatusChip map={FRESHNESS} value={fresh} />
                     </span>
                     <span className="muted">{row.route_name ?? "No route"} · {row.driver_name ?? "No driver"}</span>
                     <span className="bus-row-meta">
-                      {row.trip_status ? <Chip tone={TRIP_STATUS[row.trip_status].tone}>{TRIP_STATUS[row.trip_status].label}</Chip> : <span className="muted">No trip today</span>}
+                      {row.trip_status ? <StatusChip map={TRIP_STATUS} value={row.trip_status} /> : <span className="muted">No trip today</span>}
                       <span className="muted">
                         {Number.isFinite(row.latitude) ? `${row.latitude.toFixed(5)}, ${row.longitude.toFixed(5)}` : "No GPS fix yet"}
                         {row.speed_kmph ? ` · ${row.speed_kmph} km/h` : ""} · {ageLabel(row.recorded_at)}
@@ -251,7 +251,7 @@ function TripsBody({ scheduling, setScheduling }: { scheduling: boolean; setSche
     { key: "date", label: "Date", render: (row) => <div><strong>{row.trip_date}</strong><div className="muted">{directionLabel(row.direction)}{row.scheduled_start ? ` · ${row.scheduled_start}` : ""}</div></div> },
     { key: "route", label: "Route", render: (row) => row.route_name },
     { key: "vehicle", label: "Vehicle", render: (row) => <div>{row.registration_no}<div className="muted">{row.driver_name ?? "No driver"}{row.helper_name ? ` · ${row.helper_name}` : ""}</div></div> },
-    { key: "status", label: "Status", render: (row) => <Chip tone={TRIP_STATUS[row.status].tone}>{TRIP_STATUS[row.status].label}</Chip> },
+    { key: "status", label: "Status", render: (row) => <StatusChip map={TRIP_STATUS} value={row.status} /> },
     { key: "times", label: "Started – ended", render: (row) => `${time(row.started_at)} – ${time(row.ended_at)}` },
     { key: "riders", label: "Boarded", render: (row) => (row.status === "scheduled" ? `— / ${row.expected}` : `${row.boarded} / ${row.expected}`) },
   ];
@@ -331,7 +331,7 @@ function TripDialog({ trip, onClose }: { trip: Trip; onClose: () => void }) {
         <h2 id="trip-title">{trip.route_name}</h2>
         <p className="muted">{trip.trip_date} · {directionLabel(trip.direction)}</p>
         <dl className="teach-facts">
-          <div><dt>Status</dt><dd><Chip tone={TRIP_STATUS[trip.status].tone}>{TRIP_STATUS[trip.status].label}</Chip></dd></div>
+          <div><dt>Status</dt><dd><StatusChip map={TRIP_STATUS} value={trip.status} /></dd></div>
           <div><dt>Vehicle</dt><dd>{trip.registration_no}</dd></div>
           <div><dt>Driver</dt><dd>{trip.driver_name ?? "—"}</dd></div>
           <div><dt>Helper</dt><dd>{trip.helper_name ?? "—"}</dd></div>
@@ -345,7 +345,7 @@ function TripDialog({ trip, onClose }: { trip: Trip; onClose: () => void }) {
         <ul className="teach-list">
           {riders.options.map((row) => (
             <li key={row.id}>
-              {row.student_name} · {row.stop_name ?? "—"} · <Chip tone={BOARDING_STATUS[row.status].tone}>{BOARDING_STATUS[row.status].label}</Chip> {row.boarded_at ? time(row.boarded_at) : ""}
+              {row.student_name} · {row.stop_name ?? "—"} · <StatusChip map={BOARDING_STATUS} value={row.status} /> {row.boarded_at ? time(row.boarded_at) : ""}
             </li>
           ))}
         </ul>
@@ -416,7 +416,7 @@ function BoardingBody() {
     { key: "student", label: "Student", render: (row) => <div><strong>{row.student_name}</strong><div className="muted">{row.admission_no}</div></div> },
     { key: "trip", label: "Trip", render: (row) => <div>{row.route_name}<div className="muted">{row.trip_date} · {directionLabel(row.direction)}</div></div> },
     { key: "stop", label: "Stop", render: (row) => row.stop_name ?? "—" },
-    { key: "status", label: "Status", render: (row) => <div><Chip tone={BOARDING_STATUS[row.status].tone}>{BOARDING_STATUS[row.status].label}</Chip>{row.corrected_by ? <div className="muted">Corrected{row.note ? `: ${row.note}` : ""}</div> : null}</div> },
+    { key: "status", label: "Status", render: (row) => <div><StatusChip map={BOARDING_STATUS} value={row.status} />{row.corrected_by ? <div className="muted">Corrected{row.note ? `: ${row.note}` : ""}</div> : null}</div> },
     { key: "on", label: "Boarded", render: (row) => time(row.boarded_at) },
     { key: "off", label: "Dropped", render: (row) => time(row.dropped_at) },
   ];
@@ -540,7 +540,7 @@ function ReportsBody() {
   const historyColumns: Column<TransportAttendance>[] = [
     { key: "date", label: "Date", render: (row) => row.trip_date },
     { key: "trip", label: "Trip", render: (row) => `${row.route_name} · ${directionLabel(row.direction)}` },
-    { key: "status", label: "Status", render: (row) => <Chip tone={BOARDING_STATUS[row.status].tone}>{BOARDING_STATUS[row.status].label}</Chip> },
+    { key: "status", label: "Status", render: (row) => <StatusChip map={BOARDING_STATUS} value={row.status} /> },
     { key: "on", label: "Boarded", render: (row) => time(row.boarded_at) },
     { key: "off", label: "Dropped", render: (row) => time(row.dropped_at) },
   ];

@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { DAY_LABEL, DeletePeriod, TIMETABLE_LIVE_NOTE, TIMETABLE_TABS, TimetableForm, type FormSeed } from "@/components/teaching/timetable";

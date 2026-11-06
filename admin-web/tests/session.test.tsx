@@ -73,3 +73,11 @@ describe("school admin pages", () => {
     expect(screen.queryByText("Secret report")).toBeNull();
   });
 });
+
+describe("network failures", () => {
+  it("returns a failed result instead of throwing when the server can't be reached", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    const result = await api("/super-admin/schools/1");
+    expect(result).toEqual({ ok: false, status: 0, data: { detail: "Can't reach the server. Check your connection and try again." } });
+  });
+});

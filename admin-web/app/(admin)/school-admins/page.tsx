@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { apiErrorMessage } from "@/lib/api";
 import { loadSchools, type SchoolRecord } from "@/lib/school";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconUsers } from "@/lib/icons";
 import {
   listSchoolAdminUsers,

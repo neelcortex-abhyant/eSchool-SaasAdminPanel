@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useOptions } from "@/components/academics/hooks";
+import { useOptions } from "@/components/ui/hooks";
 import { academicsService, listAll, type AcademicSession, type ClassSection, type SchoolClass } from "@/lib/academics";
 
 const sessionService = academicsService("sessions");

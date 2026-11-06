@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { PlanForm, planToValues } from "@/components/billing/PlanForm";
 import { IconPackage } from "@/lib/icons";
 import { api, apiErrorMessage } from "@/lib/api";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useDebounced, useOptions } from "@/components/academics/hooks";
+import { useDebounced, useOptions } from "@/components/ui/hooks";
 import { errorMessage, peopleService, type Parent, type StudentRow } from "@/lib/people";
 
 const parentService = peopleService("parents");

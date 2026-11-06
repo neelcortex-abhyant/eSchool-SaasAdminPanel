@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { SelectField, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors } from "@/components/academics/hooks";
+import { SelectField, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors } from "@/components/ui/hooks";
 import { formatBytes } from "@/components/teaching/Frame";
 import { EMPTY_PLACEMENT, PlacementFields, SubjectTeacherFields, type PlacementValue } from "@/components/teaching/Pickers";
 import { MATERIAL_FILE_ACCEPT, materialFileProblem, materialService } from "@/lib/teaching/materials";

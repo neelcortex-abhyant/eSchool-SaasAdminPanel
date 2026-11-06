@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors } from "@/components/academics/hooks";
-import { Chip, FileButton, formatBytes, fromLocalInput, toLocalInput, type ChipTone } from "@/components/teaching/Frame";
+import { StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors } from "@/components/ui/hooks";
+import { FileButton, formatBytes, fromLocalInput, toLocalInput } from "@/components/teaching/Frame";
+import { Chip, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { EMPTY_PLACEMENT, PlacementFields, SubjectTeacherFields, type PlacementValue } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { homeworkService } from "@/lib/teaching/homework";
@@ -23,7 +24,7 @@ export const SUBMISSION_STATUS: Record<AssignmentStatus, { label: string; tone: 
 };
 
 export function SubmissionChip({ status }: { status: AssignmentStatus }) {
-  return <Chip tone={SUBMISSION_STATUS[status].tone}>{SUBMISSION_STATUS[status].label}</Chip>;
+  return <StatusChip map={SUBMISSION_STATUS} value={status} />;
 }
 
 function today(): string {

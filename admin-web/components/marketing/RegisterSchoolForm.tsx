@@ -5,7 +5,7 @@ import { ChangeEvent, FormEvent, useState } from "react";
 import { DomainStep, EMPTY_DOMAIN, type DomainCheck, type DomainDraft } from "@/components/domains/DomainStep";
 import { api, apiErrorMessage } from "@/lib/api";
 import { domainRequestFields, saveSampleSite } from "@/lib/domains/client";
-import { customDomainProblem, defaultSlug, rootDomain, schoolSiteUrl, slugProblem } from "@/lib/domains/core";
+import { customDomainProblem, defaultSlug, displayRootDomain, rootDomain, schoolAddress, schoolSiteUrl, slugProblem } from "@/lib/domains/core";
 import { domainsMock, domainsMode } from "@/lib/domains/mode";
 import {
   EMPTY_REGISTRATION,
@@ -121,7 +121,7 @@ export default function RegisterSchoolForm() {
       if (result.status === 409 && /domain already in use|subdomain|address is taken/i.test(message)) {
         if (domain.type === "custom") setDomainErrors({ custom_domain: "Another school already uses this domain." });
         else {
-          setDomainErrors({ slug: `${slug}.${rootDomain()} is taken.` });
+          setDomainErrors({ slug: `${schoolAddress(slug)} is taken.` });
           setTakenSlugs((list) => [...new Set([...list, slug])]);
         }
       } else if (/subdomain prefix|domain_type|^domain /i.test(message)) {
@@ -143,7 +143,8 @@ export default function RegisterSchoolForm() {
       if (customDomain) dns = { txt_name: `_eschool-verify.${customDomain}`, txt_value: "shown in Settings → Domain after you sign in", cname_name: customDomain, cname_target: `${finalSlug}.${rootDomain()}` };
     }
     const here = typeof window === "undefined" ? undefined : { protocol: window.location.protocol, port: window.location.port };
-    const siteUrl = result.data.site_url || schoolSiteUrl(finalSlug, rootDomain(), here);
+    // The server's address first; without one, build it only from a configured platform domain.
+    const siteUrl = result.data.site_url || (displayRootDomain() ? schoolSiteUrl(finalSlug, displayRootDomain(), here) : "");
     setDone({ slug: finalSlug, siteUrl, previewUrl: domainsMock() ? `/site/${finalSlug}` : siteUrl, customDomain, dns });
   }
 
@@ -155,7 +156,7 @@ export default function RegisterSchoolForm() {
           <p>
             {domainsMode() === "pending" ? (
               <>
-                <strong>Your school&apos;s address:</strong> {done.siteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                <strong>Your school&apos;s address:</strong> {done.siteUrl ? done.siteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "") : `${done.slug} (the platform team adds the domain)`}
               </>
             ) : (
               <>
@@ -295,7 +296,15 @@ export default function RegisterSchoolForm() {
         <label className="register-terms">
           <input type="checkbox" checked={values.terms_accepted} onChange={(event) => setField("terms_accepted", event.target.checked)} />
           <span>
-            I agree to the <Link href="/#contact">Terms and Conditions</Link> and <Link href="/#contact">Privacy Policy</Link>.
+            I agree to the{" "}
+            <Link href="/terms" target="_blank" rel="noopener noreferrer">
+              Terms and Conditions
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+              Privacy Policy
+            </Link>
+            .
           </span>
         </label>
         {errors.terms_accepted ? <p className="field-error">{errors.terms_accepted}</p> : null}

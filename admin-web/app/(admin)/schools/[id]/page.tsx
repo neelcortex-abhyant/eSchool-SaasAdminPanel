@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { api, apiErrorMessage } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/api";
 import { PaymentHistory } from "@/components/payments/PaymentHistory";
 import { SchoolBilling } from "@/components/schools/SchoolBilling";
-import { loadSchool, loadSchoolAdmins, schoolStatusLabel, type SchoolAdmin, type SchoolRecord } from "@/lib/school";
+import { deleteSchool, loadSchool, loadSchoolAdmins, schoolStatusLabel, setSchoolStatus, type SchoolAdmin, type SchoolRecord } from "@/lib/school";
 
 type ConfirmAction = "delete" | "suspend" | "deactivate";
 
@@ -64,8 +64,8 @@ export default function SchoolProfilePage() {
     setNotice("");
     const result =
       action === "delete"
-        ? await api(`/super-admin/schools/${school.id}`, { method: "DELETE" })
-        : await api(`/super-admin/schools/${school.id}/${action}`, { method: "POST" });
+        ? await deleteSchool(school.id)
+        : await setSchoolStatus(school.id, action);
     setPending("");
     setConfirm(null);
     if (!result.ok) {

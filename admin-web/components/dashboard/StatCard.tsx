@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import {
   IconBuilding,
   IconCheck,
@@ -17,26 +16,6 @@ const ICONS = {
   plans: IconPackage,
   payments: IconFees,
 } as const;
-
-export function PageHeading({
-  title,
-  description,
-  icon,
-}: {
-  title: string;
-  description?: string;
-  icon?: ReactNode;
-}) {
-  return (
-    <div className="page-heading">
-      <div className="page-heading-icon">{icon}</div>
-      <div>
-        <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
-      </div>
-    </div>
-  );
-}
 
 export function StatCard({ data }: { data: StatCardData }) {
   const Icon = ICONS[data.icon];

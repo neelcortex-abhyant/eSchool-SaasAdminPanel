@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, apiErrorMessage, getAccessToken } from "@/lib/api";
+import { apiErrorMessage, getAccessToken } from "@/lib/api";
 import {
   applyApiFieldErrors,
   schoolRequestBody,
@@ -10,7 +10,7 @@ import {
   type SchoolFieldErrors,
   type SchoolFormValues,
 } from "@/lib/schoolForm";
-import type { SchoolRecord } from "@/lib/school";
+import { addSchoolAdmin, saveSchool, setSchoolStatus } from "@/lib/school";
 
 export type { SchoolFormValues } from "@/lib/schoolForm";
 export { EMPTY_SCHOOL_FORM } from "@/lib/schoolForm";
@@ -77,10 +77,7 @@ export function SchoolForm({
     setSaving(true);
     setError("");
     try {
-      const result = await api<SchoolRecord>(mode === "create" ? "/super-admin/schools" : `/super-admin/schools/${schoolId}`, {
-        method: mode === "create" ? "POST" : "PATCH",
-        body: JSON.stringify(schoolRequestBody(values)),
-      });
+      const result = await saveSchool(schoolRequestBody(values), mode === "create" ? undefined : schoolId);
       if (!result.ok || !result.data.id) {
         setFieldErrors(applyApiFieldErrors(result.data));
         setError(apiErrorMessage(result.data, "Unable to save this school."));
@@ -91,20 +88,17 @@ export function SchoolForm({
 
       if ((mode === "create" && values.status === "0") || (mode === "edit" && schoolId && values.status !== initial.status)) {
         const action = values.status === "1" ? "activate" : "suspend";
-        const statusResult = await api<SchoolRecord>(`/super-admin/schools/${savedId}/${action}`, { method: "POST" });
+        const statusResult = await setSchoolStatus(savedId, action);
         if (!statusResult.ok) warnings.push("status");
       }
 
       if (mode === "create") {
-        const adminResult = await api(`/super-admin/schools/${savedId}/admins`, {
-          method: "POST",
-          body: JSON.stringify({
-            email: values.support_email.trim(),
-            password: values.admin_password,
-            first_name: values.admin_first_name.trim(),
-            last_name: values.admin_last_name.trim(),
-            mobile: values.support_phone.trim().slice(0, 32),
-          }),
+        const adminResult = await addSchoolAdmin(savedId, {
+          email: values.support_email.trim(),
+          password: values.admin_password,
+          first_name: values.admin_first_name.trim(),
+          last_name: values.admin_last_name.trim(),
+          mobile: values.support_phone.trim().slice(0, 32),
         });
         if (!adminResult.ok) warnings.push("admin");
       }

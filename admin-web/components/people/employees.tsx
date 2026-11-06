@@ -7,13 +7,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { StatusBadge } from "@/components/academics/StatusBadge";
-import { useToast } from "@/components/academics/Toasts";
-import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/ui/Toasts";
+import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
 import { DocumentPicker, PhotoPicker, StoredDocuments, uploadFiles, type PendingDocument } from "@/components/people/Files";
 import { PasswordField } from "@/components/people/PasswordField";
 import { PeoplePage, flashMessage, routeId } from "@/components/people/PeoplePage";
@@ -299,6 +299,7 @@ export function EmployeeForm({
 
   function set<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
+    errors.clearField(String(key));
   }
 
   function check(): Errors {

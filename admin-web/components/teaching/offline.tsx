@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { SelectField, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
-import { Chip, formatDateTime } from "@/components/teaching/Frame";
+import { SelectField, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
+import { formatDateTime } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { EMPTY_PLACEMENT, PlacementFields, useSubjects, useTeachers, type PlacementValue } from "@/components/teaching/Pickers";
 import { MARK_STATUS_LABEL, examRoster, markProblem, offlineService, scheduleProblems } from "@/lib/teaching/offline";
 import { MARKS_CSV_TEMPLATE_HEADER, parseMarksCsv } from "@/lib/teaching/marksCsv";

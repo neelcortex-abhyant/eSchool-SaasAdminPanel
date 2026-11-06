@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, Pagination, type Column, type SortState } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { StatusBadge } from "@/components/academics/StatusBadge";
-import { useDebounced, usePagedList } from "@/components/academics/hooks";
+import { DataTable, Pagination, type Column, type SortState } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useDebounced, usePagedList } from "@/components/ui/hooks";
 import { classLabel, sectionLabel, sessionLabel, useClassesFor, useSectionsFor, useSessions } from "@/components/people/academicOptions";
 import { PeoplePage } from "@/components/people/PeoplePage";
 import { Avatar } from "@/components/people/Profile";

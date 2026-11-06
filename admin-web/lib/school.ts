@@ -1,3 +1,8 @@
+/**
+ * School service for Super Admin pages: every /super-admin/schools call goes through here, so
+ * pages never build these URLs themselves. Each function returns the api() result
+ * ({ ok, status, data }); pages turn errors into messages with apiErrorMessage().
+ */
 import { api } from "@/lib/api";
 
 export type SchoolAdmin = {
@@ -78,4 +83,27 @@ export function loadSchool(id: string) {
 
 export function loadSchoolAdmins(id: string) {
   return api<{ items: SchoolAdmin[] }>(`/super-admin/schools/${id}/admins`);
+}
+
+/** Status actions on Nitish's routes: POST /super-admin/schools/{id}/{action}. */
+export type SchoolAction = "activate" | "suspend" | "deactivate" | "provision";
+
+/** POST /super-admin/schools (create) or PATCH /super-admin/schools/{id} (edit). */
+export function saveSchool(body: Record<string, unknown>, id?: string | number) {
+  return api<SchoolRecord>(id ? `/super-admin/schools/${id}` : "/super-admin/schools", { method: id ? "PATCH" : "POST", body: JSON.stringify(body) });
+}
+
+export function setSchoolStatus(id: string | number, action: SchoolAction) {
+  return api<SchoolRecord>(`/super-admin/schools/${id}/${action}`, { method: "POST" });
+}
+
+export function deleteSchool(id: string | number) {
+  return api(`/super-admin/schools/${id}`, { method: "DELETE" });
+}
+
+export type NewSchoolAdmin = { email: string; password: string; first_name: string; last_name: string; mobile: string };
+
+/** POST /super-admin/schools/{id}/admins: the school's first admin, created with the school. */
+export function addSchoolAdmin(id: string | number, admin: NewSchoolAdmin) {
+  return api(`/super-admin/schools/${id}/admins`, { method: "POST", body: JSON.stringify(admin) });
 }

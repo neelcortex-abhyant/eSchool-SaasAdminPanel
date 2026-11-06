@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiErrorMessage } from "@/lib/api";
 import { loadSchool } from "@/lib/school";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { SchoolForm } from "@/components/schools/SchoolForm";
 import type { SchoolFormValues } from "@/lib/schoolForm";
 import { IconBuilding } from "@/lib/icons";

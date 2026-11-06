@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import {

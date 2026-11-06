@@ -51,8 +51,8 @@ export default function SiteFooter() {
           © {year} {BRAND.name}. All rights reserved.
         </span>
         <div className="footer-legal">
-          <a href="#contact">Privacy Policy</a>
-          <a href="#contact">Terms & Conditions</a>
+          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/terms">Terms & Conditions</Link>
           <a href="#contact">Refund Policy</a>
         </div>
       </div>

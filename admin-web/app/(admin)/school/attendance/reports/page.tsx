@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { ATTENDANCE_LIVE_NOTE, ATTENDANCE_TABS, STATUS_SHORT, STATUS_TONE, percentText, todayIso } from "@/components/teaching/attendance";
-import { Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Stat } from "@/components/ui/Badge";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
 import { attendanceRoster, attendanceService, attendanceSupport, STATUS_LABEL, tally } from "@/lib/teaching/attendance";
 import type { AttendanceStatus } from "@/lib/teaching/types";

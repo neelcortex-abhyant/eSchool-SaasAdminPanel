@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { PlanForm } from "@/components/billing/PlanForm";
 import { IconPackage } from "@/lib/icons";
 

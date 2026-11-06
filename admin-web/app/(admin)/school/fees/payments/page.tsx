@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { TextAreaField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useDebounced, useFormErrors, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { TextAreaField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useDebounced, useFormErrors, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { useSubmitOnce } from "@/lib/ops/submit";
 import { FEE_TABS, PAYMENT_STATUS, PaymentChip, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RolePermissionsEditor } from "@/components/school-admins/RolePermissionsEditor";
 import { apiErrorMessage } from "@/lib/api";
 import {

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, apiErrorMessage } from "@/lib/api";
-import { loadSchools, schoolStatusLabel, type SchoolRecord } from "@/lib/school";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { apiErrorMessage } from "@/lib/api";
+import { loadSchools, schoolStatusLabel, setSchoolStatus, type SchoolRecord } from "@/lib/school";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { IconBuilding } from "@/lib/icons";
 
 const PAGE_SIZE = 20;
@@ -93,7 +93,7 @@ export default function SchoolsPage() {
     setPendingId(school.id);
     setNotice("");
     setError("");
-    const result = await api(`/super-admin/schools/${school.id}/${action}`, { method: "POST" });
+    const result = await setSchoolStatus(school.id, action);
     setPendingId(null);
     setConfirm(null);
     if (!result.ok) {
@@ -167,7 +167,7 @@ export default function SchoolsPage() {
       {!loading && !error ? (
         <div className="resource-card">
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table acad-table">
               <thead>
                 <tr>
                   <th>
@@ -188,7 +188,7 @@ export default function SchoolsPage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr>
+                  <tr className="acad-empty-row">
                     <td colSpan={6}>
                       <div className="empty-state">
                         {filtered ? "No schools match these filters." : "No schools yet. Add a school to see it here."}
@@ -200,16 +200,16 @@ export default function SchoolsPage() {
                     const active = school.status === 1;
                     return (
                       <tr key={school.id}>
-                        <td>{school.name || "—"}</td>
-                        <td className="mono">{school.code || "—"}</td>
-                        <td>{contactLabel(school)}</td>
-                        <td>
+                        <td data-label="Name">{school.name || "—"}</td>
+                        <td data-label="Code" className="mono">{school.code || "—"}</td>
+                        <td data-label="Contact">{contactLabel(school)}</td>
+                        <td data-label="Status">
                           <span className={`status-badge ${active ? "paid" : "pending"}`}>
                             {schoolStatusLabel(school.status, school.installed)}
                           </span>
                         </td>
-                        <td>{formatCreated(school.created_at)}</td>
-                        <td className="school-row-actions">
+                        <td data-label="Created">{formatCreated(school.created_at)}</td>
+                        <td className="school-row-actions acad-row-actions">
                           <Link className="link-btn" href={`/schools/${school.id}`}>
                             View
                           </Link>

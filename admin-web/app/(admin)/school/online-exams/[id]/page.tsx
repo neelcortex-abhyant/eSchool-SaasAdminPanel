@@ -2,12 +2,13 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
-import { Chip, formatDateTime, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
+import { formatDateTime, TeachingPage } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import {
   ATTEMPT_STATUS,
   BankPicker,

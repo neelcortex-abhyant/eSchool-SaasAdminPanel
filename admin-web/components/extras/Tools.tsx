@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextField } from "@/components/academics/Fields";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextField } from "@/components/ui/Fields";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage, StudentSearch } from "@/components/extras/Frame";
-import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { create, displayValue, getOne, listRows, replace, staffDirectory, update, type Raw, type StaffRef } from "@/lib/extras/api";
 import { CARD_PLACEHOLDERS, idCardBody, parseIdCardSettings, type CardKind, type IdCardSettings } from "@/lib/extras/idCards";

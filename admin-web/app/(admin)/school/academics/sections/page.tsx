@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AcademicPage } from "@/components/academics/AcademicPage";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, StatusToggle, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { StatusBadge } from "@/components/academics/StatusBadge";
-import { useToast } from "@/components/academics/Toasts";
-import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, StatusToggle, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/ui/Toasts";
+import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
 import { academicsService, academicsSupport, listAll, toId, type ClassSection, type SchoolClass } from "@/lib/academics";
 import { IconBook } from "@/lib/icons";
 

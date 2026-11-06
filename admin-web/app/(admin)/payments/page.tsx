@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeading } from "@/components/dashboard/StatCard";
+import { PageHeading } from "@/components/ui/PageHeading";
 import { PaymentSummaryCards } from "@/components/payments/PaymentSummary";
 import { StatusBadge } from "@/components/payments/PaymentHistory";
 import { IconFees } from "@/lib/icons";

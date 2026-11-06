@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useDebounced, useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, StatusToggle, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useDebounced, useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { TRANSPORT_TABS } from "@/components/ops/transport";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import { transportService } from "@/lib/ops/transport";
 import type { Route } from "@/lib/ops/types";

@@ -1,18 +1,19 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, StatusToggle, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, StatusToggle, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { StudentPicker } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
 import { isOpsLive } from "@/lib/ops/mode";
 import { TRANSPORT_TABS } from "@/components/ops/transport";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { errorMessage } from "@/lib/academics";
 import type { StudentRow } from "@/lib/people";
 import { today } from "@/lib/ops/store";

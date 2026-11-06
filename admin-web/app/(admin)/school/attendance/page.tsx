@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { DataTable, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useOptions } from "@/components/academics/hooks";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useOptions } from "@/components/ui/hooks";
 import { sessionLabel, useSessions } from "@/components/people/academicOptions";
 import { ATTENDANCE_LIVE_NOTE, ATTENDANCE_TABS, percentText, todayIso } from "@/components/teaching/attendance";
-import { Chip, Stat, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip, Stat } from "@/components/ui/Badge";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { attendanceRoster, attendanceService, attendanceSupport, tally } from "@/lib/teaching/attendance";
 import { IconCheck } from "@/lib/icons";

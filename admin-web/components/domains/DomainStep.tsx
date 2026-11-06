@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useDebounced } from "@/components/academics/hooks";
+import { useDebounced } from "@/components/ui/hooks";
 import { checkAvailability } from "@/lib/domains/client";
-import { customDomainProblem, defaultSlug, rootDomain, slugAlternatives } from "@/lib/domains/core";
+import { customDomainProblem, defaultSlug, displayRootDomain, rootDomain, schoolAddress, slugAlternatives } from "@/lib/domains/core";
 import type { Availability } from "@/lib/domains/types";
 
 export type DomainDraft = {
@@ -55,7 +55,9 @@ export function DomainStep({
   /** Subdomains the server reported as taken (no availability route yet). */
   taken?: string[];
 }) {
+  // The custom-domain check needs the platform root; text shown to people uses displayRootDomain().
   const root = rootDomain();
+  const shownRoot = displayRootDomain();
   const suggested = defaultSlug(name);
   const slug = value.slugEdited ? value.slug : suggested;
   const debounced = useDebounced(slug, 400);
@@ -83,7 +85,7 @@ export function DomainStep({
 
   const customProblem = value.type === "custom" && (customTouched || errors.custom_domain) ? errors.custom_domain || customDomainProblem(value.custom_domain, root) : "";
   const takenHere = taken.includes(slug);
-  const slugError = (takenHere ? errors.slug || `${slug}.${root} is taken.` : errors.slug && !value.slugEdited ? errors.slug : "") || (check.state === "done" && check.result && !check.result.available ? check.result.problem : "");
+  const slugError = (takenHere ? errors.slug || `${schoolAddress(slug)} is taken.` : errors.slug && !value.slugEdited ? errors.slug : "") || (check.state === "done" && check.result && !check.result.available ? check.result.problem : "");
   const alternatives =
     check.state === "done" && check.result && !check.result.available && check.result.suggestions.length
       ? check.result.suggestions
@@ -126,7 +128,7 @@ export function DomainStep({
               aria-describedby="reg-subdomain-status"
               onChange={(event) => onChange({ ...value, slug: typedSlug(event.target.value), slugEdited: true })}
             />
-            <span className="domain-suffix">.{root}</span>
+            {shownRoot ? <span className="domain-suffix">.{shownRoot}</span> : null}
           </div>
           <div id="reg-subdomain-status" className="domain-status" aria-live="polite">
             {!slug ? (
@@ -134,13 +136,13 @@ export function DomainStep({
             ) : slugError ? (
               <span className="field-error">{slugError}</span>
             ) : check.state === "checking" ? (
-              <span className="field-hint">Checking {slug}.{root}…</span>
+              <span className="field-hint">Checking {schoolAddress(slug)}…</span>
             ) : check.state === "error" ? (
               <span className="field-error">{check.message} You can still submit; the server checks again.</span>
             ) : check.state === "done" && check.result?.available && check.result.unchecked ? (
-              <span className="field-hint">{slug}.{root} — we'll confirm it's free when you submit.</span>
+              <span className="field-hint">{schoolAddress(slug)} — we'll confirm it's free when you submit.</span>
             ) : check.state === "done" && check.result?.available ? (
-              <span className="domain-ok">✓ {slug}.{root} is available</span>
+              <span className="domain-ok">✓ {schoolAddress(slug)} is available</span>
             ) : null}
           </div>
           {alternatives.length ? (
@@ -148,14 +150,14 @@ export function DomainStep({
               <span className="field-hint">Try:</span>
               {alternatives.map((option) => (
                 <button key={option} className="btn-pill btn-pill-green-soft" type="button" onClick={() => onChange({ ...value, slug: option, slugEdited: true })}>
-                  {option}.{root}
+                  {schoolAddress(option)}
                 </button>
               ))}
             </div>
           ) : null}
           {value.slugEdited && suggested && slug !== suggested ? (
             <button className="link-btn" type="button" onClick={() => onChange({ ...value, slug: suggested, slugEdited: false })}>
-              Use {suggested}.{root} from the school name
+              Use {schoolAddress(suggested)} from the school name
             </button>
           ) : null}
         </div>
@@ -180,7 +182,7 @@ export function DomainStep({
             ) : (
               <p className="field-hint">
                 Your school account is created now. After registering you'll get two DNS records to add at your domain provider. The school
-                website moves to your domain once they're verified; until then it's at {slug || "your-school"}.{root}.
+                website moves to your domain once they're verified; until then it's at {schoolAddress(slug || "your-school")}.
               </p>
             )}
           </div>

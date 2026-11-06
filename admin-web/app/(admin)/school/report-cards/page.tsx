@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { useDebounced, useOptions, usePagedList } from "@/components/academics/hooks";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { useDebounced, useOptions, usePagedList } from "@/components/ui/hooks";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
-import { Chip, TeachingPage } from "@/components/teaching/Frame";
+import { TeachingPage } from "@/components/teaching/Frame";
+import { Chip } from "@/components/ui/Badge";
 import { PlacementFilters, usePlacementFilter } from "@/components/teaching/Pickers";
-import { useToast } from "@/components/academics/Toasts";
+import { useToast } from "@/components/ui/Toasts";
 import { errorMessage } from "@/lib/academics";
 import { gradingService } from "@/lib/ops/grading";
 import { isOpsLive } from "@/lib/ops/mode";

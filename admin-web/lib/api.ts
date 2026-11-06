@@ -8,6 +8,9 @@ export const RENDER_V1_API = "https://eschool-backend-8322.onrender.com/api/v1";
 export const TOKEN_KEY = "v1_access_token";
 export const SESSION_COOKIE = "v1_session";
 
+/** Message for a request that never reached the server. */
+export const NETWORK_ERROR = "Can't reach the server. Check your connection and try again.";
+
 /** Fired on window when the API refuses the saved token (see fetchApi). */
 export const SESSION_EXPIRED_EVENT = "v1:session-expired";
 
@@ -67,12 +70,19 @@ async function fetchApi<T>(url: string, options: RequestInit): Promise<ApiResult
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(url, {
-    ...options,
-    // Bearer auth only — avoid credentialed CORS failures against Render from Netlify.
-    credentials: "same-origin",
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      // Bearer auth only — avoid credentialed CORS failures against Render from Netlify.
+      credentials: "same-origin",
+      headers,
+    });
+  } catch {
+    // Offline, DNS or CORS failure: answer like any other failed request (status 0) so pages
+    // show their error state instead of waiting forever on a promise that rejected.
+    return { ok: false, status: 0, data: { detail: NETWORK_ERROR } as T };
+  }
 
   // A signed-in request refused with 401 means the token expired or was revoked; the shell
   // listens for this and sends the user to sign in again. Sign-in itself answers 401 for a

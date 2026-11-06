@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Avatar } from "@/components/people/Profile";
 import { errorMessage } from "@/lib/academics";
 import { apiBlobUrl } from "@/lib/api";

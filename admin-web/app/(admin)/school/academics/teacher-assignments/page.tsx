@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AcademicPage } from "@/components/academics/AcademicPage";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useToast } from "@/components/academics/Toasts";
-import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/academics/hooks";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useToast } from "@/components/ui/Toasts";
+import { useDebounced, useFormErrors, useOptions, usePagedList } from "@/components/ui/hooks";
 import { academicsService, errorMessage, listAll, toId, type AcademicSession, type TeacherAssignment } from "@/lib/academics";
 import { IconTeacher } from "@/lib/icons";
 

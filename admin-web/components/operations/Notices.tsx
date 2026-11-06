@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { ConfirmDialog } from "@/components/billing/ConfirmDialog";
-import { DataTable, Pagination, type Column } from "@/components/academics/DataTable";
-import { ErrorAlert } from "@/components/academics/ErrorAlert";
-import { SelectField, TextAreaField, TextField } from "@/components/academics/Fields";
-import { FormModal } from "@/components/academics/FormModal";
-import { useFormErrors, useOptions } from "@/components/academics/hooks";
-import { useToast } from "@/components/academics/Toasts";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, Pagination, type Column } from "@/components/ui/DataTable";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { SelectField, TextAreaField, TextField } from "@/components/ui/Fields";
+import { FormModal } from "@/components/ui/FormModal";
+import { useFormErrors, useOptions } from "@/components/ui/hooks";
+import { useToast } from "@/components/ui/Toasts";
 import { ExtrasPage } from "@/components/extras/Frame";
-import { Chip, Stat, type ChipTone } from "@/components/teaching/Frame";
+import { Chip, Stat, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { errorMessage } from "@/lib/academics";
 import { displayValue } from "@/lib/extras/api";
@@ -113,7 +113,7 @@ function AnnouncementsBody({ editing, setEditing }: { editing: Announcement | "n
     { key: "title", label: "Announcement", render: (row) => <div><strong>{row.title}</strong><div className="muted notice-preview">{row.description}</div></div> },
     { key: "audience", label: "For", render: (row) => audienceLabel(row.audience) },
     { key: "date", label: "Publish date", render: (row) => displayValue(row.publish_at ?? row.created_at) },
-    { key: "status", label: "Status", render: (row) => <Chip tone={STATUS[row.status].tone}>{STATUS[row.status].label}</Chip> },
+    { key: "status", label: "Status", render: (row) => <StatusChip map={STATUS} value={row.status} /> },
   ];
   return (
     <>
@@ -292,7 +292,7 @@ function NotificationsBody({ composing, setComposing }: { composing: boolean; se
     { key: "title", label: "Notification", render: (row) => <div><strong>{row.title}</strong><div className="muted notice-preview">{row.body}</div></div> },
     { key: "audience", label: "To", render: (row) => audienceLabel(row.audience) },
     { key: "sent", label: "Sent", render: (row) => displayValue(row.created_at) },
-    { key: "delivery", label: "Delivery", render: (row) => <div><Chip tone={DELIVERY[row.delivery].tone}>{DELIVERY[row.delivery].label}</Chip>{row.recipients ? <div className="muted">{row.delivered} of {row.recipients}</div> : null}</div> },
+    { key: "delivery", label: "Delivery", render: (row) => <div><StatusChip map={DELIVERY} value={row.delivery} />{row.recipients ? <div className="muted">{row.delivered} of {row.recipients}</div> : null}</div> },
   ];
   return (
     <>
@@ -334,7 +334,7 @@ function NotificationsBody({ composing, setComposing }: { composing: boolean; se
             <dl className="teach-facts">
               <div><dt>To</dt><dd>{audienceLabel(open.audience)}</dd></div>
               <div><dt>Sent</dt><dd>{displayValue(open.created_at)}</dd></div>
-              <div><dt>Delivery</dt><dd><Chip tone={DELIVERY[open.delivery].tone}>{DELIVERY[open.delivery].label}</Chip></dd></div>
+              <div><dt>Delivery</dt><dd><StatusChip map={DELIVERY} value={open.delivery} /></dd></div>
               {open.recipients ? <div><dt>Delivered</dt><dd>{open.delivered} of {open.recipients}{open.failed ? `, ${open.failed} failed` : ""}</dd></div> : null}
               {open.failure_reason ? <div><dt>Why some failed</dt><dd>{open.failure_reason}</dd></div> : null}
             </dl>
