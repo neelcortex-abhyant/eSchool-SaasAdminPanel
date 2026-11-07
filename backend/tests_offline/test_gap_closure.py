@@ -39,7 +39,14 @@ def test_alembic_single_head_0045():
 
     cfg = Config("alembic.ini")
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["20261030_0045"]
+    assert script.get_heads() == ["20261106_0048"]
+    assert script.get_revision("20261106_0048").down_revision == "20261106_0047"
+    rev47 = script.get_revision("20261106_0047")
+    assert rev47 is not None
+    assert rev47.down_revision == "20261105_0046"
+    rev46 = script.get_revision("20261105_0046")
+    assert rev46 is not None
+    assert rev46.down_revision == "20261030_0045"
 
 
 def test_negative_net_rejected():

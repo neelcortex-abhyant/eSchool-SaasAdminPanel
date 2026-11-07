@@ -23,13 +23,16 @@ def test_migration_0042_revises_0041():
     rev = script.get_revision("20261029_0042")
     assert rev is not None
     assert rev.down_revision == "20261029_0041"
-    assert script.get_heads() == ["20261030_0045"]
+    assert script.get_heads() == ["20261106_0048"]
+    assert script.get_revision("20261106_0048").down_revision == "20261106_0047"
     rev43 = script.get_revision("20261029_0043")
     assert rev43 is not None
     assert rev43.down_revision == "20261029_0042"
     rev45 = script.get_revision("20261030_0045")
     assert rev45 is not None
     assert rev45.down_revision == "20261030_0044"
+    assert script.get_revision("20261105_0046").down_revision == "20261030_0045"
+    assert script.get_revision("20261106_0047").down_revision == "20261105_0046"
 
 
 def test_timetable_room_column_and_salary_component_model():

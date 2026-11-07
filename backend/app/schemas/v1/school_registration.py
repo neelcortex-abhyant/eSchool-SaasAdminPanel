@@ -92,3 +92,14 @@ class SchoolRegistrationResponse(BaseModel):
     school_id: int
     status: str
     message: str
+
+
+class SubdomainAvailabilityResponse(BaseModel):
+    """Public subdomain availability (SCHOOL_DOMAINS_API_CONTRACT §4)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str
+    available: bool
+    problem: str | None = None
+    suggestions: list[str] = Field(default_factory=list)

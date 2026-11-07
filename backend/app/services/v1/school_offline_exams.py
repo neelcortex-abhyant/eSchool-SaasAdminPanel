@@ -175,8 +175,34 @@ def _assert_teacher(
         )
 
 
-def _active_exam(db: Session, school_id: int, exam_id: int) -> Exam:
-    return _owned(db, Exam, exam_id, school_id)
+def _assert_branch_match(row: Any, branch_id: int | None) -> None:
+    """404 when row is stamped to a different branch than the authorized context."""
+    if branch_id is None:
+        return
+    if getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+
+
+def _active_exam(
+    db: Session, school_id: int, exam_id: int, *, branch_id: int | None = None
+) -> Exam:
+    row = _owned(db, Exam, exam_id, school_id)
+    _assert_branch_match(row, branch_id)
+    return row
+
+
+def _owned_schedule(
+    db: Session, school_id: int, schedule_id: int, *, branch_id: int | None = None
+) -> tuple[OfflineExamSchedule, Exam]:
+    """School-owned schedule + parent exam; rejects cross-branch and parent/child mismatch."""
+    row = _owned(db, OfflineExamSchedule, schedule_id, school_id)
+    _assert_branch_match(row, branch_id)
+    exam = _active_exam(db, school_id, row.exam_id, branch_id=branch_id)
+    sched_b = getattr(row, "branch_id", None)
+    exam_b = getattr(exam, "branch_id", None)
+    if sched_b is not None and exam_b is not None and sched_b != exam_b:
+        raise AcademicError(404, "Record not found")
+    return row, exam
 
 
 def _marks_exist(db: Session, exam_id: int) -> bool:
@@ -284,7 +310,9 @@ def _result_item(db: Session, row: OfflineExamResult, *, include_subjects: bool 
 # --- Exam CRUD ---
 
 
-def create_exam(db: Session, school_id: int, body: dict) -> dict:
+def create_exam(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     data = sanitize_body(body)
     session_year_id = int(data.get("session_year_id") or 0)
     class_section_id = int(data.get("class_section_id") or 0)
@@ -292,6 +320,9 @@ def create_exam(db: Session, school_id: int, body: dict) -> dict:
         raise AcademicError(422, "session_year_id and class_section_id are required")
     _same_school(db, SessionYear, session_year_id, school_id, "Session year")
     cs = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
+    if branch_id is not None and getattr(cs, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(422, "class_section_id must belong to the active branch")
+    resolved_branch = branch_id if branch_id is not None else getattr(cs, "branch_id", None)
     name = str(data.get("name") or "").strip()
     if not name or len(name) > 128:
         raise AcademicError(422, "name is required")
@@ -314,6 +345,7 @@ def create_exam(db: Session, school_id: int, body: dict) -> dict:
         exam_date=exam_date,
         publish=0,
         school_id=school_id,
+        branch_id=resolved_branch,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -332,9 +364,12 @@ def list_exams(
     session_year_id: int | None = None,
     class_section_id: int | None = None,
     q: str = "",
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(Exam).filter(Exam.school_id == school_id, Exam.deleted_at.is_(None))
+    if branch_id is not None and hasattr(Exam, "branch_id"):
+        query = query.filter(Exam.branch_id == branch_id)
     if session_year_id is not None:
         query = query.filter(Exam.session_year_id == session_year_id)
     if class_section_id is not None:
@@ -346,8 +381,10 @@ def list_exams(
     return _envelope([_exam_item(r) for r in rows], total, page, page_size)
 
 
-def get_exam(db: Session, school_id: int, exam_id: int) -> dict:
-    row = _active_exam(db, school_id, exam_id)
+def get_exam(
+    db: Session, school_id: int, exam_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     data = _exam_item(row)
     schedules = (
         db.query(OfflineExamSchedule)
@@ -363,8 +400,10 @@ def get_exam(db: Session, school_id: int, exam_id: int) -> dict:
     return data
 
 
-def update_exam(db: Session, school_id: int, exam_id: int, body: dict) -> dict:
-    row = _active_exam(db, school_id, exam_id)
+def update_exam(
+    db: Session, school_id: int, exam_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
+    row = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     data = sanitize_body(body)
     if _marks_exist(db, row.id) and any(
         k in data for k in ("session_year_id", "class_section_id")
@@ -414,8 +453,10 @@ def update_exam(db: Session, school_id: int, exam_id: int, body: dict) -> dict:
     return _exam_item(row)
 
 
-def soft_delete_exam(db: Session, school_id: int, exam_id: int) -> dict:
-    row = _active_exam(db, school_id, exam_id)
+def soft_delete_exam(
+    db: Session, school_id: int, exam_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     if row.publish:
         raise AcademicError(422, "Unpublish the exam before deleting")
     if _marks_exist(db, row.id):
@@ -460,8 +501,15 @@ def _assert_no_schedule_conflict(
             raise AcademicError(409, "Schedule conflicts with another exam for this class-section")
 
 
-def create_schedule(db: Session, school_id: int, exam_id: int, body: dict) -> dict:
-    exam = _active_exam(db, school_id, exam_id)
+def create_schedule(
+    db: Session,
+    school_id: int,
+    exam_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
+    exam = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     if exam.class_section_id is None:
         raise AcademicError(422, "Exam must have class_section_id (Module 6 offline exam)")
     data = sanitize_body(body)
@@ -515,8 +563,10 @@ def create_schedule(db: Session, school_id: int, exam_id: int, body: dict) -> di
         exclude_id=None,
     )
 
+    resolved_branch = branch_id if branch_id is not None else getattr(exam, "branch_id", None)
     row = OfflineExamSchedule(
         school_id=school_id,
+        branch_id=resolved_branch,
         exam_id=exam.id,
         session_year_id=exam.session_year_id,
         class_section_id=class_section_id,
@@ -548,12 +598,17 @@ def list_schedules(
     class_section_id: int | None = None,
     subject_id: int | None = None,
     exam_date: date | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
+    if exam_id is not None:
+        _active_exam(db, school_id, exam_id, branch_id=branch_id)
     query = db.query(OfflineExamSchedule).filter(
         OfflineExamSchedule.school_id == school_id,
         OfflineExamSchedule.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(OfflineExamSchedule, "branch_id"):
+        query = query.filter(OfflineExamSchedule.branch_id == branch_id)
     if exam_id is not None:
         query = query.filter(OfflineExamSchedule.exam_id == exam_id)
     if session_year_id is not None:
@@ -574,14 +629,23 @@ def list_schedules(
     return _envelope([_schedule_item(db, r) for r in rows], total, page, page_size)
 
 
-def get_schedule(db: Session, school_id: int, schedule_id: int) -> dict:
-    return _schedule_item(db, _owned(db, OfflineExamSchedule, schedule_id, school_id))
+def get_schedule(
+    db: Session, school_id: int, schedule_id: int, *, branch_id: int | None = None
+) -> dict:
+    row, _exam = _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
+    return _schedule_item(db, row)
 
 
-def update_schedule(db: Session, school_id: int, schedule_id: int, body: dict) -> dict:
+def update_schedule(
+    db: Session,
+    school_id: int,
+    schedule_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     """Edit a subject paper/schedule. Blocked when marks already exist for the schedule."""
-    row = _owned(db, OfflineExamSchedule, schedule_id, school_id)
-    exam = _active_exam(db, school_id, row.exam_id)
+    row, exam = _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
     if exam.publish == 1:
         raise AcademicError(409, "Unpublish the exam before editing subject papers")
     if _marks_exist_for_schedule(db, schedule_id):
@@ -677,10 +741,11 @@ def update_schedule(db: Session, school_id: int, schedule_id: int, body: dict) -
     return _schedule_item(db, row)
 
 
-def soft_delete_schedule(db: Session, school_id: int, schedule_id: int) -> dict:
+def soft_delete_schedule(
+    db: Session, school_id: int, schedule_id: int, *, branch_id: int | None = None
+) -> dict:
     """Remove a subject paper. Blocked when marks exist or exam is published."""
-    row = _owned(db, OfflineExamSchedule, schedule_id, school_id)
-    exam = _active_exam(db, school_id, row.exam_id)
+    row, exam = _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
     if exam.publish == 1:
         raise AcademicError(409, "Unpublish the exam before deleting subject papers")
     if _marks_exist_for_schedule(db, schedule_id):
@@ -742,9 +807,9 @@ def upsert_mark(
     *,
     actor_v1_user_id: str,
     reason: str | None = None,
+    branch_id: int | None = None,
 ) -> dict:
-    schedule = _owned(db, OfflineExamSchedule, schedule_id, school_id)
-    exam = _active_exam(db, school_id, schedule.exam_id)
+    schedule, exam = _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
     if exam.publish:
         raise AcademicError(422, "Unpublish results before entering or correcting marks")
     data = sanitize_body(body)
@@ -778,9 +843,15 @@ def upsert_mark(
         .first()
     )
     now = _now()
+    resolved_branch = (
+        branch_id
+        if branch_id is not None
+        else getattr(schedule, "branch_id", None) or getattr(exam, "branch_id", None)
+    )
     if existing is None:
         row = OfflineExamMark(
             school_id=school_id,
+            branch_id=resolved_branch,
             exam_id=exam.id,
             schedule_id=schedule_id,
             student_id=student_id,
@@ -807,6 +878,7 @@ def upsert_mark(
             db.add(
                 OfflineExamMarkAudit(
                     school_id=school_id,
+                    branch_id=resolved_branch,
                     mark_id=existing.id,
                     exam_id=exam.id,
                     student_id=student_id,
@@ -839,14 +911,14 @@ def bulk_upsert_marks(
     items: list,
     *,
     actor_v1_user_id: str,
+    branch_id: int | None = None,
 ) -> dict:
     """All-or-nothing bulk entry. Validates every row before committing."""
     if not isinstance(items, list) or not items:
         raise AcademicError(422, "items must be a non-empty list")
     if len(items) > 200:
         raise AcademicError(422, "at most 200 mark rows per request")
-    schedule = _owned(db, OfflineExamSchedule, schedule_id, school_id)
-    exam = _active_exam(db, school_id, schedule.exam_id)
+    schedule, exam = _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
     if exam.publish:
         raise AcademicError(422, "Unpublish results before entering marks")
     errors: list[str] = []
@@ -873,6 +945,11 @@ def bulk_upsert_marks(
 
     created = updated = 0
     now = _now()
+    resolved_branch = (
+        branch_id
+        if branch_id is not None
+        else getattr(schedule, "branch_id", None) or getattr(exam, "branch_id", None)
+    )
     _lock(db, f"oe:bulk:{schedule_id}")
     for item in prepared:
         existing = (
@@ -889,6 +966,7 @@ def bulk_upsert_marks(
             db.add(
                 OfflineExamMark(
                     school_id=school_id,
+                    branch_id=resolved_branch,
                     exam_id=exam.id,
                     schedule_id=schedule_id,
                     student_id=item["student_id"],
@@ -922,12 +1000,19 @@ def list_marks(
     exam_id: int | None = None,
     schedule_id: int | None = None,
     student_id: int | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
+    if schedule_id is not None:
+        _owned_schedule(db, school_id, schedule_id, branch_id=branch_id)
+    elif exam_id is not None:
+        _active_exam(db, school_id, exam_id, branch_id=branch_id)
     query = db.query(OfflineExamMark).filter(
         OfflineExamMark.school_id == school_id,
         OfflineExamMark.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(OfflineExamMark, "branch_id"):
+        query = query.filter(OfflineExamMark.branch_id == branch_id)
     if exam_id is not None:
         query = query.filter(OfflineExamMark.exam_id == exam_id)
     if schedule_id is not None:
@@ -944,8 +1029,12 @@ def list_marks(
     return _envelope([_mark_item(db, r) for r in rows], total, page, page_size)
 
 
-def list_mark_audits(db: Session, school_id: int, mark_id: int) -> list[dict]:
-    _owned(db, OfflineExamMark, mark_id, school_id)
+def list_mark_audits(
+    db: Session, school_id: int, mark_id: int, *, branch_id: int | None = None
+) -> list[dict]:
+    mark = _owned(db, OfflineExamMark, mark_id, school_id)
+    _assert_branch_match(mark, branch_id)
+    _active_exam(db, school_id, mark.exam_id, branch_id=branch_id)
     rows = (
         db.query(OfflineExamMarkAudit)
         .filter(
@@ -973,8 +1062,10 @@ def list_mark_audits(db: Session, school_id: int, mark_id: int) -> list[dict]:
 # --- Results processing ---
 
 
-def process_results(db: Session, school_id: int, exam_id: int) -> dict:
-    exam = _active_exam(db, school_id, exam_id)
+def process_results(
+    db: Session, school_id: int, exam_id: int, *, branch_id: int | None = None
+) -> dict:
+    exam = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     if exam.class_section_id is None:
         raise AcademicError(422, "Exam must have class_section_id")
     _lock(db, f"oe:process:{exam_id}")
@@ -1131,8 +1222,9 @@ def list_results(
     page: int,
     page_size: int,
     require_published: bool = False,
+    branch_id: int | None = None,
 ) -> dict:
-    exam = _active_exam(db, school_id, exam_id)
+    exam = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     if require_published and not exam.publish:
         raise AcademicError(404, "Record not found")
     page, page_size = _page(page, page_size)
@@ -1151,8 +1243,10 @@ def list_results(
     return _envelope([_result_item(db, r) for r in rows], total, page, page_size)
 
 
-def class_result_summary(db: Session, school_id: int, exam_id: int) -> dict:
-    exam = _active_exam(db, school_id, exam_id)
+def class_result_summary(
+    db: Session, school_id: int, exam_id: int, *, branch_id: int | None = None
+) -> dict:
+    exam = _active_exam(db, school_id, exam_id, branch_id=branch_id)
     if exam.class_section_id is None:
         raise AcademicError(422, "Exam must have class_section_id")
     enrolled = _enrolled(db, school_id, exam.class_section_id, exam.session_year_id)

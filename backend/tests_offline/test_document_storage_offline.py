@@ -21,6 +21,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.deps import central_db
 from app.api.v1 import school_admin
+from app.api.v1.deps import get_branch_context
 from app.core.config import get_settings
 from app.main import app
 from app.models.tables import Base, HomeworkSubmission, PersonDocument, School
@@ -28,6 +29,7 @@ from app.services.v1 import document_storage as store
 from app.services.v1 import person_documents
 from app.services.v1 import school_homework
 from app.services.v1.school_academics import AcademicError
+from app.services.v1.school_branches import BranchContext
 
 TEACHERS = "/api/v1/school-admin/teachers"
 STAFF = "/api/v1/school-admin/staff"
@@ -211,9 +213,21 @@ def api():
     def _auth():
         return SimpleNamespace(user=SimpleNamespace(school_id=current["school_id"]))
 
+    def _branch():
+        # create/list/get teachers resolve branch via get_branch_context (require_school_admin).
+        # Offline harness stubs that dep so document tests stay DB-auth free.
+        sid = current["school_id"]
+        return BranchContext(
+            school_id=sid,
+            branch_id=sid,
+            allowed_branch_ids=(sid,),
+            is_full_school_admin=True,
+        )
+
     app.dependency_overrides[central_db] = _db
     app.dependency_overrides[school_admin.require_teachers] = _auth
     app.dependency_overrides[school_admin.require_staff] = _auth
+    app.dependency_overrides[get_branch_context] = _branch
     client = TestClient(app)
 
     def as_school(school_id: int) -> TestClient:
@@ -485,7 +499,7 @@ def _full_attachments() -> str:
 
 def test_homework_attachment_limit_does_not_orphan_file(storage_dir, monkeypatch):
     hw = SimpleNamespace(teacher_user_id=5, attachments_json=_full_attachments())
-    monkeypatch.setattr(school_homework, "_active_homework", lambda *_a: hw)
+    monkeypatch.setattr(school_homework, "_active_homework", lambda *_a, **_k: hw)
     with pytest.raises(AcademicError) as exc:
         school_homework.append_stored_attachment_to_homework(
             None, 1, 9, file_bytes=PDF, claimed_filename="brief.pdf"  # type: ignore[arg-type]
@@ -501,8 +515,8 @@ def test_graded_submission_upload_does_not_orphan_file(api, storage_dir, monkeyp
         deadline_at=now + timedelta(days=1), allow_late=0, teacher_user_id=5,
     )
     student = SimpleNamespace(id=4, user_id=8, class_section_id=1, session_year_id=1)
-    monkeypatch.setattr(school_homework, "_active_homework", lambda *_a: hw)
-    monkeypatch.setattr(school_homework, "_student_for_user", lambda *_a: student)
+    monkeypatch.setattr(school_homework, "_active_homework", lambda *_a, **_k: hw)
+    monkeypatch.setattr(school_homework, "_student_for_user", lambda *_a, **_k: student)
     with api.Session() as db:
         db.add(
             HomeworkSubmission(

@@ -2,16 +2,39 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.v1_database import get_v1_db
-from app.schemas.v1.school_registration import SchoolRegistrationRequest, SchoolRegistrationResponse
+from app.schemas.v1.school_registration import (
+    SchoolRegistrationRequest,
+    SchoolRegistrationResponse,
+    SubdomainAvailabilityResponse,
+)
 from app.services.v1.school_admin_service import SchoolAdminServiceError
 from app.services.v1.school_registration_service import SchoolRegistrationError, register_school
-from app.services.v1.school_service import SchoolServiceError
+from app.services.v1.school_service import SchoolServiceError, check_subdomain_availability
 
 router = APIRouter(prefix="/schools", tags=["v1-school-registration"])
+
+
+@router.get(
+    "/subdomain-availability",
+    response_model=SubdomainAvailabilityResponse,
+    summary="Check default subdomain availability (public)",
+)
+def subdomain_availability(
+    db: Annotated[Session, Depends(get_v1_db)],
+    slug: str | None = Query(None, max_length=40),
+    name: str | None = Query(None, max_length=255),
+    city: str | None = Query(None, max_length=80),
+) -> SubdomainAvailabilityResponse:
+    """Contract §4 — does not expose school identity. Does not fix BUG-01 FE preview."""
+    try:
+        payload = check_subdomain_availability(db, slug=slug, name=name, city=city)
+    except SchoolServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return SubdomainAvailabilityResponse(**payload)
 
 
 @router.post("/register", response_model=SchoolRegistrationResponse, status_code=status.HTTP_201_CREATED)

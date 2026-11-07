@@ -1101,17 +1101,42 @@ def _structure_item(db: Session, row: FeeStructure) -> dict:
     )
 
 
-def list_fee_structures(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
+def list_fee_structures(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    branch_id: int | None = None,
+) -> dict:
+    def filt(q):
+        if branch_id is not None and hasattr(FeeStructure, "branch_id"):
+            q = q.filter(FeeStructure.branch_id == branch_id)
+        return q
+
     return _list_active(
-        db, FeeStructure, school_id, page=page, page_size=page_size, serialize=lambda r: _structure_item(db, r)
+        db,
+        FeeStructure,
+        school_id,
+        page=page,
+        page_size=page_size,
+        filters=filt,
+        serialize=lambda r: _structure_item(db, r),
     )
 
 
-def get_fee_structure(db: Session, school_id: int, row_id: int) -> dict:
-    return _structure_item(db, _owned(db, FeeStructure, row_id, school_id))
+def get_fee_structure(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _owned(db, FeeStructure, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    return _structure_item(db, row)
 
 
-def create_fee_structure(db: Session, school_id: int, body: dict) -> dict:
+def create_fee_structure(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     name = str(body.get("name") or "").strip()
     session_year_id = int(body.get("session_year_id") or 0)
     if not name or not session_year_id:
@@ -1125,8 +1150,12 @@ def create_fee_structure(db: Session, school_id: int, body: dict) -> dict:
     amounts = body.get("amounts") or body.get("items") or []
     if not isinstance(amounts, list) or not amounts:
         raise AcademicError(422, "amounts must be a non-empty list")
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
+    if resolved_branch is not None:
+        resolved_branch = int(resolved_branch)
     row = FeeStructure(
         school_id=school_id,
+        branch_id=resolved_branch,
         name=name,
         session_year_id=session_year_id,
         class_id=int(class_id) if class_id is not None else None,
@@ -1145,6 +1174,7 @@ def create_fee_structure(db: Session, school_id: int, body: dict) -> dict:
         db.add(
             FeeStructureAmount(
                 school_id=school_id,
+                branch_id=resolved_branch,
                 structure_id=row.id,
                 fee_type_id=fee_type_id,
                 amount=amount,
@@ -1168,8 +1198,17 @@ def create_fee_structure(db: Session, school_id: int, body: dict) -> dict:
     return _structure_item(db, row)
 
 
-def update_fee_structure(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+def update_fee_structure(
+    db: Session,
+    school_id: int,
+    row_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     row = _owned(db, FeeStructure, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     if "name" in body:
         name = str(body["name"] or "").strip()
         if not name:
@@ -1218,8 +1257,12 @@ def update_fee_structure(db: Session, school_id: int, row_id: int, body: dict) -
     return _structure_item(db, row)
 
 
-def soft_delete_fee_structure(db: Session, school_id: int, row_id: int) -> dict:
+def soft_delete_fee_structure(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
     row = _owned(db, FeeStructure, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     now = _now()
     for a in _structure_amounts(db, school_id, row.id):
         a.deleted_at = now
@@ -1227,8 +1270,19 @@ def soft_delete_fee_structure(db: Session, school_id: int, row_id: int) -> dict:
     return _soft_delete(db, row)
 
 
-def list_fee_assignments(db: Session, school_id: int, page: int = 1, page_size: int = 20, student_id: int | None = None, structure_id: int | None = None) -> dict:
+def list_fee_assignments(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    student_id: int | None = None,
+    structure_id: int | None = None,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     def filt(q):
+        if branch_id is not None and hasattr(FeeAssignment, "branch_id"):
+            q = q.filter(FeeAssignment.branch_id == branch_id)
         if student_id is not None:
             q = q.filter(FeeAssignment.student_id == student_id)
         if structure_id is not None:
@@ -1238,15 +1292,28 @@ def list_fee_assignments(db: Session, school_id: int, page: int = 1, page_size: 
     return _list_active(db, FeeAssignment, school_id, page=page, page_size=page_size, filters=filt)
 
 
-def create_fee_assignment(db: Session, school_id: int, body: dict) -> dict:
+def create_fee_assignment(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     structure_id = int(body.get("structure_id") or 0)
     student_id = int(body.get("student_id") or 0)
     if not structure_id or not student_id:
         raise AcademicError(422, "structure_id and student_id are required")
-    _owned(db, FeeStructure, structure_id, school_id)
-    _owned(db, Student, student_id, school_id)
+    structure = _owned(db, FeeStructure, structure_id, school_id)
+    student = _owned(db, Student, student_id, school_id)
+    if branch_id is not None:
+        if getattr(structure, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "structure_id must belong to the active branch")
+        if getattr(student, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "student_id must belong to the active branch")
+    resolved_branch = (
+        branch_id
+        if branch_id is not None
+        else getattr(student, "branch_id", None) or getattr(structure, "branch_id", None)
+    )
     row = FeeAssignment(
         school_id=school_id,
+        branch_id=resolved_branch,
         structure_id=structure_id,
         student_id=student_id,
         created_at=_now(),
@@ -1258,15 +1325,36 @@ def create_fee_assignment(db: Session, school_id: int, body: dict) -> dict:
     return _row_dict(row)
 
 
-def soft_delete_fee_assignment(db: Session, school_id: int, row_id: int) -> dict:
-    return _soft_delete(db, _owned(db, FeeAssignment, row_id, school_id))
+def soft_delete_fee_assignment(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _owned(db, FeeAssignment, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    return _soft_delete(db, row)
 
 
-def list_fee_concessions(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
-    return _list_active(db, FeeConcession, school_id, page=page, page_size=page_size)
+def list_fee_concessions(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    branch_id: int | None = None,
+) -> dict:
+    def filt(q):
+        if branch_id is not None and hasattr(FeeConcession, "branch_id"):
+            q = q.filter(FeeConcession.branch_id == branch_id)
+        return q
+
+    return _list_active(
+        db, FeeConcession, school_id, page=page, page_size=page_size, filters=filt
+    )
 
 
-def create_fee_concession(db: Session, school_id: int, body: dict) -> dict:
+def create_fee_concession(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     student_id = int(body.get("student_id") or 0)
     structure_id = int(body.get("structure_id") or 0)
     kind = str(body.get("kind") or "").strip()
@@ -1279,10 +1367,27 @@ def create_fee_concession(db: Session, school_id: int, body: dict) -> dict:
         raise AcademicError(422, "student_id, structure_id, kind (percent|amount), value > 0, reason required")
     if kind == "percent" and value > 100:
         raise AcademicError(422, "percent concession cannot exceed 100")
-    _owned(db, Student, student_id, school_id)
-    _owned(db, FeeStructure, structure_id, school_id)
+    student = _owned(db, Student, student_id, school_id)
+    structure = _owned(db, FeeStructure, structure_id, school_id)
+    if branch_id is not None:
+        if getattr(student, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(404, "Record not found")
+        if getattr(structure, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(404, "Record not found")
+        if (
+            getattr(student, "branch_id", None) is not None
+            and getattr(structure, "branch_id", None) is not None
+            and student.branch_id != structure.branch_id
+        ):
+            raise AcademicError(404, "Record not found")
+    resolved_branch = (
+        branch_id
+        if branch_id is not None
+        else getattr(student, "branch_id", None) or getattr(structure, "branch_id", None)
+    )
     row = FeeConcession(
         school_id=school_id,
+        branch_id=resolved_branch,
         student_id=student_id,
         structure_id=structure_id,
         kind=kind,
@@ -1297,14 +1402,29 @@ def create_fee_concession(db: Session, school_id: int, body: dict) -> dict:
     return _row_dict(row)
 
 
-def soft_delete_fee_concession(db: Session, school_id: int, row_id: int) -> dict:
-    return _soft_delete(db, _owned(db, FeeConcession, row_id, school_id))
+def soft_delete_fee_concession(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _owned(db, FeeConcession, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    return _soft_delete(db, row)
 
 
-def list_fee_payments(db: Session, school_id: int, page: int = 1, page_size: int = 20, student_id: int | None = None) -> dict:
+def list_fee_payments(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    student_id: int | None = None,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     def filt(q):
         if student_id is not None:
             q = q.filter(FeePayment.student_id == student_id)
+        if branch_id is not None and hasattr(FeePayment, "branch_id"):
+            q = q.filter(FeePayment.branch_id == branch_id)
         return q
 
     return _list_active(db, FeePayment, school_id, page=page, page_size=page_size, filters=filt)
@@ -1346,7 +1466,9 @@ def _concession_amount(db: Session, school_id: int, student_id: int, structure_i
     return min(float(conc.value), total)
 
 
-def collect_fee(db: Session, school_id: int, body: dict) -> dict:
+def collect_fee(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     from app.services.v1 import school_erp_fees as erp_fees
 
     assignment_id = int(body.get("assignment_id") or 0)
@@ -1359,6 +1481,9 @@ def collect_fee(db: Session, school_id: int, body: dict) -> dict:
     if amount <= 0:
         raise AcademicError(422, "amount must be > 0")
     assignment = _owned(db, FeeAssignment, assignment_id, school_id)
+    if branch_id is not None and getattr(assignment, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    resolved_branch = branch_id if branch_id is not None else getattr(assignment, "branch_id", None)
     idem = body.get("idempotency_key")
     if idem:
         existing = (
@@ -1382,6 +1507,7 @@ def collect_fee(db: Session, school_id: int, body: dict) -> dict:
     receipt = body.get("receipt_no") or f"RCPT-{_now().strftime('%Y%m%d%H%M%S')}-{assignment.id}"
     row = FeePayment(
         school_id=school_id,
+        branch_id=resolved_branch,
         assignment_id=assignment.id,
         student_id=assignment.student_id,
         amount=amount,
@@ -1403,14 +1529,21 @@ def collect_fee(db: Session, school_id: int, body: dict) -> dict:
     return _row_dict(row)
 
 
-def fees_outstanding(db: Session, school_id: int, page: int = 1, page_size: int = 20) -> dict:
+def fees_outstanding(
+    db: Session,
+    school_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     page, page_size = _page(page, page_size)
-    assignments = (
-        db.query(FeeAssignment)
-        .filter(FeeAssignment.school_id == school_id, FeeAssignment.deleted_at.is_(None))
-        .order_by(FeeAssignment.id.desc())
-        .all()
+    aq = db.query(FeeAssignment).filter(
+        FeeAssignment.school_id == school_id, FeeAssignment.deleted_at.is_(None)
     )
+    if branch_id is not None and hasattr(FeeAssignment, "branch_id"):
+        aq = aq.filter(FeeAssignment.branch_id == branch_id)
+    assignments = aq.order_by(FeeAssignment.id.desc()).all()
     items = []
     summary = {"payable": 0.0, "collected": 0.0, "outstanding": 0.0}
     for a in assignments:
@@ -1440,11 +1573,15 @@ def fees_outstanding(db: Session, school_id: int, page: int = 1, page_size: int 
     return {**_envelope(slice_items, total_n, page, page_size), "summary": summary}
 
 
-def send_fee_reminders(db: Session, school_id: int, *, limit: int = 100) -> dict:
+def send_fee_reminders(
+    db: Session, school_id: int, *, limit: int = 100, branch_id: int | None = None
+) -> dict:
     """Enqueue fee-reminder notifications for outstanding assignments (deduped)."""
     from app.services.v1 import notification_delivery as notif
 
-    payload = fees_outstanding(db, school_id, page=1, page_size=max(1, min(limit, 200)))
+    payload = fees_outstanding(
+        db, school_id, page=1, page_size=max(1, min(limit, 200)), branch_id=branch_id
+    )
     queued = 0
     skipped = 0
     for item in payload.get("items") or []:
@@ -2077,21 +2214,33 @@ def soft_delete_income(db: Session, school_id: int, row_id: int) -> dict:
     return _soft_delete(db, _owned(db, IncomeRecord, row_id, school_id))
 
 
-def incomes_dashboard(db: Session, school_id: int) -> dict:
-    income_total = (
-        db.query(func.coalesce(func.sum(IncomeRecord.amount), 0))
-        .filter(IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None))
-        .scalar()
+def incomes_dashboard(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    income_q = db.query(func.coalesce(func.sum(IncomeRecord.amount), 0)).filter(
+        IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None)
     )
-    expense_total = (
-        db.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.school_id == school_id)
-        .scalar()
+    expense_q = db.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.school_id == school_id
     )
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None:
+        if hasattr(IncomeRecord, "branch_id"):
+            income_q = income_q.filter(IncomeRecord.branch_id.in_(bids))
+        if hasattr(Expense, "branch_id"):
+            expense_q = expense_q.filter(Expense.branch_id.in_(bids))
+    income_total = income_q.scalar()
+    expense_total = expense_q.scalar()
     return {
         "income_total": float(income_total or 0),
         "expense_total": float(expense_total or 0),
         "net": float(income_total or 0) - float(expense_total or 0),
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
     }
 
 
@@ -2900,86 +3049,194 @@ def staff_id_card_payload(db: Session, school_id: int, staff_id: int) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def report_students(db: Session, school_id: int) -> dict:
-    total = db.query(func.count(Student.id)).filter(Student.school_id == school_id, Student.deleted_at.is_(None)).scalar() or 0
-    by_status = (
-        db.query(Student.enrollment_status, func.count(Student.id))
-        .filter(Student.school_id == school_id, Student.deleted_at.is_(None))
-        .group_by(Student.enrollment_status)
-        .all()
+def _branch_ids_filter(branch_id: int | None, allowed_branch_ids: list[int] | None) -> list[int] | None:
+    if branch_id is not None and branch_id != 0:
+        return [branch_id]
+    if allowed_branch_ids is not None:
+        return list(allowed_branch_ids)
+    return None
+
+
+def report_students(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    q = db.query(func.count(Student.id)).filter(Student.school_id == school_id, Student.deleted_at.is_(None))
+    status_q = db.query(Student.enrollment_status, func.count(Student.id)).filter(
+        Student.school_id == school_id, Student.deleted_at.is_(None)
     )
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(Student, "branch_id"):
+        q = q.filter(Student.branch_id.in_(bids))
+        status_q = status_q.filter(Student.branch_id.in_(bids))
+    total = q.scalar() or 0
+    by_status = status_q.group_by(Student.enrollment_status).all()
     return {
         "total": int(total),
         "by_enrollment_status": {s or "unknown": int(c) for s, c in by_status},
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
     }
 
 
-def report_teachers(db: Session, school_id: int) -> dict:
+def report_teachers(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
     # Teachers are staff with Spatie Teacher role — approximate via Staff rows used as teachers.
-    total = db.query(func.count(Staff.id)).filter(Staff.school_id == school_id).scalar() or 0
-    return {"total_staff": int(total)}
+    q = db.query(func.count(Staff.id)).filter(Staff.school_id == school_id)
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(Staff, "branch_id"):
+        q = q.filter(Staff.branch_id.in_(bids))
+    total = q.scalar() or 0
+    return {
+        "total_staff": int(total),
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
+    }
 
 
-def report_staff(db: Session, school_id: int) -> dict:
-    total = db.query(func.count(Staff.id)).filter(Staff.school_id == school_id).scalar() or 0
-    by_status = (
-        db.query(Staff.employment_status, func.count(Staff.id))
-        .filter(Staff.school_id == school_id)
-        .group_by(Staff.employment_status)
-        .all()
+def report_staff(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    q = db.query(func.count(Staff.id)).filter(Staff.school_id == school_id)
+    status_q = db.query(Staff.employment_status, func.count(Staff.id)).filter(
+        Staff.school_id == school_id
     )
-    return {"total": int(total), "by_employment_status": {s or "unknown": int(c) for s, c in by_status}}
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(Staff, "branch_id"):
+        q = q.filter(Staff.branch_id.in_(bids))
+        status_q = status_q.filter(Staff.branch_id.in_(bids))
+    total = q.scalar() or 0
+    by_status = status_q.group_by(Staff.employment_status).all()
+    return {
+        "total": int(total),
+        "by_employment_status": {s or "unknown": int(c) for s, c in by_status},
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
+    }
 
 
-def report_exams(db: Session, school_id: int) -> dict:
-    exams = db.query(func.count(Exam.id)).filter(Exam.school_id == school_id, Exam.deleted_at.is_(None)).scalar() or 0
-    results = (
-        db.query(func.count(OfflineExamResult.id))
-        .filter(OfflineExamResult.school_id == school_id, OfflineExamResult.deleted_at.is_(None))
-        .scalar()
-        or 0
+def report_exams(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    exams_q = db.query(func.count(Exam.id)).filter(
+        Exam.school_id == school_id, Exam.deleted_at.is_(None)
     )
-    return {"exams": int(exams), "processed_results": int(results)}
-
-
-def report_expenses(db: Session, school_id: int) -> dict:
-    total = db.query(func.coalesce(func.sum(Expense.amount), 0)).filter(Expense.school_id == school_id).scalar()
-    count = db.query(func.count(Expense.id)).filter(Expense.school_id == school_id).scalar() or 0
-    return {"total_amount": float(total or 0), "count": int(count)}
-
-
-def report_income(db: Session, school_id: int) -> dict:
-    total = (
-        db.query(func.coalesce(func.sum(IncomeRecord.amount), 0))
-        .filter(IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None))
-        .scalar()
+    results_q = db.query(func.count(OfflineExamResult.id)).filter(
+        OfflineExamResult.school_id == school_id, OfflineExamResult.deleted_at.is_(None)
     )
-    count = (
-        db.query(func.count(IncomeRecord.id))
-        .filter(IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None))
-        .scalar()
-        or 0
-    )
-    return {"total_amount": float(total or 0), "count": int(count)}
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None:
+        if hasattr(Exam, "branch_id"):
+            exams_q = exams_q.filter(Exam.branch_id.in_(bids))
+        if hasattr(OfflineExamResult, "branch_id"):
+            results_q = results_q.filter(OfflineExamResult.branch_id.in_(bids))
+    exams = exams_q.scalar() or 0
+    results = results_q.scalar() or 0
+    return {
+        "exams": int(exams),
+        "processed_results": int(results),
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
+    }
 
 
-def report_financial_summary(db: Session, school_id: int) -> dict:
-    income = report_income(db, school_id)
-    expense = report_expenses(db, school_id)
-    fees_collected = (
-        db.query(func.coalesce(func.sum(FeePayment.amount), 0))
-        .filter(
-            FeePayment.school_id == school_id,
-            FeePayment.deleted_at.is_(None),
-            FeePayment.status == "success",
-        )
-        .scalar()
+def report_expenses(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    total_q = db.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.school_id == school_id
     )
+    count_q = db.query(func.count(Expense.id)).filter(Expense.school_id == school_id)
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(Expense, "branch_id"):
+        total_q = total_q.filter(Expense.branch_id.in_(bids))
+        count_q = count_q.filter(Expense.branch_id.in_(bids))
+    total = total_q.scalar()
+    count = count_q.scalar() or 0
+    return {
+        "total_amount": float(total or 0),
+        "count": int(count),
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
+    }
+
+
+def report_income(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    total_q = db.query(func.coalesce(func.sum(IncomeRecord.amount), 0)).filter(
+        IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None)
+    )
+    count_q = db.query(func.count(IncomeRecord.id)).filter(
+        IncomeRecord.school_id == school_id, IncomeRecord.deleted_at.is_(None)
+    )
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(IncomeRecord, "branch_id"):
+        total_q = total_q.filter(IncomeRecord.branch_id.in_(bids))
+        count_q = count_q.filter(IncomeRecord.branch_id.in_(bids))
+    total = total_q.scalar()
+    count = count_q.scalar() or 0
+    return {
+        "total_amount": float(total or 0),
+        "count": int(count),
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
+    }
+
+
+def report_financial_summary(
+    db: Session,
+    school_id: int,
+    *,
+    branch_id: int | None = None,
+    allowed_branch_ids: list[int] | None = None,
+) -> dict:
+    income = report_income(
+        db, school_id, branch_id=branch_id, allowed_branch_ids=allowed_branch_ids
+    )
+    expense = report_expenses(
+        db, school_id, branch_id=branch_id, allowed_branch_ids=allowed_branch_ids
+    )
+    fees_q = db.query(func.coalesce(func.sum(FeePayment.amount), 0)).filter(
+        FeePayment.school_id == school_id,
+        FeePayment.deleted_at.is_(None),
+        FeePayment.status == "success",
+    )
+    bids = _branch_ids_filter(branch_id, allowed_branch_ids)
+    if bids is not None and hasattr(FeePayment, "branch_id"):
+        fees_q = fees_q.filter(FeePayment.branch_id.in_(bids))
+    fees_collected = fees_q.scalar()
     return {
         "income_total": income["total_amount"],
         "expense_total": expense["total_amount"],
         "fees_collected": float(fees_collected or 0),
         "net": income["total_amount"] - expense["total_amount"],
+        "branch_id": branch_id,
+        "consolidated": branch_id in (None, 0) and allowed_branch_ids is not None,
     }
 
 
@@ -3181,12 +3438,15 @@ def list_announcements(
     *,
     status_filter: str | None = None,
     q: str | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(Announcement).filter(
         Announcement.school_id == school_id,
         Announcement.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(Announcement, "branch_id"):
+        query = query.filter(Announcement.branch_id == branch_id)
     if status_filter:
         query = query.filter(Announcement.status == status_filter)
     if q and q.strip():
@@ -3217,7 +3477,9 @@ def get_announcement(db: Session, school_id: int, row_id: int) -> dict:
     return _announcement_item(row)
 
 
-def create_announcement(db: Session, school_id: int, body: dict) -> dict:
+def create_announcement(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     title = str(body.get("title") or "").strip()
     session_year_id = int(body.get("session_year_id") or 0)
     if not title or not session_year_id:
@@ -3240,11 +3502,15 @@ def create_announcement(db: Session, school_id: int, body: dict) -> dict:
     if status_val == "scheduled" and publish_at and publish_at <= now:
         status_val = "published"
         published_at = now
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
+    if resolved_branch is not None:
+        resolved_branch = int(resolved_branch)
     row = Announcement(
         title=title,
         description=body.get("description") or body.get("body"),
         session_year_id=session_year_id,
         school_id=school_id,
+        branch_id=resolved_branch,
         status=status_val,
         audience_json=json.dumps(audience),
         publish_at=publish_at,

@@ -317,8 +317,13 @@ def _assert_teacher_assignment(
         )
 
 
-def _active_homework(db: Session, school_id: int, homework_id: int) -> Homework:
-    return _owned(db, Homework, homework_id, school_id)
+def _active_homework(
+    db: Session, school_id: int, homework_id: int, *, branch_id: int | None = None
+) -> Homework:
+    row = _owned(db, Homework, homework_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    return row
 
 
 def _assignment_status(sub: HomeworkSubmission | None) -> str:
@@ -417,7 +422,9 @@ def _enrolled_students(
     )
 
 
-def create_homework(db: Session, school_id: int, body: dict) -> dict:
+def create_homework(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     data = sanitize_homework_body(body)
     session_year_id = int(data.get("session_year_id") or 0)
     class_section_id = int(data.get("class_section_id") or 0)
@@ -434,6 +441,9 @@ def create_homework(db: Session, school_id: int, body: dict) -> dict:
 
     _same_school(db, SessionYear, session_year_id, school_id, "Session year")
     class_section = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
+    resolved_branch = branch_id if branch_id is not None else getattr(class_section, "branch_id", None)
+    if branch_id is not None and getattr(class_section, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(422, "class_section_id must belong to the active branch")
     _same_school(db, Subject, subject_id, school_id, "Subject")
     _assert_subject_mapped_to_class(db, school_id, class_section.class_id, subject_id)
     staff = _staff_for_teacher_user(db, school_id, teacher_user_id)
@@ -475,6 +485,7 @@ def create_homework(db: Session, school_id: int, body: dict) -> dict:
 
     row = Homework(
         school_id=school_id,
+        branch_id=resolved_branch,
         session_year_id=session_year_id,
         class_section_id=class_section_id,
         subject_id=subject_id,
@@ -525,12 +536,15 @@ def list_homework(
     subject_id: int | None = None,
     teacher_user_id: int | None = None,
     q: str = "",
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(Homework).filter(
         Homework.school_id == school_id,
         Homework.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(Homework, "branch_id"):
+        query = query.filter(Homework.branch_id == branch_id)
     if session_year_id is not None:
         query = query.filter(Homework.session_year_id == session_year_id)
     if class_section_id is not None:
@@ -551,12 +565,23 @@ def list_homework(
     return _envelope([_homework_item(db, r) for r in rows], total, page, page_size)
 
 
-def get_homework(db: Session, school_id: int, homework_id: int) -> dict:
-    return _homework_item(db, _active_homework(db, school_id, homework_id))
+def get_homework(
+    db: Session, school_id: int, homework_id: int, *, branch_id: int | None = None
+) -> dict:
+    return _homework_item(
+        db, _active_homework(db, school_id, homework_id, branch_id=branch_id)
+    )
 
 
-def update_homework(db: Session, school_id: int, homework_id: int, body: dict) -> dict:
-    row = _active_homework(db, school_id, homework_id)
+def update_homework(
+    db: Session,
+    school_id: int,
+    homework_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
+    row = _active_homework(db, school_id, homework_id, branch_id=branch_id)
     data = sanitize_homework_body(body)
 
     session_year_id = row.session_year_id
@@ -633,8 +658,10 @@ def update_homework(db: Session, school_id: int, homework_id: int, body: dict) -
     return _homework_item(db, row)
 
 
-def soft_delete_homework(db: Session, school_id: int, homework_id: int) -> dict:
-    row = _active_homework(db, school_id, homework_id)
+def soft_delete_homework(
+    db: Session, school_id: int, homework_id: int, *, branch_id: int | None = None
+) -> dict:
+    row = _active_homework(db, school_id, homework_id, branch_id=branch_id)
     now = _now()
     row.deleted_at = now
     row.updated_at = now
@@ -651,8 +678,9 @@ def list_submissions(
     page_size: int,
     status_filter: str | None = None,
     is_late: bool | None = None,
+    branch_id: int | None = None,
 ) -> dict:
-    hw = _active_homework(db, school_id, homework_id)
+    hw = _active_homework(db, school_id, homework_id, branch_id=branch_id)
     page, page_size = _page(page, page_size)
     query = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.school_id == school_id,
@@ -675,14 +703,18 @@ def list_submissions(
     return _envelope([_submission_item(db, r) for r in rows], total, page, page_size)
 
 
-def get_submission(db: Session, school_id: int, submission_id: int) -> dict:
+def get_submission(
+    db: Session, school_id: int, submission_id: int, *, branch_id: int | None = None
+) -> dict:
     row = _owned(db, HomeworkSubmission, submission_id, school_id)
-    _active_homework(db, school_id, row.homework_id)
+    _active_homework(db, school_id, row.homework_id, branch_id=branch_id)
     return _submission_item(db, row)
 
 
-def homework_summary(db: Session, school_id: int, homework_id: int) -> dict:
-    hw = _active_homework(db, school_id, homework_id)
+def homework_summary(
+    db: Session, school_id: int, homework_id: int, *, branch_id: int | None = None
+) -> dict:
+    hw = _active_homework(db, school_id, homework_id, branch_id=branch_id)
     enrolled = _enrolled_students(db, school_id, hw.class_section_id, hw.session_year_id)
     enrolled_ids = {s.id for s in enrolled}
     if enrolled_ids:
@@ -739,9 +771,10 @@ def evaluate_submission(
     body: dict,
     *,
     evaluator_user_id: str | None,
+    branch_id: int | None = None,
 ) -> dict:
     row = _owned(db, HomeworkSubmission, submission_id, school_id)
-    hw = _active_homework(db, school_id, row.homework_id)
+    hw = _active_homework(db, school_id, row.homework_id, branch_id=branch_id)
 
     # Evaluator must be the assigned teacher (or school-admin acting with teachers.manage —
     # route already requires permission; still require teacher assignment coverage).
@@ -1056,10 +1089,11 @@ def append_stored_attachment_to_homework(
     *,
     file_bytes: bytes,
     claimed_filename: str | None,
+    branch_id: int | None = None,
 ) -> dict:
     """Optional binary upload when document_storage is configured."""
     require_storage()
-    hw = _active_homework(db, school_id, homework_id)
+    hw = _active_homework(db, school_id, homework_id, branch_id=branch_id)
     content_type, ext, filename = validate_upload(
         file_bytes, category="other", claimed_filename=claimed_filename
     )

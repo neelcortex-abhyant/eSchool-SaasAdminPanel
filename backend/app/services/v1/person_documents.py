@@ -31,17 +31,29 @@ def _photo_api_path(kind: str, route_owner_id: int) -> str:
 
 
 def _resolve_owner(
-    db: Session, school_id: int, kind: str, route_owner_id: int
+    db: Session,
+    school_id: int,
+    kind: str,
+    route_owner_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> tuple[User, int]:
     """Return (user, route_owner_id). route_owner_id is student.id or users.id."""
     if kind == "teacher":
-        user, _staff = _owned_teacher(db, school_id, route_owner_id)
+        user, staff = _owned_teacher(db, school_id, route_owner_id)
+        if branch_id is not None and getattr(staff, "branch_id", None) not in (
+            None,
+            branch_id,
+        ):
+            raise AcademicError(404, "Record not found")
         return user, route_owner_id
     if kind == "staff":
         user, _staff = _owned_non_teaching_staff(db, school_id, route_owner_id)
         return user, route_owner_id
     if kind == "student":
-        user_id = resolve_student_owner_user_id(db, school_id, route_owner_id)
+        user_id = resolve_student_owner_user_id(
+            db, school_id, route_owner_id, branch_id=branch_id
+        )
         user = db.get(User, user_id)
         if user is None or user.school_id != school_id or user.deleted_at is not None:
             raise AcademicError(404, "Record not found")
@@ -107,8 +119,11 @@ def list_documents(
     page: int,
     page_size: int,
     category: str | None,
+    branch_id: int | None = None,
 ) -> dict:
-    user, route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     page, page_size = _page(page, page_size)
     query = db.query(PersonDocument).filter(
         PersonDocument.school_id == school_id,
@@ -134,9 +149,17 @@ def list_documents(
 
 
 def get_document(
-    db: Session, school_id: int, kind: str, route_owner_id: int, document_id: int
+    db: Session,
+    school_id: int,
+    kind: str,
+    route_owner_id: int,
+    document_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
-    user, route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     row = _owned_document(db, school_id, user.id, document_id)
     return document_public_item(row, owner_kind=kind, route_owner_id=route_id)
 
@@ -151,8 +174,11 @@ def upload_document(
     data: bytes,
     filename: str | None,
     title: str | None = None,
+    branch_id: int | None = None,
 ) -> dict:
-    user, route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     content_type, ext, safe_name, clean_title = _validate_people_upload(
         data, category=category, claimed_filename=filename, title=title
     )
@@ -219,18 +245,34 @@ def upload_document(
 
 
 def download_document(
-    db: Session, school_id: int, kind: str, route_owner_id: int, document_id: int
+    db: Session,
+    school_id: int,
+    kind: str,
+    route_owner_id: int,
+    document_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> tuple[bytes, str, str | None]:
-    user, _route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, _route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     row = _owned_document(db, school_id, user.id, document_id)
     data = store.get_storage().get(row.storage_key)
     return data, row.content_type, row.original_filename
 
 
 def delete_document(
-    db: Session, school_id: int, kind: str, route_owner_id: int, document_id: int
+    db: Session,
+    school_id: int,
+    kind: str,
+    route_owner_id: int,
+    document_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
-    user, route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     row = _owned_document(db, school_id, user.id, document_id)
     key = row.storage_key
     was_photo = row.category == "profile_photo"
@@ -249,9 +291,16 @@ def delete_document(
 
 
 def get_profile_photo_bytes(
-    db: Session, school_id: int, kind: str, route_owner_id: int
+    db: Session,
+    school_id: int,
+    kind: str,
+    route_owner_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> tuple[bytes, str]:
-    user, _route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, _route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     row = (
         db.query(PersonDocument)
         .filter(
@@ -277,6 +326,7 @@ def upload_photo(
     *,
     data: bytes,
     filename: str | None,
+    branch_id: int | None = None,
 ) -> dict:
     """Contract-shaped photo upload → ``{ photo_url }``."""
     item = upload_document(
@@ -287,7 +337,10 @@ def upload_photo(
         category="profile_photo",
         data=data,
         filename=filename,
+        branch_id=branch_id,
         title="Profile photo",
     )
-    user, route_id = _resolve_owner(db, school_id, kind, route_owner_id)
+    user, route_id = _resolve_owner(
+        db, school_id, kind, route_owner_id, branch_id=branch_id
+    )
     return {"photo_url": user.image or _photo_api_path(kind, route_id), "document": item}

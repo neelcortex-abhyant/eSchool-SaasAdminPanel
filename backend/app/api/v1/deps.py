@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
 from app.models.v1.session import AuthSession
 from app.models.v1.user import STATUS_ACTIVE, User
 from app.services.v1 import auth_service, rbac
+from app.services.v1.school_branches import BranchContext, BranchError, resolve_branch_context
 from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE as SCHOOL_STATUS_ACTIVE
 from app.services.v1.subscription_access import subscription_expiry_blocks_access
 
@@ -124,3 +125,34 @@ def assert_school_scope(auth: AuthContext, school_id: int) -> None:
         return
     if auth.user.role != ROLE_SCHOOL_ADMIN or auth.user.school_id != school_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+def get_branch_context(
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    x_branch_id: Annotated[int | None, Header(alias="X-Branch-Id")] = None,
+) -> BranchContext:
+    """Resolve authorized BranchContext. X-Branch-Id is a hint only."""
+    try:
+        return resolve_branch_context(db, auth.user, header_branch_id=x_branch_id)
+    except BranchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+def get_branch_context_optional_consolidated(
+    auth: Annotated[AuthContext, Depends(require_school_admin)],
+    db: Annotated[Session, Depends(central_db)],
+    x_branch_id: Annotated[int | None, Header(alias="X-Branch-Id")] = None,
+    branch_id: Annotated[str | None, Header(alias="X-Branch-Scope")] = None,
+) -> BranchContext:
+    """Like get_branch_context; X-Branch-Scope=all allows consolidated for full school_admin."""
+    allow_all = (branch_id or "").strip().lower() == "all" and x_branch_id is None
+    try:
+        return resolve_branch_context(
+            db,
+            auth.user,
+            header_branch_id=x_branch_id,
+            allow_consolidated=allow_all,
+        )
+    except BranchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

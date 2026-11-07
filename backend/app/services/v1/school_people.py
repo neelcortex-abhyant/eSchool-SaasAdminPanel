@@ -250,9 +250,16 @@ def _session_name(db: Session, school_id: int, session_year_id: int) -> str | No
 
 
 def _assert_active_class_section(
-    db: Session, school_id: int, class_section_id: int, session_year_id: int
+    db: Session,
+    school_id: int,
+    class_section_id: int,
+    session_year_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> ClassSection:
     cs = _same_school(db, ClassSection, class_section_id, school_id, "class_section_id")
+    if branch_id is not None and getattr(cs, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(422, "class_section_id must belong to the active branch")
     klass = db.get(SchoolClass, cs.class_id)
     section = db.get(Section, cs.section_id)
     if (
@@ -269,7 +276,12 @@ def _assert_active_class_section(
 
 
 def _assert_admission_no_unique(
-    db: Session, school_id: int, admission_no: str, *, exclude_student_id: int | None = None
+    db: Session,
+    school_id: int,
+    admission_no: str,
+    *,
+    exclude_student_id: int | None = None,
+    branch_id: int | None = None,
 ) -> None:
     key = admission_no.strip().lower()
     query = db.query(Student, User).join(User, User.id == Student.user_id).filter(
@@ -277,6 +289,8 @@ def _assert_admission_no_unique(
         Student.deleted_at.is_(None),
         func.lower(func.btrim(Student.admission_no)) == key,
     )
+    if branch_id is not None:
+        query = query.filter(Student.branch_id == branch_id)
     if exclude_student_id is not None:
         query = query.filter(Student.id != exclude_student_id)
     row = query.first()
@@ -479,8 +493,16 @@ def _student_profile(db: Session, school_id: int, student: Student, user: User) 
     return item
 
 
-def _owned_student(db: Session, school_id: int, student_id: int) -> tuple[Student, User]:
+def _owned_student(
+    db: Session,
+    school_id: int,
+    student_id: int,
+    *,
+    branch_id: int | None = None,
+) -> tuple[Student, User]:
     student = _owned(db, Student, student_id, school_id)
+    if branch_id is not None and getattr(student, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     user = db.get(User, student.user_id)
     if user is None or user.school_id != school_id or user.deleted_at is not None:
         raise AcademicError(404, "Record not found")
@@ -634,6 +656,7 @@ def list_students(
     parent_id: int | None = None,
     sort: str = "name",
     order: str = "asc",
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     sort_key = (sort or "name").strip().lower()
@@ -670,6 +693,8 @@ def list_students(
             User.deleted_at.is_(None),
         )
     )
+    if branch_id is not None:
+        query = query.filter(Student.branch_id == branch_id)
     if status is not None:
         query = query.filter(User.status == int(status))
     if session_year_id is not None:
@@ -727,8 +752,10 @@ def list_students(
     return _envelope(items, total, page, page_size)
 
 
-def get_student(db: Session, school_id: int, student_id: int) -> dict:
-    student, user = _owned_student(db, school_id, student_id)
+def get_student(
+    db: Session, school_id: int, student_id: int, *, branch_id: int | None = None
+) -> dict:
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     return _student_profile(db, school_id, student, user)
 
 
@@ -767,7 +794,9 @@ def _resolve_guardian_for_create(db: Session, school_id: int, guardian: dict) ->
     return parent, relationship
 
 
-def create_student(db: Session, school_id: int, body: dict) -> dict:
+def create_student(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     first_name = _require_str(body, "first_name", max_len=128)
     last_name = _require_str(body, "last_name", max_len=128)
     dob = _parse_date(body.get("dob"), "dob")
@@ -782,7 +811,14 @@ def create_student(db: Session, school_id: int, body: dict) -> dict:
         raise AcademicError(422, "session_year_id is required")
     if not class_section_id:
         raise AcademicError(422, "class_section_id is required")
-    _assert_active_class_section(db, school_id, class_section_id, session_year_id)
+    resolved_branch = branch_id
+    if resolved_branch is None and body.get("branch_id") is not None:
+        resolved_branch = int(body["branch_id"])
+    cs = _assert_active_class_section(
+        db, school_id, class_section_id, session_year_id, branch_id=resolved_branch
+    )
+    if resolved_branch is None:
+        resolved_branch = getattr(cs, "branch_id", None)
 
     raw_adm = body.get("admission_no")
     if raw_adm is None or not str(raw_adm).strip():
@@ -794,7 +830,9 @@ def create_student(db: Session, school_id: int, body: dict) -> dict:
                 422,
                 "admission_no may only contain letters, digits, - and / (max 32 characters)",
             )
-        _assert_admission_no_unique(db, school_id, admission_no)
+        _assert_admission_no_unique(
+            db, school_id, admission_no, branch_id=resolved_branch
+        )
 
     roll_number = body.get("roll_number")
     if roll_number is not None and roll_number != "":
@@ -863,6 +901,7 @@ def create_student(db: Session, school_id: int, body: dict) -> dict:
         roll_number=roll_number,
         admission_date=admission_date,
         school_id=school_id,
+        branch_id=resolved_branch,
         guardian_id=parent.id,
         session_year_id=session_year_id,
         enrollment_status="active" if status == 1 else "inactive",
@@ -880,8 +919,15 @@ def create_student(db: Session, school_id: int, body: dict) -> dict:
     return _student_profile(db, school_id, student, user)
 
 
-def update_student(db: Session, school_id: int, student_id: int, body: dict) -> dict:
-    student, user = _owned_student(db, school_id, student_id)
+def update_student(
+    db: Session,
+    school_id: int,
+    student_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     if "guardian" in body:
         raise AcademicError(422, "Use guardian link endpoints to change guardians")
 
@@ -891,7 +937,13 @@ def update_student(db: Session, school_id: int, student_id: int, body: dict) -> 
             422,
             "admission_no may only contain letters, digits, - and / (max 32 characters)",
         )
-    _assert_admission_no_unique(db, school_id, admission_no, exclude_student_id=student.id)
+    _assert_admission_no_unique(
+        db,
+        school_id,
+        admission_no,
+        exclude_student_id=student.id,
+        branch_id=branch_id if branch_id is not None else getattr(student, "branch_id", None),
+    )
 
     first_name = _require_str(body, "first_name", max_len=128)
     last_name = _require_str(body, "last_name", max_len=128)
@@ -977,10 +1029,17 @@ def update_student(db: Session, school_id: int, student_id: int, body: dict) -> 
     return _student_profile(db, school_id, student, user)
 
 
-def update_student_status(db: Session, school_id: int, student_id: int, status: int) -> dict:
+def update_student_status(
+    db: Session,
+    school_id: int,
+    student_id: int,
+    status: int,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     if status not in (0, 1):
         raise AcademicError(422, "status must be 0 or 1")
-    student, user = _owned_student(db, school_id, student_id)
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     user.status = status
     user.updated_at = _now()
     student.enrollment_status = "active" if status == 1 else "inactive"
@@ -994,9 +1053,14 @@ def update_student_status(db: Session, school_id: int, student_id: int, status: 
 
 
 def link_guardian(
-    db: Session, school_id: int, student_id: int, body: dict
+    db: Session,
+    school_id: int,
+    student_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
-    student, user = _owned_student(db, school_id, student_id)
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     parent_id = int(body.get("parent_id") or 0)
     if not parent_id:
         raise AcademicError(422, "parent_id is required")
@@ -1018,9 +1082,14 @@ def link_guardian(
 
 
 def unlink_guardian(
-    db: Session, school_id: int, student_id: int, parent_id: int
+    db: Session,
+    school_id: int,
+    student_id: int,
+    parent_id: int,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
-    student, user = _owned_student(db, school_id, student_id)
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     links = _active_guardian_links(db, student.id)
     target = next((link for link in links if link.guardian_user_id == int(parent_id)), None)
     if target is None:
@@ -1264,7 +1333,9 @@ def update_parent_status(db: Session, school_id: int, parent_id: int, status: in
     return _parent_profile(db, school_id, parent)
 
 
-def resolve_student_owner_user_id(db: Session, school_id: int, student_id: int) -> int:
+def resolve_student_owner_user_id(
+    db: Session, school_id: int, student_id: int, *, branch_id: int | None = None
+) -> int:
     """Map people-API student id → legacy users.id for document ownership."""
-    student, user = _owned_student(db, school_id, student_id)
+    student, user = _owned_student(db, school_id, student_id, branch_id=branch_id)
     return user.id

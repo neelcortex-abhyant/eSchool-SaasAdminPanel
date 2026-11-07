@@ -59,7 +59,12 @@ def test_roles_catalog(v1_client, v1_db):
 
     assert res.status_code == 200
     items = res.json()["items"]
-    assert [r["key"] for r in items] == ["school_admin", "academic_admin", "accounts_admin"]
+    assert [r["key"] for r in items] == [
+        "school_admin",
+        "academic_admin",
+        "accounts_admin",
+        "branch_admin",
+    ]
     by_key = {r["key"]: r for r in items}
     assert by_key["school_admin"]["permissions"] == list(rbac.PERMISSIONS)
     assert by_key["accounts_admin"]["permissions"] == ["dashboard.view", "fees.manage", "reports.view"]

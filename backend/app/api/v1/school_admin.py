@@ -6,19 +6,21 @@ from datetime import date, datetime
 from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, assert_school_scope, require_school_permission
+from app.api.v1.deps import AuthContext, assert_school_scope, get_branch_context, require_school_permission
+from app.services.v1.school_branches import BranchContext
 from app.core.config import get_settings
 from app.models.tables import SessionYear
 from app.schemas.v1.schools import SchoolResponse
 from app.schemas.v1.users import UserResponse
 from app.api.v1 import school_admin_academics as academics_routes
+from app.api.v1 import school_admin_branches as branches_routes
 from app.api.v1 import school_admin_erp as erp_routes
 from app.api.v1 import school_admin_messaging as messaging_routes
 from app.api.v1 import school_admin_mgmt as mgmt_routes
@@ -63,6 +65,7 @@ def require_teachers_or_staff(
 # Academic structure lives in school_admin_academics.py; inherits this router's tag.
 # Mounted first so /academics/... stays distinct from direct /classes and /sessions.
 router.include_router(academics_routes.router)
+router.include_router(branches_routes.router)
 router.include_router(mgmt_routes.router)
 router.include_router(erp_routes.router)
 router.include_router(settings_routes.router)
@@ -496,9 +499,27 @@ def _private_image_response(data: bytes, content_type: str) -> Response:
     return Response(content=data, media_type=content_type, headers=dict(_PRIVATE_FILE_HEADERS))
 
 
-@router.get("/me", response_model=UserResponse)
-def school_admin_me(auth: Annotated[AuthContext, Depends(require_school_context)]) -> UserResponse:
-    return UserResponse.model_validate(auth.user)
+@router.get("/me")
+def school_admin_me(
+    auth: Annotated[AuthContext, Depends(require_school_context)],
+    db: Annotated[Session, Depends(central_db)],
+    x_branch_id: Annotated[int | None, Header(alias="X-Branch-Id")] = None,
+) -> dict:
+    """Additive /me: user fields + branches[] / default_branch_id / active_branch_id."""
+    from app.services.v1 import school_branches as branches_svc
+
+    base = UserResponse.model_validate(auth.user).model_dump(mode="json")
+    try:
+        extra = branches_svc.me_branches_payload(db, auth.user, active_branch_id=x_branch_id)
+    except branches_svc.BranchError:
+        extra = {
+            "branches": [],
+            "default_branch_id": None,
+            "active_branch_id": None,
+            "is_full_school_admin": False,
+        }
+    base.update(extra)
+    return base
 
 
 @router.get("/school", response_model=SchoolResponse)
@@ -759,6 +780,7 @@ def replace_subject_classes(
 def list_people_students(
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     q: str = "",
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
@@ -784,6 +806,7 @@ def list_people_students(
             parent_id=parent_id,
             sort=sort,
             order=order,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -793,8 +816,13 @@ def create_people_student(
     body: StudentCreateBody,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: people_svc.create_student(db, _school_id(auth), _write_body(body)))
+    return _run(
+        lambda: people_svc.create_student(
+            db, _school_id(auth), _write_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/students/{student_id}", responses=core_out.json_response(core_out.StudentOut))
@@ -802,8 +830,13 @@ def get_people_student(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: people_svc.get_student(db, _school_id(auth), student_id))
+    return _run(
+        lambda: people_svc.get_student(
+            db, _school_id(auth), student_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/students/{student_id}", responses=core_out.json_response(core_out.StudentOut))
@@ -812,9 +845,12 @@ def update_people_student(
     body: StudentUpdateBody,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: people_svc.update_student(db, _school_id(auth), student_id, _write_body(body))
+        lambda: people_svc.update_student(
+            db, _school_id(auth), student_id, _write_body(body), branch_id=branch.branch_id
+        )
     )
 
 
@@ -824,9 +860,12 @@ def update_people_student_status(
     body: PeopleStatusBody,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: people_svc.update_student_status(db, _school_id(auth), student_id, body.status)
+        lambda: people_svc.update_student_status(
+            db, _school_id(auth), student_id, body.status, branch_id=branch.branch_id
+        )
     )
 
 
@@ -836,9 +875,12 @@ def link_people_guardian(
     body: GuardianLinkBody,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: people_svc.link_guardian(db, _school_id(auth), student_id, _write_body(body))
+        lambda: people_svc.link_guardian(
+            db, _school_id(auth), student_id, _write_body(body), branch_id=branch.branch_id
+        )
     )
 
 
@@ -848,9 +890,12 @@ def unlink_people_guardian(
     parent_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: people_svc.unlink_guardian(db, _school_id(auth), student_id, parent_id)
+        lambda: people_svc.unlink_guardian(
+            db, _school_id(auth), student_id, parent_id, branch_id=branch.branch_id
+        )
     )
 
 
@@ -859,12 +904,19 @@ async def upload_student_photo(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     file: UploadFile = File(...),
 ) -> dict:
     data, filename = await _read_upload(file, too_large_status=413)
     result = _run(
         lambda: docs_svc.upload_photo(
-            db, _school_id(auth), "student", student_id, data=data, filename=filename
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            data=data,
+            filename=filename,
+            branch_id=branch.branch_id,
         )
     )
     return {"photo_url": result["photo_url"]}
@@ -875,9 +927,12 @@ def get_student_photo(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
     data, content_type = _run(
-        lambda: docs_svc.get_profile_photo_bytes(db, _school_id(auth), "student", student_id)
+        lambda: docs_svc.get_profile_photo_bytes(
+            db, _school_id(auth), "student", student_id, branch_id=branch.branch_id
+        )
     )
     return _private_image_response(data, content_type)
 
@@ -887,6 +942,7 @@ async def upload_student_document(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     file: UploadFile = File(...),
     title: str = Form(default=""),
     category: str = Form(default="other"),
@@ -902,6 +958,7 @@ async def upload_student_document(
             data=data,
             filename=filename,
             title=title or None,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -911,6 +968,7 @@ def list_student_documents(
     student_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     category: str | None = Query(default=None),
@@ -924,6 +982,7 @@ def list_student_documents(
             page=page,
             page_size=page_size,
             category=category,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -934,10 +993,16 @@ def get_student_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: docs_svc.get_document(
-            db, _school_id(auth), "student", student_id, document_id
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -948,10 +1013,16 @@ def delete_student_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: docs_svc.delete_document(
-            db, _school_id(auth), "student", student_id, document_id
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -962,10 +1033,16 @@ def download_student_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_students)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
     data, content_type, filename = _run(
         lambda: docs_svc.download_document(
-            db, _school_id(auth), "student", student_id, document_id
+            db,
+            _school_id(auth),
+            "student",
+            student_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
     return _download_response(data, content_type, filename)
@@ -1050,6 +1127,7 @@ def list_teacher_departments(
 def list_teachers(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     q: str = "",
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
@@ -1077,6 +1155,7 @@ def list_teachers(
             employment_status=employment_status,
             department=department,
             designation=designation,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1086,9 +1165,12 @@ def create_teacher(
     body: TeacherCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: teachers_svc.create_teacher(db, _school_id(auth), _write_body(body))
+        lambda: teachers_svc.create_teacher(
+            db, _school_id(auth), _write_body(body), branch_id=branch.branch_id
+        )
     )
 
 
@@ -1097,8 +1179,13 @@ def get_teacher(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: teachers_svc.get_teacher(db, _school_id(auth), teacher_id))
+    return _run(
+        lambda: teachers_svc.get_teacher(
+            db, _school_id(auth), teacher_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/teachers/{teacher_id}", responses=core_out.json_response(core_out.TeacherOut))
@@ -1107,10 +1194,11 @@ def update_teacher(
     body: TeacherUpdateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: teachers_svc.update_teacher(
-            db, _school_id(auth), teacher_id, _write_body(body)
+            db, _school_id(auth), teacher_id, _write_body(body), branch_id=branch.branch_id
         )
     )
 
@@ -1121,10 +1209,11 @@ def update_teacher_status(
     body: TeacherStatusBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: teachers_svc.update_teacher_status(
-            db, _school_id(auth), teacher_id, body.status
+            db, _school_id(auth), teacher_id, body.status, branch_id=branch.branch_id
         )
     )
 
@@ -1134,6 +1223,7 @@ async def upload_teacher_document(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     file: UploadFile = File(...),
     category: str = Form(default="other"),
     title: str = Form(default=""),
@@ -1149,6 +1239,7 @@ async def upload_teacher_document(
             data=data,
             filename=filename,
             title=title or None,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1158,6 +1249,7 @@ def list_teacher_documents(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     category: str | None = Query(default=None),
@@ -1171,6 +1263,7 @@ def list_teacher_documents(
             page=page,
             page_size=page_size,
             category=category,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1181,10 +1274,16 @@ def get_teacher_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: docs_svc.get_document(
-            db, _school_id(auth), "teacher", teacher_id, document_id
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1195,10 +1294,16 @@ def download_teacher_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> Response:
     data, content_type, filename = _run(
         lambda: docs_svc.download_document(
-            db, _school_id(auth), "teacher", teacher_id, document_id
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
     return _download_response(data, content_type, filename)
@@ -1210,10 +1315,16 @@ def delete_teacher_document(
     document_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: docs_svc.delete_document(
-            db, _school_id(auth), "teacher", teacher_id, document_id
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            document_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1223,12 +1334,19 @@ async def upload_teacher_photo(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     file: UploadFile = File(...),
 ) -> dict:
     data, filename = await _read_upload(file, too_large_status=413)
     result = _run(
         lambda: docs_svc.upload_photo(
-            db, _school_id(auth), "teacher", teacher_id, data=data, filename=filename
+            db,
+            _school_id(auth),
+            "teacher",
+            teacher_id,
+            data=data,
+            filename=filename,
+            branch_id=branch.branch_id,
         )
     )
     return {"photo_url": result["photo_url"]}
@@ -1239,10 +1357,11 @@ def get_teacher_photo(
     teacher_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> Response:
     data, content_type = _run(
         lambda: docs_svc.get_profile_photo_bytes(
-            db, _school_id(auth), "teacher", teacher_id
+            db, _school_id(auth), "teacher", teacher_id, branch_id=branch.branch_id
         )
     )
     return _private_image_response(data, content_type)
@@ -1257,6 +1376,7 @@ def get_teacher_daily_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int = Query(ge=1),
     day: str = Query(min_length=1, max_length=16),
 ) -> dict:
@@ -1267,6 +1387,7 @@ def get_teacher_daily_timetable(
             teacher_user_id,
             session_year_id=session_year_id,
             day=day,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1276,6 +1397,7 @@ def get_teacher_weekly_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int = Query(ge=1),
 ) -> dict:
     return _run(
@@ -1284,6 +1406,7 @@ def get_teacher_weekly_timetable(
             _school_id(auth),
             teacher_user_id,
             session_year_id=session_year_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1293,6 +1416,7 @@ def get_teacher_timetable(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int = Query(ge=1),
     day: str | None = Query(default=None, max_length=16),
     page: int = Query(default=1, ge=1),
@@ -1307,6 +1431,7 @@ def get_teacher_timetable(
             day=day,
             page=page,
             page_size=page_size,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1316,6 +1441,7 @@ def get_teacher_availability(
     teacher_user_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int = Query(ge=1),
     day: str = Query(min_length=1, max_length=16),
     start_time: str = Query(min_length=4, max_length=8),
@@ -1332,6 +1458,7 @@ def get_teacher_availability(
             start_time=start_time,
             end_time=end_time,
             exclude_entry_id=exclude_entry_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1571,6 +1698,7 @@ def list_people(
 def get_weekly_timetable(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int = Query(ge=1),
     class_section_id: int = Query(ge=1),
 ) -> dict:
@@ -1581,6 +1709,7 @@ def get_weekly_timetable(
             _school_id(auth),
             session_year_id=session_year_id,
             class_section_id=class_section_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1589,6 +1718,7 @@ def get_weekly_timetable(
 def list_timetable_entries(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     session_year_id: int | None = Query(default=None, ge=1),
@@ -1608,6 +1738,7 @@ def list_timetable_entries(
             section_id=section_id,
             class_section_id=class_section_id,
             day=day,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1617,10 +1748,11 @@ def create_timetable_entry(
     body: TimetableEntryCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: timetable_svc.create_entry(
-            db, _school_id(auth), _timetable_write_body(body)
+            db, _school_id(auth), _timetable_write_body(body), branch_id=branch.branch_id
         )
     )
 
@@ -1630,8 +1762,13 @@ def get_timetable_entry(
     entry_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: timetable_svc.get_entry(db, _school_id(auth), entry_id))
+    return _run(
+        lambda: timetable_svc.get_entry(
+            db, _school_id(auth), entry_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/timetable-entries/{entry_id}", responses=core_out.json_response(core_out.TimetableEntryOut))
@@ -1640,10 +1777,15 @@ def update_timetable_entry(
     body: TimetableEntryUpdateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: timetable_svc.update_entry(
-            db, _school_id(auth), entry_id, _timetable_write_body(body)
+            db,
+            _school_id(auth),
+            entry_id,
+            _timetable_write_body(body),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1653,8 +1795,13 @@ def delete_timetable_entry(
     entry_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: timetable_svc.soft_delete_entry(db, _school_id(auth), entry_id))
+    return _run(
+        lambda: timetable_svc.soft_delete_entry(
+            db, _school_id(auth), entry_id, branch_id=branch.branch_id
+        )
+    )
 
 
 # --- Phase 7: Teacher–Subject Assignments (direct /school-admin/teacher-assignments) ---
@@ -1665,6 +1812,7 @@ def delete_timetable_entry(
 def list_teacher_assignments(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     teacher_id: int | None = Query(default=None, ge=1),
@@ -1685,6 +1833,7 @@ def list_teacher_assignments(
             section_id=section_id,
             subject_id=subject_id,
             session_id=session_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1694,11 +1843,12 @@ def create_teacher_assignment(
     body: TeacherAssignmentWriteBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     """Create a teacher–subject assignment. School id comes from auth only."""
     return _run(
         lambda: academics.create_teacher_assignment(
-            db, _school_id(auth), _write_body(body)
+            db, _school_id(auth), _write_body(body), branch_id=branch.branch_id
         )
     )
 
@@ -1708,8 +1858,13 @@ def get_teacher_assignment(
     assignment_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: academics.get_teacher_assignment(db, _school_id(auth), assignment_id))
+    return _run(
+        lambda: academics.get_teacher_assignment(
+            db, _school_id(auth), assignment_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/teacher-assignments/{assignment_id}", responses=core_out.json_response(core_out.TeacherAssignmentOut))
@@ -1718,11 +1873,12 @@ def update_teacher_assignment(
     body: TeacherAssignmentWriteBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     """Partial update. Revalidates the full resulting combination."""
     return _run(
         lambda: academics.update_teacher_assignment(
-            db, _school_id(auth), assignment_id, _write_body(body)
+            db, _school_id(auth), assignment_id, _write_body(body), branch_id=branch.branch_id
         )
     )
 
@@ -1732,10 +1888,13 @@ def delete_teacher_assignment(
     assignment_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     """Soft-delete. Historical rows kept; no cascade to attendance/exams."""
     return _run(
-        lambda: academics.soft_delete_teacher_assignment(db, _school_id(auth), assignment_id)
+        lambda: academics.soft_delete_teacher_assignment(
+            db, _school_id(auth), assignment_id, branch_id=branch.branch_id
+        )
     )
 
 
@@ -1764,9 +1923,12 @@ def create_homework(
     body: HomeworkCreateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
-        lambda: homework_svc.create_homework(db, _school_id(auth), _homework_write_body(body))
+        lambda: homework_svc.create_homework(
+            db, _school_id(auth), _homework_write_body(body), branch_id=branch.branch_id
+        )
     )
 
 
@@ -1774,6 +1936,7 @@ def create_homework(
 def list_homework(
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     session_year_id: int | None = Query(default=None, ge=1),
@@ -1793,6 +1956,7 @@ def list_homework(
             subject_id=subject_id,
             teacher_user_id=teacher_user_id,
             q=q,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1802,6 +1966,7 @@ def list_homework_submissions(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     status_filter: str | None = Query(default=None, alias="status"),
@@ -1816,6 +1981,7 @@ def list_homework_submissions(
             page_size=page_size,
             status_filter=status_filter,
             is_late=is_late,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1825,8 +1991,13 @@ def get_homework_summary(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: homework_svc.homework_summary(db, _school_id(auth), homework_id))
+    return _run(
+        lambda: homework_svc.homework_summary(
+            db, _school_id(auth), homework_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/homework/{homework_id}", responses=core_out.json_response(core_out.HomeworkOut))
@@ -1834,8 +2005,13 @@ def get_homework(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: homework_svc.get_homework(db, _school_id(auth), homework_id))
+    return _run(
+        lambda: homework_svc.get_homework(
+            db, _school_id(auth), homework_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/homework/{homework_id}", responses=core_out.json_response(core_out.HomeworkOut))
@@ -1844,10 +2020,15 @@ def update_homework(
     body: HomeworkUpdateBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: homework_svc.update_homework(
-            db, _school_id(auth), homework_id, _homework_write_body(body)
+            db,
+            _school_id(auth),
+            homework_id,
+            _homework_write_body(body),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1857,8 +2038,13 @@ def delete_homework(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: homework_svc.soft_delete_homework(db, _school_id(auth), homework_id))
+    return _run(
+        lambda: homework_svc.soft_delete_homework(
+            db, _school_id(auth), homework_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post("/homework/{homework_id}/attachments", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.HomeworkOut, status_code=201))
@@ -1866,6 +2052,7 @@ async def upload_homework_attachment(
     homework_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     file: UploadFile = File(...),
 ) -> dict:
     """Binary attachment upload when DOCUMENT_STORAGE_* is configured; else 503."""
@@ -1877,6 +2064,7 @@ async def upload_homework_attachment(
             homework_id,
             file_bytes=data,
             claimed_filename=filename or file.filename,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1886,8 +2074,13 @@ def get_homework_submission(
     submission_id: int,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: homework_svc.get_submission(db, _school_id(auth), submission_id))
+    return _run(
+        lambda: homework_svc.get_submission(
+            db, _school_id(auth), submission_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/homework-submissions/{submission_id}/evaluation", responses=core_out.json_response(core_out.HomeworkSubmissionOut))
@@ -1896,6 +2089,7 @@ def evaluate_homework_submission(
     body: HomeworkEvaluationBody,
     auth: Annotated[AuthContext, Depends(require_teachers)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: homework_svc.evaluate_submission(
@@ -1904,6 +2098,7 @@ def evaluate_homework_submission(
             submission_id,
             body.model_dump(exclude_unset=True),
             evaluator_user_id=str(auth.user.id),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2399,10 +2594,14 @@ def create_offline_exam(
     body: OfflineExamCreateBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: offline_svc.create_exam(
-            db, _school_id(auth), offline_svc.sanitize_body(body.model_dump())
+            db,
+            _school_id(auth),
+            offline_svc.sanitize_body(body.model_dump()),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2411,6 +2610,7 @@ def create_offline_exam(
 def list_offline_exams(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     session_year_id: int | None = Query(default=None, ge=1),
@@ -2426,6 +2626,7 @@ def list_offline_exams(
             session_year_id=session_year_id,
             class_section_id=class_section_id,
             q=q,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2435,8 +2636,13 @@ def get_offline_exam(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.get_exam(db, _school_id(auth), exam_id))
+    return _run(
+        lambda: offline_svc.get_exam(
+            db, _school_id(auth), exam_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/offline-exams/{exam_id}", responses=core_out.json_response(core_out.OfflineExamOut))
@@ -2445,6 +2651,7 @@ def update_offline_exam(
     body: OfflineExamUpdateBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: offline_svc.update_exam(
@@ -2452,6 +2659,7 @@ def update_offline_exam(
             _school_id(auth),
             exam_id,
             offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2461,8 +2669,13 @@ def delete_offline_exam(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.soft_delete_exam(db, _school_id(auth), exam_id))
+    return _run(
+        lambda: offline_svc.soft_delete_exam(
+            db, _school_id(auth), exam_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post("/offline-exams/{exam_id}/schedules", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.OfflineExamScheduleOut, status_code=201))
@@ -2471,6 +2684,7 @@ def create_offline_exam_schedule(
     body: OfflineScheduleCreateBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: offline_svc.create_schedule(
@@ -2478,6 +2692,7 @@ def create_offline_exam_schedule(
             _school_id(auth),
             exam_id,
             offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2486,6 +2701,7 @@ def create_offline_exam_schedule(
 def list_offline_exam_schedules(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     exam_id: int | None = Query(default=None, ge=1),
@@ -2505,6 +2721,7 @@ def list_offline_exam_schedules(
             class_section_id=class_section_id,
             subject_id=subject_id,
             exam_date=exam_date,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2514,8 +2731,13 @@ def get_offline_exam_schedule(
     schedule_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.get_schedule(db, _school_id(auth), schedule_id))
+    return _run(
+        lambda: offline_svc.get_schedule(
+            db, _school_id(auth), schedule_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/offline-exam-schedules/{schedule_id}", responses=core_out.json_response(core_out.OfflineExamScheduleOut))
@@ -2524,6 +2746,7 @@ def patch_offline_exam_schedule(
     body: OfflineSchedulePatchBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     return _run(
         lambda: offline_svc.update_schedule(
@@ -2531,6 +2754,7 @@ def patch_offline_exam_schedule(
             _school_id(auth),
             schedule_id,
             offline_svc.sanitize_body(body.model_dump(exclude_unset=True)),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2540,8 +2764,13 @@ def delete_offline_exam_schedule(
     schedule_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.soft_delete_schedule(db, _school_id(auth), schedule_id))
+    return _run(
+        lambda: offline_svc.soft_delete_schedule(
+            db, _school_id(auth), schedule_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post("/offline-exam-schedules/{schedule_id}/marks", status_code=status.HTTP_201_CREATED, responses=core_out.json_response(core_out.OfflineExamMarkOut, status_code=201))
@@ -2550,6 +2779,7 @@ def upsert_offline_exam_mark(
     body: OfflineMarkBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     payload = body.model_dump(exclude_unset=True)
     reason = payload.pop("reason", None)
@@ -2561,6 +2791,7 @@ def upsert_offline_exam_mark(
             offline_svc.sanitize_body(payload),
             actor_v1_user_id=str(auth.user.id),
             reason=reason,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2571,6 +2802,7 @@ def bulk_offline_exam_marks(
     body: OfflineMarkBulkBody,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
     items = [offline_svc.sanitize_body(i.model_dump(exclude={"reason"})) for i in body.items]
     return _run(
@@ -2580,6 +2812,7 @@ def bulk_offline_exam_marks(
             schedule_id,
             items,
             actor_v1_user_id=str(auth.user.id),
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2588,6 +2821,7 @@ def bulk_offline_exam_marks(
 def list_offline_exam_marks(
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     exam_id: int | None = Query(default=None, ge=1),
@@ -2603,6 +2837,7 @@ def list_offline_exam_marks(
             exam_id=exam_id,
             schedule_id=schedule_id,
             student_id=student_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2612,8 +2847,13 @@ def list_offline_exam_mark_audits(
     mark_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> list:
-    return _run(lambda: offline_svc.list_mark_audits(db, _school_id(auth), mark_id))
+    return _run(
+        lambda: offline_svc.list_mark_audits(
+            db, _school_id(auth), mark_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post("/offline-exams/{exam_id}/process-results", responses=core_out.json_response(core_out.OfflineExamProcessResultsOut))
@@ -2621,8 +2861,13 @@ def process_offline_exam_results(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.process_results(db, _school_id(auth), exam_id))
+    return _run(
+        lambda: offline_svc.process_results(
+            db, _school_id(auth), exam_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/offline-exams/{exam_id}/results", responses=core_out.json_response(core_out.OfflineExamResultListOut))
@@ -2630,12 +2875,18 @@ def list_offline_exam_results(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
 ) -> dict:
     return _run(
         lambda: offline_svc.list_results(
-            db, _school_id(auth), exam_id, page=page, page_size=page_size
+            db,
+            _school_id(auth),
+            exam_id,
+            page=page,
+            page_size=page_size,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -2645,5 +2896,10 @@ def offline_exam_results_summary(
     exam_id: int,
     auth: Annotated[AuthContext, Depends(require_exams)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> dict:
-    return _run(lambda: offline_svc.class_result_summary(db, _school_id(auth), exam_id))
+    return _run(
+        lambda: offline_svc.class_result_summary(
+            db, _school_id(auth), exam_id, branch_id=branch.branch_id
+        )
+    )

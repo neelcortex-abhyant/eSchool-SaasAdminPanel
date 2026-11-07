@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, require_school_permission
+from app.api.v1.deps import AuthContext, get_branch_context, require_school_permission
 from app.schemas.v1 import school_admin_erp as erp_schemas
 from app.schemas.v1.school_admin_erp_responses import (
     FeeCollectionReportOut,
@@ -31,6 +31,7 @@ from app.services.v1 import school_erp_report_cards as erp_rc
 from app.services.v1 import school_erp_transport as erp_transport
 from app.services.v1.school_academic_mgmt import sanitize_body
 from app.services.v1.school_academics import AcademicError
+from app.services.v1.school_branches import BranchContext
 
 router = APIRouter(prefix="")
 
@@ -94,8 +95,13 @@ def get_fee_structure_installments(
     structure_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: erp_fees.list_installments(db, _school_id(auth), structure_id))
+    return _run(
+        lambda: erp_fees.list_installments(
+            db, _school_id(auth), structure_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.put(
@@ -107,9 +113,14 @@ def put_fee_structure_installments(
     body: erp_schemas.FeeInstallmentsPutBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
     items = body.installment_rows()
-    return _run(lambda: erp_fees.set_structure_installments(db, _school_id(auth), structure_id, items))
+    return _run(
+        lambda: erp_fees.set_structure_installments(
+            db, _school_id(auth), structure_id, items, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-payments/{payment_id}/receipt", responses=json_response(FeeReceiptOut))
@@ -117,8 +128,13 @@ def fee_payment_receipt(
     payment_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: erp_fees.get_payment_receipt(db, _school_id(auth), payment_id))
+    return _run(
+        lambda: erp_fees.get_payment_receipt(
+            db, _school_id(auth), payment_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-payments/{payment_id}/receipt/pdf", responses=_PDF_RESPONSE, response_class=Response)
@@ -126,8 +142,13 @@ def fee_payment_receipt_pdf(
     payment_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ) -> Response:
-    payload = _run(lambda: erp_fees.render_fee_receipt_pdf(db, _school_id(auth), payment_id))
+    payload = _run(
+        lambda: erp_fees.render_fee_receipt_pdf(
+            db, _school_id(auth), payment_id, branch_id=branch.branch_id
+        )
+    )
     return _pdf_response(payload, f"fee-receipt-{payment_id}.pdf")
 
 
@@ -137,10 +158,16 @@ def cancel_fee_payment(
     body: erp_schemas.FeePaymentCancelBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
     return _run(
         lambda: erp_fees.cancel_fee_payment(
-            db, _school_id(auth), payment_id, body.reason, actor=auth.user
+            db,
+            _school_id(auth),
+            payment_id,
+            body.reason,
+            actor=auth.user,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -149,13 +176,19 @@ def cancel_fee_payment(
 def fees_collection_report(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     from_date: date = Query(...),
     to_date: date = Query(...),
     class_id: int | None = Query(None, ge=1),
 ):
     return _run(
         lambda: erp_fees.fee_collection_report(
-            db, _school_id(auth), from_date, to_date, class_id=class_id
+            db,
+            _school_id(auth),
+            from_date,
+            to_date,
+            class_id=class_id,
+            branch_id=branch.branch_id,
         )
     )
 

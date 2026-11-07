@@ -25,13 +25,18 @@ from app.schemas.v1.schools import (
     SchoolUpdateRequest,
 )
 from app.models.v1.user import STATUS_ACTIVE
-from app.services.v1 import audit_service, password_reset_service, school_admin_service, school_service
+from app.schemas.v1.school_branches import BranchSettingsBody, SchoolBranchSummaryOut
+from app.services.v1 import audit_service, password_reset_service, school_admin_service, school_branches, school_service
 
 router = APIRouter(prefix="/schools", tags=["v1-super-admin-schools"])
 logger = logging.getLogger("eschool.school_admins")
 
 
 def _http(exc: school_service.SchoolServiceError | school_admin_service.SchoolAdminServiceError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _branch_http(exc: school_branches.BranchError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
@@ -148,6 +153,51 @@ def get_school(
     except school_service.SchoolServiceError as exc:
         raise _http(exc) from exc
     return SchoolResponse.model_validate(school)
+
+
+@router.get("/{school_id}/branches", response_model=SchoolBranchSummaryOut)
+def get_school_branches(
+    school_id: int,
+    _auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SchoolBranchSummaryOut:
+    try:
+        payload = school_branches.school_branch_summary(db, school_id)
+    except school_branches.BranchError as exc:
+        raise _branch_http(exc) from exc
+    return SchoolBranchSummaryOut.model_validate(payload)
+
+
+@router.patch("/{school_id}/branch-settings", response_model=SchoolBranchSummaryOut)
+def update_school_branch_settings(
+    school_id: int,
+    body: BranchSettingsBody,
+    auth: Annotated[AuthContext, Depends(require_super_admin)],
+    db: Annotated[Session, Depends(central_db)],
+) -> SchoolBranchSummaryOut:
+    """Super Admin sets the total branch cap and whether additional branches may be created."""
+    try:
+        payload = school_branches.update_branch_settings(
+            db,
+            school_id,
+            max_branches=body.max_branches,
+            branch_creation_enabled=body.branch_creation_enabled,
+        )
+    except school_branches.BranchError as exc:
+        raise _branch_http(exc) from exc
+    audit_service.record_audit(
+        db,
+        actor=auth.user,
+        action="school.branch_settings",
+        entity_type="school",
+        entity_id=school_id,
+        school_id=school_id,
+        metadata={
+            "max_branches": body.max_branches,
+            "branch_creation_enabled": body.branch_creation_enabled,
+        },
+    )
+    return SchoolBranchSummaryOut.model_validate(payload)
 
 
 @router.patch("/{school_id}", response_model=SchoolResponse)

@@ -29,19 +29,63 @@ DOMAIN_TYPES = frozenset({DOMAIN_TYPE_DEFAULT, DOMAIN_TYPE_CUSTOM})
 
 # Subdomain label for domain_type=default (prefix only; stored domain is full host).
 _SUBDOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+# Availability API (SCHOOL_DOMAINS_API_CONTRACT §2): 3–40 chars, hyphen-separated labels.
+_AVAILABILITY_SUBDOMAIN_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _HOSTNAME_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _RESERVED_SUBDOMAINS = frozenset(
     {
         "www",
-        "api",
-        "admin",
         "app",
+        "admin",
+        "api",
         "mail",
+        "smtp",
+        "imap",
+        "pop",
         "ftp",
-        "localhost",
-        "staging",
-        "static",
+        "ns1",
+        "ns2",
+        "dns",
         "cdn",
+        "static",
+        "assets",
+        "dashboard",
+        "login",
+        "register",
+        "signup",
+        "help",
+        "support",
+        "status",
+        "blog",
+        "docs",
+        "billing",
+        "school",
+        "schools",
+        "super-admin",
+        "superadmin",
+        "portal",
+        "test",
+        "dev",
+        "staging",
+        "localhost",
+        "site",
+        "by-host",
+    }
+)
+_FILLER_WORDS = frozenset(
+    {
+        "the",
+        "of",
+        "and",
+        "school",
+        "academy",
+        "public",
+        "high",
+        "secondary",
+        "international",
+        "primary",
+        "senior",
+        "junior",
     }
 )
 
@@ -131,6 +175,157 @@ def _normalize_subdomain_prefix(value: str) -> str:
     if prefix in _RESERVED_SUBDOMAINS:
         raise SchoolServiceError("domain subdomain prefix is reserved", status_code=422)
     return prefix
+
+
+def _slugify_name(name: str) -> str:
+    text = (name or "").strip().lower().replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = text.strip("-")
+    if len(text) > 40:
+        cut = text[:40]
+        if "-" in cut:
+            cut = cut.rsplit("-", 1)[0]
+        text = cut.strip("-")
+    return text
+
+
+def _city_slug(city: str | None) -> str:
+    return _slugify_name(city or "")[:40]
+
+
+def _name_without_filler(name: str) -> str:
+    parts = [p for p in _slugify_name(name).split("-") if p and p not in _FILLER_WORDS]
+    return "-".join(parts)[:40]
+
+
+def _initials_slug(name: str, city: str | None) -> str:
+    words = [w for w in _slugify_name(name).split("-") if w and w not in _FILLER_WORDS]
+    initials = "".join(w[0] for w in words if w)[:12]
+    city_part = _city_slug(city)
+    if initials and city_part:
+        return f"{initials}-{city_part}"[:40]
+    return initials or city_part
+
+
+def _domain_taken(db: Session, full_host: str) -> bool:
+    row = db.scalar(
+        select(School.id).where(
+            func.lower(func.btrim(School.domain)) == full_host.lower(),
+            School.domain.is_not(None),
+            func.btrim(School.domain) != "",
+            School.deleted_at.is_(None),
+        )
+    )
+    return row is not None
+
+
+def _suggestion_candidates(slug: str, name: str | None, city: str | None) -> list[str]:
+    city_part = _city_slug(city)
+    name_part = _name_without_filler(name or slug)
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(candidate: str) -> None:
+        c = (candidate or "").strip("-")[:40]
+        if (
+            not c
+            or c in seen
+            or c == slug
+            or not _AVAILABILITY_SUBDOMAIN_RE.match(c)
+            or len(c) < 3
+            or c.isdigit()
+            or c in _RESERVED_SUBDOMAINS
+        ):
+            return
+        seen.add(c)
+        out.append(c)
+
+    if city_part:
+        add(f"{slug}-{city_part}")
+    if name_part:
+        add(name_part)
+        if city_part:
+            add(f"{name_part}-{city_part}")
+    add(_initials_slug(name or slug, city))
+    for n in range(2, 12):
+        add(f"{slug}-{n}")
+        if len(out) >= 5:
+            break
+    return out[:5]
+
+
+def check_subdomain_availability(
+    db: Session,
+    *,
+    slug: str | None = None,
+    name: str | None = None,
+    city: str | None = None,
+) -> dict:
+    """Public availability check (contract §4). Never returns school identity."""
+    raw = (slug or "").strip().lower()
+    if not raw and name:
+        raw = _slugify_name(name)
+    if not raw:
+        return {
+            "slug": "",
+            "available": False,
+            "problem": "slug is required (or provide name to derive one).",
+            "suggestions": _suggestion_candidates("school", name, city),
+        }
+
+    if not _AVAILABILITY_SUBDOMAIN_RE.match(raw) or not (3 <= len(raw) <= 40):
+        return {
+            "slug": raw,
+            "available": False,
+            "problem": "slug must be 3–40 characters of lowercase letters, digits, and hyphens.",
+            "suggestions": _suggestion_candidates(_slugify_name(name or raw), name, city),
+        }
+    if raw.isdigit():
+        return {
+            "slug": raw,
+            "available": False,
+            "problem": "slug must not be all digits.",
+            "suggestions": _suggestion_candidates(_slugify_name(name or "school"), name, city),
+        }
+    if raw in _RESERVED_SUBDOMAINS:
+        return {
+            "slug": raw,
+            "available": False,
+            "problem": f"{raw} is reserved.",
+            "suggestions": _suggestion_candidates(_slugify_name(name or raw), name, city),
+        }
+
+    # Also enforce registration normalize rules (hyphen edges / label shape).
+    try:
+        _normalize_subdomain_prefix(raw)
+    except SchoolServiceError as exc:
+        return {
+            "slug": raw,
+            "available": False,
+            "problem": str(exc.detail),
+            "suggestions": _suggestion_candidates(_slugify_name(name or raw), name, city),
+        }
+
+    base = get_settings().resolved_school_base_domain
+    if not base:
+        raise SchoolServiceError(
+            "School base domain is not configured (set SCHOOL_BASE_DOMAIN or APP_URL)",
+            status_code=500,
+        )
+    full_host = f"{raw}.{base}"
+    if _domain_taken(db, full_host):
+        return {
+            "slug": raw,
+            "available": False,
+            "problem": f"{full_host} is taken.",
+            "suggestions": [
+                s
+                for s in _suggestion_candidates(raw, name, city)
+                if not _domain_taken(db, f"{s}.{base}")
+            ][:5],
+        }
+
+    return {"slug": raw, "available": True, "problem": None, "suggestions": []}
 
 
 def resolve_school_domain(

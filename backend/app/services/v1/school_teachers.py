@@ -282,7 +282,9 @@ def _apply_search(query, q: str):
     )
 
 
-def create_teacher(db: Session, school_id: int, body: dict) -> dict:
+def create_teacher(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     """Create User + Staff and assign school-scoped Teacher role.
 
     Password is required and hashed (never returned). Account is active
@@ -334,9 +336,13 @@ def create_teacher(db: Session, school_id: int, body: dict) -> dict:
     db.add(user)
     db.flush()
 
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
+    if resolved_branch is not None:
+        resolved_branch = int(resolved_branch)
     staff = Staff(
         user_id=user.id,
         school_id=school_id,
+        branch_id=resolved_branch,
         qualification=qualification,
         salary=salary,
         employee_id=employee_id,
@@ -368,6 +374,7 @@ def list_teachers(
     employment_status: str | None = None,
     department: str | None = None,
     designation: str | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     """Paginated teachers: User with school Teacher role and Staff row."""
     page, page_size = _page(page, page_size)
@@ -394,6 +401,8 @@ def list_teachers(
         department=department,
         designation=designation,
     )
+    if branch_id is not None and hasattr(Staff, "branch_id"):
+        query = query.filter(Staff.branch_id == branch_id)
     query = _apply_search(query, q)
     total = query.count()
     rows = query.order_by(User.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
@@ -408,8 +417,12 @@ def list_teachers(
     return _envelope(items, total, page, page_size)
 
 
-def get_teacher(db: Session, school_id: int, teacher_id: int) -> dict:
+def get_teacher(
+    db: Session, school_id: int, teacher_id: int, *, branch_id: int | None = None
+) -> dict:
     user, staff = _owned_teacher(db, school_id, teacher_id)
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     item = _teacher_item(
         user, staff, assignment_count=_assignment_count(db, school_id, user.id)
     )
@@ -423,9 +436,18 @@ def get_teacher(db: Session, school_id: int, teacher_id: int) -> dict:
     return item
 
 
-def update_teacher(db: Session, school_id: int, teacher_id: int, body: dict) -> dict:
+def update_teacher(
+    db: Session,
+    school_id: int,
+    teacher_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     """Partial profile / employment update. Does not change roles or passwords."""
     user, staff = _owned_teacher(db, school_id, teacher_id)
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     if "status" in body:
         raise AcademicError(422, "Use PATCH /teachers/{id}/status to change account status")
     if "password" in body or "roles" in body or "role" in body:
@@ -493,7 +515,14 @@ def update_teacher(db: Session, school_id: int, teacher_id: int, body: dict) -> 
     )
 
 
-def update_teacher_status(db: Session, school_id: int, teacher_id: int, status: int) -> dict:
+def update_teacher_status(
+    db: Session,
+    school_id: int,
+    teacher_id: int,
+    status: int,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     """Activate/deactivate account via ``User.status`` (0|1).
 
     Preserves User, Staff, and historical ``TeacherAssignment`` rows.
@@ -502,6 +531,8 @@ def update_teacher_status(db: Session, school_id: int, teacher_id: int, status: 
     if status not in (0, 1):
         raise AcademicError(422, "status must be 0 or 1")
     user, staff = _owned_teacher(db, school_id, teacher_id)
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     user.status = status
     user.updated_at = _now()
     if status == 0:

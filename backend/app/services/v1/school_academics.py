@@ -187,32 +187,45 @@ def _assert_unique_school_email(db: Session, school_id: int, email: str) -> None
         raise AcademicError(409, "A user with this email already exists in this school")
 
 
-def summary(db: Session, school_id: int, session_year_id: int | None = None) -> dict:
+def summary(
+    db: Session,
+    school_id: int,
+    session_year_id: int | None = None,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     if session_year_id is not None:
         _owned(db, SessionYear, session_year_id, school_id)
+
     def active(model, session_field: str | None = None) -> int:
         query = db.query(func.count(model.id)).filter(model.school_id == school_id)
         if hasattr(model, "deleted_at"):
             query = query.filter(model.deleted_at.is_(None))
         if session_year_id and session_field and hasattr(model, session_field):
             query = query.filter(getattr(model, session_field) == session_year_id)
+        if branch_id is not None and hasattr(model, "branch_id"):
+            query = query.filter(model.branch_id == branch_id)
         return int(query.scalar() or 0)
 
-    guardians = (
-        db.query(func.count(func.distinct(Student.guardian_id)))
-        .filter(Student.school_id == school_id, Student.deleted_at.is_(None))
-        .scalar()
-        or 0
+    guardians_q = db.query(func.count(func.distinct(Student.guardian_id))).filter(
+        Student.school_id == school_id, Student.deleted_at.is_(None)
     )
+    if branch_id is not None and hasattr(Student, "branch_id"):
+        guardians_q = guardians_q.filter(Student.branch_id == branch_id)
+    guardians = guardians_q.scalar() or 0
     today = date.today()
     attendance = db.query(Attendance).filter(Attendance.school_id == school_id, Attendance.date == today)
     if session_year_id:
         attendance = attendance.filter(Attendance.session_year_id == session_year_id)
+    if branch_id is not None and hasattr(Attendance, "branch_id"):
+        attendance = attendance.filter(Attendance.branch_id == branch_id)
     present = attendance.filter(Attendance.type == 1).count()
     absent = attendance.filter(Attendance.type != 1).count()
     leaves = db.query(Leave).filter(Leave.school_id == school_id, Leave.from_date <= today, Leave.to_date >= today)
     if session_year_id:
         leaves = leaves.filter(Leave.session_year_id == session_year_id)
+    if branch_id is not None and hasattr(Leave, "branch_id"):
+        leaves = leaves.filter(Leave.branch_id == branch_id)
     leave_rows = leaves.order_by(Leave.id.desc()).limit(8).all()
     return {
         "students": active(Student, "session_year_id"),
@@ -626,6 +639,7 @@ def list_class_sections(
     *,
     class_id: int | None = None,
     medium_id: int | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     if class_id is not None:
         _owned(db, SchoolClass, class_id, school_id)
@@ -635,6 +649,8 @@ def list_class_sections(
     query = db.query(ClassSection).filter(
         ClassSection.school_id == school_id, ClassSection.deleted_at.is_(None)
     )
+    if branch_id is not None:
+        query = query.filter(ClassSection.branch_id == branch_id)
     if class_id is not None:
         query = query.filter(ClassSection.class_id == class_id)
     if medium_id is not None:
@@ -1194,20 +1210,24 @@ def _class_section_item(db: Session, row: ClassSection) -> dict:
     }
 
 
-def create_class_section(db: Session, school_id: int, body: dict) -> dict:
+def create_class_section(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     _same_school(db, SchoolClass, int(body["class_id"]), school_id, "Class")
     _same_school(db, Section, int(body["section_id"]), school_id, "Section")
     _same_school(db, Medium, int(body["medium_id"]), school_id, "Medium")
-    existing = (
-        db.query(ClassSection)
-        .filter(
-            ClassSection.school_id == school_id,
-            ClassSection.class_id == int(body["class_id"]),
-            ClassSection.section_id == int(body["section_id"]),
-            ClassSection.deleted_at.is_(None),
-        )
-        .first()
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
+    if resolved_branch is not None:
+        resolved_branch = int(resolved_branch)
+    existing_q = db.query(ClassSection).filter(
+        ClassSection.school_id == school_id,
+        ClassSection.class_id == int(body["class_id"]),
+        ClassSection.section_id == int(body["section_id"]),
+        ClassSection.deleted_at.is_(None),
     )
+    if resolved_branch is not None:
+        existing_q = existing_q.filter(ClassSection.branch_id == resolved_branch)
+    existing = existing_q.first()
     if existing is not None:
         raise AcademicError(409, "This class and section are already linked")
     row = ClassSection(
@@ -1215,6 +1235,7 @@ def create_class_section(db: Session, school_id: int, body: dict) -> dict:
         section_id=int(body["section_id"]),
         medium_id=int(body["medium_id"]),
         school_id=school_id,
+        branch_id=resolved_branch,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -1490,10 +1511,18 @@ def update_subject(db: Session, school_id: int, subject_id: int, body: dict) -> 
     return _subject_item(row)
 
 
-def create_attendance(db: Session, school_id: int, body: dict) -> dict:
-    _same_school(db, ClassSection, int(body["class_section_id"]), school_id, "Class section")
-    _same_school(db, Student, int(body["student_id"]), school_id, "Student")
+def create_attendance(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
+    cs = _same_school(db, ClassSection, int(body["class_section_id"]), school_id, "Class section")
+    student = _same_school(db, Student, int(body["student_id"]), school_id, "Student")
     _same_school(db, SessionYear, int(body["session_year_id"]), school_id, "Session year")
+    resolved_branch = branch_id if branch_id is not None else getattr(cs, "branch_id", None)
+    if branch_id is not None:
+        if getattr(cs, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "class_section_id must belong to the active branch")
+        if getattr(student, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "student_id must belong to the active branch")
     kind = int(body.get("type") or 1)
     if kind not in (0, 1, 2):
         raise AcademicError(422, "Attendance type must be 1 present, 0 absent, or 2 late")
@@ -1505,6 +1534,7 @@ def create_attendance(db: Session, school_id: int, body: dict) -> dict:
         date=body["date"],
         remark=(body.get("remark") or "")[:512],
         school_id=school_id,
+        branch_id=resolved_branch,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -1581,7 +1611,9 @@ def create_fee(db: Session, school_id: int, body: dict) -> dict:
     return {"id": row.id, "name": row.name, "due_date": row.due_date.isoformat(), "due_charges": row.due_charges, "session_year_id": row.session_year_id}
 
 
-def create_announcement(db: Session, school_id: int, body: dict) -> dict:
+def create_announcement(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     """Academics/notices create — supports optional audience/status when provided."""
     import json as _json
 
@@ -1593,11 +1625,15 @@ def create_announcement(db: Session, school_id: int, body: dict) -> dict:
     audience = body.get("audience") or ["all"]
     if isinstance(audience, str):
         audience = [audience]
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
+    if resolved_branch is not None:
+        resolved_branch = int(resolved_branch)
     row = Announcement(
         title=body["title"].strip(),
         description=body.get("description"),
         session_year_id=int(body["session_year_id"]),
         school_id=school_id,
+        branch_id=resolved_branch,
         status=status_val,
         audience_json=_json.dumps(list(audience)),
         published_at=now if status_val == "published" else None,
@@ -2446,12 +2482,15 @@ def list_teacher_assignments(
     class_section_id: int | None = None,
     session_id: int | None = None,
     session_year_id: int | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     session_filter = session_id if session_id is not None else session_year_id
     query = db.query(TeacherAssignment).filter(
         TeacherAssignment.school_id == school_id, TeacherAssignment.deleted_at.is_(None)
     )
+    if branch_id is not None and hasattr(TeacherAssignment, "branch_id"):
+        query = query.filter(TeacherAssignment.branch_id == branch_id)
     if teacher_id is not None:
         query = query.filter(TeacherAssignment.teacher_user_id == teacher_id)
     if subject_id is not None:
@@ -2486,36 +2525,53 @@ def list_teacher_assignments(
     return _envelope(_assignment_items(db, rows), total, page, page_size)
 
 
-def get_teacher_assignment(db: Session, school_id: int, row_id: int) -> dict:
+def get_teacher_assignment(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
     row = _owned(db, TeacherAssignment, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     return _assignment_items(db, [row])[0]
 
 
-def soft_delete_teacher_assignment(db: Session, school_id: int, row_id: int) -> dict:
+def soft_delete_teacher_assignment(
+    db: Session, school_id: int, row_id: int, *, branch_id: int | None = None
+) -> dict:
     """Soft-delete an assignment. No FK dependents on teacher_assignments today."""
+    get_teacher_assignment(db, school_id, row_id, branch_id=branch_id)
     soft_delete(db, TeacherAssignment, school_id, row_id)
     return {"deleted": True}
 
 
-def create_teacher_assignment(db: Session, school_id: int, body: dict) -> dict:
+def create_teacher_assignment(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     if "teacher_id" not in body or "subject_id" not in body:
         raise AcademicError(422, "teacher_id and subject_id are required")
     staff = _staff_for_teacher_user(db, school_id, int(body["teacher_id"]))
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Teacher not found")
     subject_id = int(body["subject_id"])
     _same_school(db, Subject, subject_id, school_id, "Subject")
     class_section_id = _resolve_class_section_id(db, school_id, body, existing=None)
     session_year_id = _resolve_session_year_id(body, existing=None)
     if session_year_id is not None:
         _same_school(db, SessionYear, session_year_id, school_id, "Session year")
+    resolved_branch = branch_id if branch_id is not None else body.get("branch_id")
     if class_section_id is not None:
         link = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
         _assert_subject_mapped_to_class(db, school_id, link.class_id, subject_id)
+        if branch_id is not None and getattr(link, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "class_section_id must belong to the active branch")
+        if resolved_branch is None:
+            resolved_branch = getattr(link, "branch_id", None)
     if _find_open_assignment(
         db, school_id, staff.id, subject_id, class_section_id, session_year_id
     ):
         raise AcademicError(409, "This teacher assignment already exists")
     row = TeacherAssignment(
         school_id=school_id,
+        branch_id=int(resolved_branch) if resolved_branch is not None else None,
         staff_id=staff.id,
         teacher_user_id=staff.user_id,
         subject_id=subject_id,
@@ -2530,8 +2586,17 @@ def create_teacher_assignment(db: Session, school_id: int, body: dict) -> dict:
     return _assignment_items(db, [row])[0]
 
 
-def update_teacher_assignment(db: Session, school_id: int, row_id: int, body: dict) -> dict:
+def update_teacher_assignment(
+    db: Session,
+    school_id: int,
+    row_id: int,
+    body: dict,
+    *,
+    branch_id: int | None = None,
+) -> dict:
     row = _owned(db, TeacherAssignment, row_id, school_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     teacher_user_id = int(body["teacher_id"]) if "teacher_id" in body else row.teacher_user_id
     subject_id = int(body["subject_id"]) if "subject_id" in body else row.subject_id
     class_section_id = _resolve_class_section_id(
@@ -2539,12 +2604,16 @@ def update_teacher_assignment(db: Session, school_id: int, row_id: int, body: di
     )
     session_year_id = _resolve_session_year_id(body, existing=row.session_year_id)
     staff = _staff_for_teacher_user(db, school_id, teacher_user_id)
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Teacher not found")
     _same_school(db, Subject, subject_id, school_id, "Subject")
     if session_year_id is not None:
         _same_school(db, SessionYear, session_year_id, school_id, "Session year")
     if class_section_id is not None:
         link = _same_school(db, ClassSection, class_section_id, school_id, "Class section")
         _assert_subject_mapped_to_class(db, school_id, link.class_id, subject_id)
+        if branch_id is not None and getattr(link, "branch_id", None) not in (None, branch_id):
+            raise AcademicError(422, "class_section_id must belong to the active branch")
     if _find_open_assignment(
         db,
         school_id,

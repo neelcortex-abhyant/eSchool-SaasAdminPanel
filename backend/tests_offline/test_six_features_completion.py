@@ -121,4 +121,7 @@ def test_alembic_single_head_follows_0045():
     cfg = Config("alembic.ini")
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["20261030_0045"]
+    assert heads == ["20261106_0048"]
+    assert script.get_revision("20261106_0048").down_revision == "20261106_0047"
+    assert script.get_revision("20261106_0047").down_revision == "20261105_0046"
+    assert script.get_revision("20261105_0046").down_revision == "20261030_0045"

@@ -95,8 +95,16 @@ def _installment_allocated(db: Session, school_id: int, installment_id: int) -> 
     return inr_quantize(total or 0)
 
 
-def list_installments(db: Session, school_id: int, structure_id: int) -> dict:
-    _owned(db, FeeStructure, structure_id, school_id)
+def _assert_row_branch(row: Any, branch_id: int | None) -> None:
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+
+
+def list_installments(
+    db: Session, school_id: int, structure_id: int, *, branch_id: int | None = None
+) -> dict:
+    structure = _owned(db, FeeStructure, structure_id, school_id)
+    _assert_row_branch(structure, branch_id)
     rows = _active_installments(db, school_id, structure_id)
     items = []
     for row in rows:
@@ -118,9 +126,15 @@ def list_installments(db: Session, school_id: int, structure_id: int) -> dict:
 
 
 def set_structure_installments(
-    db: Session, school_id: int, structure_id: int, items: list[dict]
+    db: Session,
+    school_id: int,
+    structure_id: int,
+    items: list[dict],
+    *,
+    branch_id: int | None = None,
 ) -> dict:
     structure = _owned(db, FeeStructure, structure_id, school_id)
+    _assert_row_branch(structure, branch_id)
     structure_total = _structure_total_dec(db, school_id, structure.id)
     validate_installment_sum(structure_total, items)
 
@@ -138,6 +152,7 @@ def set_structure_installments(
         inst.deleted_at = now
         inst.updated_at = now
 
+    resolved_branch = branch_id if branch_id is not None else getattr(structure, "branch_id", None)
     for idx, raw in enumerate(items):
         name = str(raw.get("name") or "").strip()
         if not name:
@@ -157,6 +172,7 @@ def set_structure_installments(
         db.add(
             FeeInstallment(
                 school_id=school_id,
+                branch_id=resolved_branch,
                 structure_id=structure.id,
                 name=name,
                 due_date=due,
@@ -167,7 +183,7 @@ def set_structure_installments(
             )
         )
     _commit(db)
-    return list_installments(db, school_id, structure.id)
+    return list_installments(db, school_id, structure.id, branch_id=branch_id)
 
 
 def allocate_payment(db: Session, school_id: int, payment: FeePayment, structure_id: int) -> list[FeePaymentAllocation]:
@@ -214,10 +230,13 @@ def allocate_payment(db: Session, school_id: int, payment: FeePayment, structure
     return created
 
 
-def get_payment_receipt(db: Session, school_id: int, payment_id: int) -> dict:
+def get_payment_receipt(
+    db: Session, school_id: int, payment_id: int, *, branch_id: int | None = None
+) -> dict:
     payment = db.get(FeePayment, payment_id)
     if payment is None or payment.school_id != school_id:
         raise AcademicError(404, "Record not found")
+    _assert_row_branch(payment, branch_id)
     # Cancelled payments are soft-deleted but remain receivable for audit/receipt.
     if payment.deleted_at is not None and payment.cancelled_at is None:
         raise AcademicError(404, "Record not found")
@@ -265,8 +284,10 @@ def get_payment_receipt(db: Session, school_id: int, payment_id: int) -> dict:
     }
 
 
-def render_fee_receipt_pdf(db: Session, school_id: int, payment_id: int) -> bytes:
-    receipt = get_payment_receipt(db, school_id, payment_id)
+def render_fee_receipt_pdf(
+    db: Session, school_id: int, payment_id: int, *, branch_id: int | None = None
+) -> bytes:
+    receipt = get_payment_receipt(db, school_id, payment_id, branch_id=branch_id)
     school = db.get(School, school_id)
     pdf = FPDF()
     pdf.set_compression(False)
@@ -301,6 +322,8 @@ def cancel_fee_payment(
     payment_id: int,
     reason: str,
     actor: Any = None,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
     reason = str(reason or "").strip()
     if not reason:
@@ -308,6 +331,7 @@ def cancel_fee_payment(
     if len(reason) > 512:
         raise AcademicError(422, "reason must be at most 512 characters")
     payment = _owned(db, FeePayment, payment_id, school_id)
+    _assert_row_branch(payment, branch_id)
     if payment.status != "success" or payment.deleted_at is not None:
         raise AcademicError(422, "Only successful (non-cancelled) payments can be cancelled")
     now = _now()
@@ -342,7 +366,7 @@ def cancel_fee_payment(
         )
     )
     _commit(db)
-    return get_payment_receipt(db, school_id, payment.id)
+    return get_payment_receipt(db, school_id, payment.id, branch_id=branch_id)
 
 
 def fee_collection_report(
@@ -351,6 +375,8 @@ def fee_collection_report(
     from_date: date,
     to_date: date,
     class_id: int | None = None,
+    *,
+    branch_id: int | None = None,
 ) -> dict:
     if to_date < from_date:
         raise AcademicError(422, "to_date must be on or after from_date")
@@ -361,6 +387,8 @@ def fee_collection_report(
         FeePayment.paid_on >= from_date,
         FeePayment.paid_on <= to_date,
     )
+    if branch_id is not None and hasattr(FeePayment, "branch_id"):
+        q = q.filter(FeePayment.branch_id == branch_id)
     if class_id is not None:
         q = (
             q.join(FeeAssignment, FeeAssignment.id == FeePayment.assignment_id)

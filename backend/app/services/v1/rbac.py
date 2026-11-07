@@ -45,6 +45,7 @@ PERMISSIONS: dict[str, str] = {
 ADMIN_ROLE_SCHOOL = "school_admin"
 ADMIN_ROLE_ACADEMIC = "academic_admin"
 ADMIN_ROLE_ACCOUNTS = "accounts_admin"
+ADMIN_ROLE_BRANCH = "branch_admin"
 DEFAULT_ADMIN_ROLE = ADMIN_ROLE_SCHOOL
 
 # Ordered: responses list roles in this order.
@@ -68,6 +69,19 @@ ADMIN_ROLES: dict[str, dict] = {
     ADMIN_ROLE_ACCOUNTS: {
         "label": "Accounts Admin",
         "permissions": (PERM_DASHBOARD, PERM_FEES, PERM_REPORTS),
+    },
+    ADMIN_ROLE_BRANCH: {
+        "label": "Branch Admin",
+        "permissions": (
+            PERM_DASHBOARD,
+            PERM_STUDENTS,
+            PERM_TEACHERS,
+            PERM_STAFF,
+            PERM_FEES,
+            PERM_EXAMS,
+            PERM_ATTENDANCE,
+            PERM_REPORTS,
+        ),
     },
 }
 

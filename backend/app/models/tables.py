@@ -6,6 +6,7 @@ from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -73,6 +74,9 @@ class User(Base, TimestampMixin):
 
 class School(Base, TimestampMixin):
     __tablename__ = "schools"
+    __table_args__ = (
+        CheckConstraint("max_branches >= 1", name="ck_schools_max_branches_at_least_one"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
@@ -99,6 +103,35 @@ class School(Base, TimestampMixin):
     installed: Mapped[int] = mapped_column(Integer, default=1)
     # Idempotent provisioning marker (shared Neon; not a physical DB create).
     provisioned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Super Admin quota. max_branches includes the default Main branch. Default: no extra branches.
+    branch_creation_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    max_branches: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SchoolBranch(Base, TimestampMixin):
+    """Physical/operational branch under a single school (never a second school row)."""
+
+    __tablename__ = "school_branches"
+    __table_args__ = (
+        Index(
+            "uq_school_branches_school_name_active",
+            "school_id",
+            text("lower(btrim(name))"),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    address: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    status: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    is_default: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -262,6 +295,7 @@ class ClassSection(Base, TimestampMixin):
     section_id: Mapped[int] = mapped_column(Integer)
     medium_id: Mapped[int] = mapped_column(Integer)
     school_id: Mapped[int] = mapped_column(Integer, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -315,6 +349,7 @@ class ClassSubject(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     class_id: Mapped[int] = mapped_column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
     subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -343,6 +378,7 @@ class TeacherAssignment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
     teacher_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
@@ -381,6 +417,7 @@ class ClassTimetableEntry(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
     )
@@ -422,6 +459,7 @@ class Homework(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
     )
@@ -472,6 +510,7 @@ class HomeworkSubmission(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     homework_id: Mapped[int] = mapped_column(Integer, ForeignKey("homeworks.id"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     text_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -524,6 +563,7 @@ class StudyMaterial(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
     )
@@ -590,6 +630,7 @@ class OnlineAssessment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
     )
@@ -631,6 +672,7 @@ class OnlineAssessmentQuestion(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     assessment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("online_assessments.id"), nullable=False, index=True
     )
@@ -660,6 +702,7 @@ class OnlineAssessmentChoice(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     question_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("online_assessment_questions.id"), nullable=False, index=True
     )
@@ -702,6 +745,7 @@ class OnlineAssessmentAttempt(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     assessment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("online_assessments.id"), nullable=False, index=True
     )
@@ -735,6 +779,7 @@ class OnlineAssessmentAnswer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     attempt_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("online_assessment_attempts.id"), nullable=False, index=True
     )
@@ -750,12 +795,14 @@ class OnlineAssessmentAnswer(Base, TimestampMixin):
 class Student(Base, TimestampMixin):
     __tablename__ = "students"
     __table_args__ = (
+        # Per-branch admission numbers (migration 0047); same ADM may exist on Branch 2.
         Index(
-            "uq_students_school_admission_no_active",
+            "uq_students_school_branch_admission_no_active",
             "school_id",
+            "branch_id",
             text("lower(btrim(admission_no))"),
             unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL AND branch_id IS NOT NULL"),
         ),
         Index(
             "uq_students_school_session_cs_roll_active",
@@ -775,6 +822,7 @@ class Student(Base, TimestampMixin):
     roll_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     admission_date: Mapped[DateType] = mapped_column(Date)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     guardian_id: Mapped[int] = mapped_column(Integer)
     session_year_id: Mapped[int] = mapped_column(Integer)
     # Module 2/admission: admitted|active|inactive|transferred (migration 0024).
@@ -806,6 +854,7 @@ class StudentGuardian(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     guardian_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     relationship_type: Mapped[str] = mapped_column(String(32), nullable=False, default="guardian")
@@ -850,6 +899,7 @@ class Attendance(Base, TimestampMixin):
     date: Mapped[DateType] = mapped_column(Date)
     remark: Mapped[str] = mapped_column(String(512), default="")
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
 
 class AttendanceLock(Base, TimestampMixin):
@@ -859,6 +909,7 @@ class AttendanceLock(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     attendance_date: Mapped[DateType] = mapped_column(Date, nullable=False)
     class_section_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
@@ -875,6 +926,7 @@ class AttendanceEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     attendance_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     session_year_id: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -893,6 +945,7 @@ class PersonDocument(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     owner_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     title: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
@@ -925,6 +978,7 @@ class Exam(Base, TimestampMixin):
     # 0 = unpublished (students/parents cannot read results); 1 = published.
     publish: Mapped[int] = mapped_column(Integer, default=0)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # Module 6 additive fields (nullable for legacy academics rows).
     class_section_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("class_sections.id"), nullable=True, index=True
@@ -968,6 +1022,7 @@ class OfflineExamSchedule(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     exam_id: Mapped[int] = mapped_column(Integer, ForeignKey("exams.id"), nullable=False, index=True)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
@@ -1015,6 +1070,7 @@ class OfflineExamMark(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     exam_id: Mapped[int] = mapped_column(Integer, ForeignKey("exams.id"), nullable=False, index=True)
     schedule_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("offline_exam_schedules.id"), nullable=False, index=True
@@ -1038,6 +1094,7 @@ class OfflineExamMarkAudit(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     mark_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("offline_exam_marks.id"), nullable=False, index=True
     )
@@ -1073,6 +1130,7 @@ class OfflineExamResult(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     exam_id: Mapped[int] = mapped_column(Integer, ForeignKey("exams.id"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     total_max_marks: Mapped[float] = mapped_column(
@@ -1100,6 +1158,7 @@ class Fee(Base, TimestampMixin):
     due_date: Mapped[DateType] = mapped_column(Date)
     due_charges: Mapped[float] = mapped_column(Float, default=0)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(Integer)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -1119,6 +1178,7 @@ class Staff(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     school_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     qualification: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     salary: Mapped[float] = mapped_column(Float, default=0)
     # Module 3 employment fields (migrations 0027–0028).
@@ -1163,6 +1223,7 @@ class Leave(Base, TimestampMixin):
     to_date: Mapped[DateType] = mapped_column(Date)
     status: Mapped[int] = mapped_column(Integer, default=0)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(Integer)
     leave_type_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("leave_types.id"), nullable=True, index=True
@@ -1182,6 +1243,7 @@ class Announcement(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     session_year_id: Mapped[int] = mapped_column(Integer)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="published", server_default="published"
     )
@@ -1485,6 +1547,7 @@ class Notification(Base, TimestampMixin):
     school_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("schools.id"), nullable=True, index=True
     )
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     audience_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     delivery: Mapped[str] = mapped_column(
@@ -1509,6 +1572,7 @@ class Expense(Base, TimestampMixin):
     amount: Mapped[float] = mapped_column(Float, default=0)
     date: Mapped[DateType] = mapped_column(Date)
     school_id: Mapped[int] = mapped_column(Integer)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     session_year_id: Mapped[int] = mapped_column(Integer)
 
 
@@ -1574,6 +1638,7 @@ class ReportCard(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     exam_id: Mapped[int] = mapped_column(Integer, ForeignKey("exams.id"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     grading_scale_id: Mapped[Optional[int]] = mapped_column(
@@ -1626,6 +1691,7 @@ class AdmissionInquiry(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_name: Mapped[str] = mapped_column(String(255), nullable=False)
     parent_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -1654,6 +1720,7 @@ class StudentElective(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
     session_year_id: Mapped[int] = mapped_column(
@@ -1667,6 +1734,7 @@ class StudentTransfer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     from_class_section_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     to_school_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -1680,6 +1748,7 @@ class StudentPromotion(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     from_class_section_id: Mapped[int] = mapped_column(Integer, nullable=False)
     to_class_section_id: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1733,6 +1802,7 @@ class FeeStructure(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     session_year_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("session_years.id"), nullable=False, index=True
@@ -1758,6 +1828,7 @@ class FeeStructureAmount(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     structure_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_structures.id"), nullable=False, index=True
     )
@@ -1780,6 +1851,7 @@ class FeeAssignment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     structure_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_structures.id"), nullable=False, index=True
     )
@@ -1801,6 +1873,7 @@ class FeeConcession(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     structure_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_structures.id"), nullable=False, index=True
@@ -1832,6 +1905,7 @@ class FeePayment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     assignment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_assignments.id"), nullable=False, index=True
     )
@@ -1857,6 +1931,7 @@ class FeeInstallment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     structure_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_structures.id"), nullable=False, index=True
     )
@@ -1876,6 +1951,7 @@ class FeePaymentAllocation(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     payment_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fee_payments.id"), nullable=False, index=True
     )
@@ -1956,6 +2032,7 @@ class Syllabus(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     class_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("classes.id"), nullable=True, index=True)
     subject_id: Mapped[Optional[int]] = mapped_column(
@@ -1974,6 +2051,7 @@ class OnlineClass(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     class_section_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("class_sections.id"), nullable=True, index=True
@@ -2005,6 +2083,7 @@ class StaffAttendanceRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
     attendance_date: Mapped[DateType] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(
@@ -2029,6 +2108,7 @@ class StaffQrAttendanceSetting(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -2040,6 +2120,7 @@ class StaffTask(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     assigned_to_staff_id: Mapped[Optional[int]] = mapped_column(
@@ -2096,6 +2177,7 @@ class IncomeRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     category_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("income_categories.id"), nullable=True, index=True
     )
@@ -2198,6 +2280,7 @@ class SalaryAssignment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
     structure_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("salary_structures.id"), nullable=False, index=True
@@ -2224,6 +2307,7 @@ class PayrollRun(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     period_label: Mapped[str] = mapped_column(String(64), nullable=False)
     run_date: Mapped[DateType] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(
@@ -2241,6 +2325,7 @@ class PayrollItem(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     run_id: Mapped[int] = mapped_column(Integer, ForeignKey("payroll_runs.id"), nullable=False, index=True)
     staff_id: Mapped[int] = mapped_column(Integer, ForeignKey("staffs.id"), nullable=False, index=True)
     gross: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0, server_default="0")
@@ -2261,6 +2346,7 @@ class PayrollAuditEvent(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     run_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("payroll_runs.id"), nullable=True, index=True
     )
@@ -2305,6 +2391,7 @@ class MessageConversation(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     teacher_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     parent_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -2324,6 +2411,7 @@ class ConversationMessage(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     conversation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("message_conversations.id"), nullable=False, index=True
     )
@@ -2343,6 +2431,7 @@ class ConversationRead(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     conversation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("message_conversations.id"), nullable=False, index=True
     )
@@ -2364,6 +2453,7 @@ class TransportVehicle(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     registration_no: Mapped[str] = mapped_column(String(64), nullable=False)
     capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -2382,6 +2472,7 @@ class TransportRoute(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     vehicle_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("transport_vehicles.id"), nullable=True, index=True
@@ -2397,6 +2488,7 @@ class TransportStop(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     route_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("transport_routes.id"), nullable=False, index=True
     )
@@ -2422,6 +2514,7 @@ class StudentTransportAssignment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     route_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("transport_routes.id"), nullable=False, index=True
@@ -2441,6 +2534,7 @@ class TransportTrip(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     route_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("transport_routes.id"), nullable=False, index=True
     )
@@ -2472,6 +2566,7 @@ class TransportGpsPoint(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     trip_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("transport_trips.id"), nullable=False, index=True
     )
@@ -2503,6 +2598,7 @@ class TransportAttendanceEvent(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     trip_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("transport_trips.id"), nullable=False, index=True
     )
@@ -2548,6 +2644,7 @@ class CertificateIssue(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     template_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("certificate_templates.id"), nullable=False, index=True
     )
@@ -2602,6 +2699,7 @@ class DiaryCategory(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -2612,6 +2710,7 @@ class StudentDiaryEntry(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     category_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("diary_categories.id"), nullable=True, index=True
     )
@@ -2810,6 +2909,7 @@ class SupportTicket(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", server_default="open")
@@ -2827,6 +2927,7 @@ class SupportTicketMessage(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_id: Mapped[int] = mapped_column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     ticket_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("support_tickets.id"), nullable=False, index=True
     )

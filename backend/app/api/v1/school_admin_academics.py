@@ -10,7 +10,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
-from app.api.v1.deps import AuthContext, assert_school_permission, require_school_admin
+from app.api.v1.deps import AuthContext, assert_school_permission, get_branch_context, require_school_admin
+from app.services.v1.school_branches import BranchContext
 from app.core.database import session_factory
 from app.services.v1 import notification_delivery as notif_delivery
 from app.models.tables import (
@@ -148,10 +149,13 @@ def _run(action):
 def summary(
     auth: Annotated[AuthContext, Depends(require_school_admin)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     session_year_id: int | None = None,
 ):
     assert_school_permission(auth, db, rbac.PERM_DASHBOARD)
-    return academics.summary(db, _school_id(auth), session_year_id)
+    return academics.summary(
+        db, _school_id(auth), session_year_id, branch_id=branch.branch_id
+    )
 
 
 @router.post("/sessions/{session_id}/activate", responses=core_out.json_response(core_out.SessionYearOut))
@@ -291,6 +295,8 @@ def index(
         if resource == "sessions":
             return academics.list_sessions(db, school_id, q, page, page_size)
         if resource == "class-sections":
+            # Optional branch filter when X-Branch-Id resolved by caller body; list stays
+            # school-wide unless branch_id query added later. Prefer people/fees routes.
             return academics.list_class_sections(
                 db, school_id, page, page_size, class_id=class_id, medium_id=medium_id
             )
@@ -411,6 +417,7 @@ def create(
     body: WriteBody,
     auth: Annotated[AuthContext, Depends(require_school_admin)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
     _allow(auth, db, resource, write=True)
     school_id = _school_id(auth)
@@ -430,15 +437,21 @@ def create(
         if resource == "classes":
             return academics.create_class(db, school_id, data)
         if resource == "class-sections":
-            return academics.create_class_section(db, school_id, data)
+            return academics.create_class_section(
+                db, school_id, data, branch_id=branch.branch_id
+            )
         if resource == "class-subjects":
             return academics.create_class_subject(db, school_id, data)
         if resource == "teacher-assignments":
-            return academics.create_teacher_assignment(db, school_id, data)
+            return academics.create_teacher_assignment(
+                db, school_id, data, branch_id=branch.branch_id
+            )
         if resource == "subjects":
             return academics.create_subject(db, school_id, data)
         if resource == "attendances":
-            return academics.create_attendance(db, school_id, data)
+            return academics.create_attendance(
+                db, school_id, data, branch_id=branch.branch_id
+            )
         if resource == "exams":
             return academics.create_exam(db, school_id, data)
         if resource == "fees":
@@ -446,7 +459,9 @@ def create(
         if resource == "expenses":
             return academics.create_expense(db, school_id, data)
         if resource == "notices":
-            return academics.create_announcement(db, school_id, data)
+            return academics.create_announcement(
+                db, school_id, data, branch_id=branch.branch_id
+            )
         if resource == "leaves":
             return academics.create_leave(db, school_id, data)
         raise academics.AcademicError(404, "Unknown school record")

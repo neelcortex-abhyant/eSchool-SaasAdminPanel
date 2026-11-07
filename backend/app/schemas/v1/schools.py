@@ -110,6 +110,8 @@ class SchoolResponse(BaseModel):
     school_website: str = ""
     installed: int
     provisioned_at: Optional[datetime] = None
+    branch_creation_enabled: bool = False
+    max_branches: int = 1
     deleted_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

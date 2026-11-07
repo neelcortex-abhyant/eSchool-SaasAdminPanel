@@ -313,12 +313,20 @@ def _entry_item(db: Session, row: ClassTimetableEntry) -> dict:
     }
 
 
-def _require_timetable_teacher(db: Session, school_id: int, teacher_user_id: int) -> User:
+def _require_timetable_teacher(
+    db: Session,
+    school_id: int,
+    teacher_user_id: int,
+    *,
+    branch_id: int | None = None,
+) -> User:
     """Same-school Teacher with Staff row and active account, or 404."""
     from app.services.v1.school_teachers import _owned_teacher
 
-    user, _staff = _owned_teacher(db, school_id, teacher_user_id)
+    user, staff = _owned_teacher(db, school_id, teacher_user_id)
     if getattr(user, "status", 1) != 1:
+        raise AcademicError(404, "Teacher not found")
+    if branch_id is not None and getattr(staff, "branch_id", None) not in (None, branch_id):
         raise AcademicError(404, "Teacher not found")
     return user
 
@@ -330,6 +338,7 @@ def _teacher_entries_query(
     teacher_user_id: int,
     session_year_id: int,
     day: str | None = None,
+    branch_id: int | None = None,
 ):
     query = db.query(ClassTimetableEntry).filter(
         ClassTimetableEntry.school_id == school_id,
@@ -339,6 +348,8 @@ def _teacher_entries_query(
     )
     if day is not None:
         query = query.filter(ClassTimetableEntry.day == day)
+    if branch_id is not None and hasattr(ClassTimetableEntry, "branch_id"):
+        query = query.filter(ClassTimetableEntry.branch_id == branch_id)
     return query
 
 
@@ -351,9 +362,10 @@ def list_teacher_timetable(
     day: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    branch_id: int | None = None,
 ) -> dict:
     """Paginated periods for one teacher in a session (optional day filter)."""
-    _require_timetable_teacher(db, school_id, teacher_user_id)
+    _require_timetable_teacher(db, school_id, teacher_user_id, branch_id=branch_id)
     _active_session(db, school_id, session_year_id)
     day_filter = _normalize_day(day) if day is not None and str(day).strip() else None
     page, page_size = _page(page, page_size)
@@ -363,6 +375,7 @@ def list_teacher_timetable(
         teacher_user_id=teacher_user_id,
         session_year_id=session_year_id,
         day=day_filter,
+        branch_id=branch_id,
     )
     rows = query.all()
     rows.sort(key=lambda row: (DAY_SORT_ORDER.get(row.day, 99), row.start_time, row.id))
@@ -379,8 +392,9 @@ def teacher_daily_timetable(
     *,
     session_year_id: int,
     day: str,
+    branch_id: int | None = None,
 ) -> dict:
-    user = _require_timetable_teacher(db, school_id, teacher_user_id)
+    user = _require_timetable_teacher(db, school_id, teacher_user_id, branch_id=branch_id)
     _active_session(db, school_id, session_year_id)
     day_norm = _normalize_day(day)
     rows = (
@@ -390,6 +404,7 @@ def teacher_daily_timetable(
             teacher_user_id=teacher_user_id,
             session_year_id=session_year_id,
             day=day_norm,
+            branch_id=branch_id,
         )
         .all()
     )
@@ -409,14 +424,16 @@ def teacher_weekly_timetable(
     teacher_user_id: int,
     *,
     session_year_id: int,
+    branch_id: int | None = None,
 ) -> dict:
-    user = _require_timetable_teacher(db, school_id, teacher_user_id)
+    user = _require_timetable_teacher(db, school_id, teacher_user_id, branch_id=branch_id)
     _active_session(db, school_id, session_year_id)
     rows = _teacher_entries_query(
         db,
         school_id,
         teacher_user_id=teacher_user_id,
         session_year_id=session_year_id,
+        branch_id=branch_id,
     ).all()
     rows.sort(key=lambda row: (DAY_SORT_ORDER.get(row.day, 99), row.start_time, row.id))
     by_day: dict[str, list[dict]] = {name: [] for name in WORKING_DAYS}
@@ -441,9 +458,10 @@ def check_teacher_availability(
     start_time: Any,
     end_time: Any,
     exclude_entry_id: int | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     """Read-only availability check (no advisory locks — writes re-validate under locks)."""
-    user = _require_timetable_teacher(db, school_id, teacher_user_id)
+    user = _require_timetable_teacher(db, school_id, teacher_user_id, branch_id=branch_id)
     _active_session(db, school_id, session_year_id)
     day_norm = _normalize_day(day)
     start = _parse_time(start_time, "start_time")
@@ -458,6 +476,10 @@ def check_teacher_availability(
             existing is not None
             and existing.school_id == school_id
             and existing.deleted_at is None
+            and (
+                branch_id is None
+                or getattr(existing, "branch_id", None) in (None, branch_id)
+            )
         ):
             exclude_id = existing.id
 
@@ -467,6 +489,7 @@ def check_teacher_availability(
         teacher_user_id=teacher_user_id,
         session_year_id=session_year_id,
         day=day_norm,
+        branch_id=branch_id,
     )
     if exclude_id is not None:
         query = query.filter(ClassTimetableEntry.id != exclude_id)
@@ -598,7 +621,9 @@ def _resolve_write_fields(
     }
 
 
-def create_entry(db: Session, school_id: int, body: dict) -> dict:
+def create_entry(
+    db: Session, school_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
     fields = _resolve_write_fields(db, school_id, body, existing=None)
     _acquire_timetable_advisory_locks(
         db,
@@ -621,8 +646,18 @@ def create_entry(db: Session, school_id: int, body: dict) -> dict:
         end_time=fields["end_time"],
         exclude_id=None,
     )
+    cs = db.get(ClassSection, fields["class_section_id"])
+    if branch_id is not None and cs is not None and getattr(cs, "branch_id", None) not in (
+        None,
+        branch_id,
+    ):
+        raise AcademicError(422, "class_section_id must belong to the active branch")
+    resolved_branch = (
+        branch_id if branch_id is not None else (getattr(cs, "branch_id", None) if cs else None)
+    )
     row = ClassTimetableEntry(
         school_id=school_id,
+        branch_id=resolved_branch,
         session_year_id=fields["session_year_id"],
         class_section_id=fields["class_section_id"],
         subject_id=fields["subject_id"],
@@ -653,12 +688,15 @@ def list_entries(
     section_id: int | None = None,
     class_section_id: int | None = None,
     day: str | None = None,
+    branch_id: int | None = None,
 ) -> dict:
     page, page_size = _page(page, page_size)
     query = db.query(ClassTimetableEntry).filter(
         ClassTimetableEntry.school_id == school_id,
         ClassTimetableEntry.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(ClassTimetableEntry, "branch_id"):
+        query = query.filter(ClassTimetableEntry.branch_id == branch_id)
     if session_year_id is not None:
         _active_session(db, school_id, session_year_id)
         query = query.filter(ClassTimetableEntry.session_year_id == session_year_id)
@@ -698,12 +736,21 @@ def list_entries(
     return _envelope([_entry_item(db, row) for row in page_rows], total, page, page_size)
 
 
-def get_entry(db: Session, school_id: int, entry_id: int) -> dict:
-    return _entry_item(db, _owned_entry(db, school_id, entry_id))
-
-
-def update_entry(db: Session, school_id: int, entry_id: int, body: dict) -> dict:
+def get_entry(
+    db: Session, school_id: int, entry_id: int, *, branch_id: int | None = None
+) -> dict:
     row = _owned_entry(db, school_id, entry_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    return _entry_item(db, row)
+
+
+def update_entry(
+    db: Session, school_id: int, entry_id: int, body: dict, *, branch_id: int | None = None
+) -> dict:
+    row = _owned_entry(db, school_id, entry_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     if not body:
         return _entry_item(db, row)
     fields = _resolve_write_fields(db, school_id, body, existing=row)
@@ -752,8 +799,12 @@ def update_entry(db: Session, school_id: int, entry_id: int, body: dict) -> dict
     return _entry_item(db, row)
 
 
-def soft_delete_entry(db: Session, school_id: int, entry_id: int) -> dict:
+def soft_delete_entry(
+    db: Session, school_id: int, entry_id: int, *, branch_id: int | None = None
+) -> dict:
     row = _owned_entry(db, school_id, entry_id)
+    if branch_id is not None and getattr(row, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
     _acquire_timetable_advisory_locks(
         db,
         _schedule_lock_labels(
@@ -779,19 +830,21 @@ def weekly_timetable(
     *,
     session_year_id: int,
     class_section_id: int,
+    branch_id: int | None = None,
 ) -> dict:
     _active_session(db, school_id, session_year_id)
     link = _active_class_section(db, school_id, class_section_id)
-    rows = (
-        db.query(ClassTimetableEntry)
-        .filter(
-            ClassTimetableEntry.school_id == school_id,
-            ClassTimetableEntry.session_year_id == session_year_id,
-            ClassTimetableEntry.class_section_id == class_section_id,
-            ClassTimetableEntry.deleted_at.is_(None),
-        )
-        .all()
+    if branch_id is not None and getattr(link, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    query = db.query(ClassTimetableEntry).filter(
+        ClassTimetableEntry.school_id == school_id,
+        ClassTimetableEntry.session_year_id == session_year_id,
+        ClassTimetableEntry.class_section_id == class_section_id,
+        ClassTimetableEntry.deleted_at.is_(None),
     )
+    if branch_id is not None and hasattr(ClassTimetableEntry, "branch_id"):
+        query = query.filter(ClassTimetableEntry.branch_id == branch_id)
+    rows = query.all()
     rows.sort(key=lambda row: (DAY_SORT_ORDER.get(row.day, 99), row.start_time, row.id))
     by_day: dict[str, list[dict]] = {name: [] for name in WORKING_DAYS}
     for row in rows:

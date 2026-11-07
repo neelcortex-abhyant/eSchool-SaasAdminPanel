@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import central_db
 from app.core.database import session_factory
 from app.services.v1 import notification_delivery as notif_delivery
-from app.api.v1.deps import AuthContext, require_school_permission
+from app.api.v1.deps import AuthContext, get_branch_context, get_branch_context_optional_consolidated, require_school_permission
+from app.services.v1.school_branches import BranchContext
 from app.schemas.v1 import school_admin_erp as erp_schemas
 from app.schemas.v1 import school_admin_mgmt as mgmt_schemas
 from app.schemas.v1 import school_admin_mgmt_responses as mgmt_out
@@ -451,10 +452,15 @@ def delete_fee_type(
 def list_fee_structures(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
 ):
-    return _run(lambda: mgmt.list_fee_structures(db, _school_id(auth), page=page, page_size=page_size))
+    return _run(
+        lambda: mgmt.list_fee_structures(
+            db, _school_id(auth), page=page, page_size=page_size, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post(
@@ -466,8 +472,13 @@ def create_fee_structure(
     body: erp_schemas.FeeStructureCreateBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.create_fee_structure(db, _school_id(auth), _erp_body(body)))
+    return _run(
+        lambda: mgmt.create_fee_structure(
+            db, _school_id(auth), _erp_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-structures/{row_id}", responses=json_response(FeeStructureOut))
@@ -475,8 +486,13 @@ def get_fee_structure(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.get_fee_structure(db, _school_id(auth), row_id))
+    return _run(
+        lambda: mgmt.get_fee_structure(
+            db, _school_id(auth), row_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.patch("/fee-structures/{row_id}", responses=json_response(FeeStructureOut))
@@ -485,8 +501,13 @@ def patch_fee_structure(
     body: erp_schemas.FeeStructurePatchBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.update_fee_structure(db, _school_id(auth), row_id, _erp_body(body)))
+    return _run(
+        lambda: mgmt.update_fee_structure(
+            db, _school_id(auth), row_id, _erp_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.delete("/fee-structures/{row_id}", responses=json_response(DeletedOut))
@@ -494,14 +515,20 @@ def delete_fee_structure(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.soft_delete_fee_structure(db, _school_id(auth), row_id))
+    return _run(
+        lambda: mgmt.soft_delete_fee_structure(
+            db, _school_id(auth), row_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-assignments", responses=json_response(FeeAssignmentListOut))
 def list_fee_assignments(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
     student_id: int | None = Query(None, ge=1),
@@ -515,6 +542,7 @@ def list_fee_assignments(
             page_size=page_size,
             student_id=student_id,
             structure_id=structure_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -528,8 +556,13 @@ def create_fee_assignment(
     body: erp_schemas.FeeAssignmentCreateBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.create_fee_assignment(db, _school_id(auth), _erp_body(body)))
+    return _run(
+        lambda: mgmt.create_fee_assignment(
+            db, _school_id(auth), _erp_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.delete("/fee-assignments/{row_id}", responses=json_response(DeletedOut))
@@ -537,18 +570,32 @@ def delete_fee_assignment(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.soft_delete_fee_assignment(db, _school_id(auth), row_id))
+    return _run(
+        lambda: mgmt.soft_delete_fee_assignment(
+            db, _school_id(auth), row_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-concessions", responses=json_response(FeeConcessionListOut))
 def list_fee_concessions(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
 ):
-    return _run(lambda: mgmt.list_fee_concessions(db, _school_id(auth), page=page, page_size=page_size))
+    return _run(
+        lambda: mgmt.list_fee_concessions(
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            branch_id=branch.branch_id,
+        )
+    )
 
 
 @router.post(
@@ -560,8 +607,13 @@ def create_fee_concession(
     body: erp_schemas.FeeConcessionCreateBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.create_fee_concession(db, _school_id(auth), _erp_body(body)))
+    return _run(
+        lambda: mgmt.create_fee_concession(
+            db, _school_id(auth), _erp_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.delete("/fee-concessions/{row_id}", responses=json_response(DeletedOut))
@@ -569,21 +621,32 @@ def delete_fee_concession(
     row_id: int,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.soft_delete_fee_concession(db, _school_id(auth), row_id))
+    return _run(
+        lambda: mgmt.soft_delete_fee_concession(
+            db, _school_id(auth), row_id, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/fee-payments", responses=json_response(FeePaymentListOut))
 def list_fee_payments(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
     student_id: int | None = Query(None, ge=1),
 ):
     return _run(
         lambda: mgmt.list_fee_payments(
-            db, _school_id(auth), page=page, page_size=page_size, student_id=student_id
+            db,
+            _school_id(auth),
+            page=page,
+            page_size=page_size,
+            student_id=student_id,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -592,10 +655,15 @@ def list_fee_payments(
 def fees_outstanding(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
 ):
-    return _run(lambda: mgmt.fees_outstanding(db, _school_id(auth), page=page, page_size=page_size))
+    return _run(
+        lambda: mgmt.fees_outstanding(
+            db, _school_id(auth), page=page, page_size=page_size, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post(
@@ -605,9 +673,14 @@ def fees_outstanding(
 def send_fee_reminders(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     limit: int = Query(100, ge=1, le=200),
 ):
-    return _run(lambda: mgmt.send_fee_reminders(db, _school_id(auth), limit=limit))
+    return _run(
+        lambda: mgmt.send_fee_reminders(
+            db, _school_id(auth), limit=limit, branch_id=branch.branch_id
+        )
+    )
 
 
 @router.post(
@@ -619,8 +692,13 @@ def fees_collect(
     body: erp_schemas.FeeCollectBody,
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.collect_fee(db, _school_id(auth), _erp_body(body)))
+    return _run(
+        lambda: mgmt.collect_fee(
+            db, _school_id(auth), _erp_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 # ---- Semesters / streams / shifts / syllabi / online classes ----
@@ -1039,8 +1117,16 @@ def delete_income_category(
 def incomes_dashboard(
     auth: Annotated[AuthContext, Depends(require_fees)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.incomes_dashboard(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.incomes_dashboard(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/incomes", responses=mgmt_out.json_response(mgmt_out.IncomeListOut))
@@ -1746,56 +1832,112 @@ def staff_id_card(
 def reports_students(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_students(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_students(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/teachers", responses=mgmt_out.json_response(mgmt_out.ReportTeachersOut))
 def reports_teachers(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_teachers(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_teachers(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/staff", responses=mgmt_out.json_response(mgmt_out.ReportStaffOut))
 def reports_staff(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_staff(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_staff(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/exams", responses=mgmt_out.json_response(mgmt_out.ReportExamsOut))
 def reports_exams(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_exams(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_exams(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/expenses", responses=mgmt_out.json_response(mgmt_out.ReportAmountCountOut))
 def reports_expenses(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_expenses(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_expenses(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/income", responses=mgmt_out.json_response(mgmt_out.ReportAmountCountOut))
 def reports_income(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_income(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_income(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 @router.get("/reports/financial-summary", responses=mgmt_out.json_response(mgmt_out.ReportFinancialSummaryOut))
 def reports_financial_summary(
     auth: Annotated[AuthContext, Depends(require_reports)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context_optional_consolidated)],
 ):
-    return _run(lambda: mgmt.report_financial_summary(db, _school_id(auth)))
+    return _run(
+        lambda: mgmt.report_financial_summary(
+            db,
+            _school_id(auth),
+            branch_id=branch.branch_id,
+            allowed_branch_ids=list(branch.allowed_branch_ids),
+        )
+    )
 
 
 # ---- Diary / notifications / announcements / sliders / gallery ----
@@ -1921,6 +2063,7 @@ def create_notification(
 def list_announcements(
     auth: Annotated[AuthContext, Depends(require_school)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
     status: str | None = Query(default=None),
@@ -1934,6 +2077,7 @@ def list_announcements(
             page_size=page_size,
             status_filter=status,
             q=q,
+            branch_id=branch.branch_id,
         )
     )
 
@@ -1943,8 +2087,13 @@ def create_announcement(
     body: mgmt_schemas.AnnouncementCreateBody,
     auth: Annotated[AuthContext, Depends(require_school)],
     db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
 ):
-    return _run(lambda: mgmt.create_announcement(db, _school_id(auth), _mgmt_body(body)))
+    return _run(
+        lambda: mgmt.create_announcement(
+            db, _school_id(auth), _mgmt_body(body), branch_id=branch.branch_id
+        )
+    )
 
 
 @router.get("/announcements/{row_id}", responses=mgmt_out.json_response(mgmt_out.AnnouncementOut))
