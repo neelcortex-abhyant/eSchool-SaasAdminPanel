@@ -9,14 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
 from app.core.v1_database import get_v1_db
-from app.models.tables import School
 from app.models.v1.roles import ROLE_SCHOOL_ADMIN, ROLE_SUPER_ADMIN
 from app.models.v1.session import AuthSession
-from app.models.v1.user import STATUS_ACTIVE, User
+from app.models.v1.user import User
 from app.services.v1 import auth_service, rbac
 from app.services.v1.school_branches import BranchContext, BranchError, resolve_branch_context
-from app.services.v1.school_service import INSTALLED_YES, STATUS_ACTIVE as SCHOOL_STATUS_ACTIVE
-from app.services.v1.subscription_access import subscription_expiry_blocks_access
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -57,39 +54,15 @@ def require_school_admin(
 ) -> AuthContext:
     """Allow only an active school_admin bound to an active, installed school.
 
-    Login keeps auth_service.assert_school_admin_login_allowed. That helper returns
-    when status is 1, even if installed is 0, so it is not used for these routes.
+    Uses auth_service.school_admin_access_error, the same rule login applies, so a
+    successful login is never followed by 403s on the dashboard.
     """
     if auth.user.role != ROLE_SCHOOL_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    if auth.user.status != STATUS_ACTIVE:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account inactive")
-    if auth.user.school_id is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No school assigned")
-    school = db.get(School, auth.user.school_id)
-    if (
-        school is not None
-        and school.deleted_at is None
-        and school.status == SCHOOL_STATUS_ACTIVE
-        and school.installed == INSTALLED_YES
-    ):
-        if subscription_expiry_blocks_access(auth.user.school_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Subscription access is not available",
-            )
-        return auth
-    if (
-        school is not None
-        and school.deleted_at is None
-        and school.status != SCHOOL_STATUS_ACTIVE
-        and school.installed != INSTALLED_YES
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This school is waiting for approval. You can sign in after it is activated.",
-        )
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="School access is suspended")
+    error = auth_service.school_admin_access_error(db, auth.user)
+    if error is not None:
+        raise HTTPException(status_code=error.status_code, detail=error.detail)
+    return auth
 
 
 def assert_school_permission(auth: AuthContext, db: Session, permission: str) -> None:

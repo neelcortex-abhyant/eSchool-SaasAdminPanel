@@ -101,10 +101,20 @@ New optional request fields (the model has `extra="forbid"`, so they must be add
 `GET /api/v1/schools/subdomain-availability?slug=greenvalley&name=Green%20Valley%20Public%20School&city=Pune`
 
 ```json
-{ "slug": "greenvalley", "available": false, "problem": "greenvalley.<root> is taken.", "suggestions": ["greenvalley-pune", "green-valley", "gv-pune"] }
+{ "slug": "greenvalley", "available": false, "problem": "greenvalley.schoolsarthi.com is taken.", "suggestions": ["greenvalley-pune", "green-valley", "gv-pune"],
+  "hostname": "greenvalley.schoolsarthi.com", "base_domain": "schoolsarthi.com" }
 ```
 
-Invalid slugs → `available: false` with the rule's message in `problem`.
+Invalid slugs → `available: false` with the rule's message in `problem`, and `hostname: null`.
+
+**P0 contract update (2026-11-12).** These changes are additive; existing fields are unchanged.
+- `hostname` is the full address the slug will be provisioned as. **Show `hostname` in the preview.** Never build `slug + "." + <guessed root>`, which is how `.localhost` reached the QA build.
+- `base_domain` is the server's configured `SCHOOL_BASE_DOMAIN` (production: `schoolsarthi.com`).
+- `POST /api/v1/schools/register` now also returns `hostname` (the stored full host, or `null`) and `domain_type`.
+- `GET /api/v1/public/schools/by-host` and `by-code` now also return `hostname`.
+- Super Admin `SchoolResponse.domain` and `/school-admin/school` already return the stored full host.
+- Uniqueness is case-insensitive, and hostnames held by deleted schools stay taken. Availability and create use the same rule, so "available" is never followed by a 409.
+- In `APP_ENV=production` the server refuses (500, "set SCHOOL_BASE_DOMAIN") to build hostnames on an empty, `localhost`, `*.localhost`, `wrteam.me`, `onrender.com` or `netlify.app` base.
 
 ## 5. Public school site lookup (no auth)
 

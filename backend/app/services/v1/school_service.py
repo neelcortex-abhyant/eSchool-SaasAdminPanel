@@ -208,12 +208,13 @@ def _initials_slug(name: str, city: str | None) -> str:
 
 
 def _domain_taken(db: Session, full_host: str) -> bool:
+    # Same rule as _ensure_domain_available (deleted schools keep their hostname), so a
+    # slug reported as available is never refused with 409 when the school is saved.
     row = db.scalar(
         select(School.id).where(
             func.lower(func.btrim(School.domain)) == full_host.lower(),
             School.domain.is_not(None),
             func.btrim(School.domain) != "",
-            School.deleted_at.is_(None),
         )
     )
     return row is not None
@@ -252,6 +253,19 @@ def _suggestion_candidates(slug: str, name: str | None, city: str | None) -> lis
         if len(out) >= 5:
             break
     return out[:5]
+
+
+def school_base_domain() -> str:
+    """The configured base for default school hostnames (``<prefix>.<base>``).
+
+    Raises 500 when the base is missing, or in production when it is a local,
+    vendor-demo or hosting-provider host, so a wrong hostname is never stored.
+    """
+    settings = get_settings()
+    problem = settings.school_base_domain_problem
+    if problem:
+        raise SchoolServiceError(problem, status_code=500)
+    return settings.resolved_school_base_domain
 
 
 def check_subdomain_availability(
@@ -306,12 +320,7 @@ def check_subdomain_availability(
             "suggestions": _suggestion_candidates(_slugify_name(name or raw), name, city),
         }
 
-    base = get_settings().resolved_school_base_domain
-    if not base:
-        raise SchoolServiceError(
-            "School base domain is not configured (set SCHOOL_BASE_DOMAIN or APP_URL)",
-            status_code=500,
-        )
+    base = school_base_domain()
     full_host = f"{raw}.{base}"
     if _domain_taken(db, full_host):
         return {
@@ -323,9 +332,18 @@ def check_subdomain_availability(
                 for s in _suggestion_candidates(raw, name, city)
                 if not _domain_taken(db, f"{s}.{base}")
             ][:5],
+            "hostname": full_host,
+            "base_domain": base,
         }
 
-    return {"slug": raw, "available": True, "problem": None, "suggestions": []}
+    return {
+        "slug": raw,
+        "available": True,
+        "problem": None,
+        "suggestions": [],
+        "hostname": full_host,
+        "base_domain": base,
+    }
 
 
 def resolve_school_domain(
@@ -349,13 +367,7 @@ def resolve_school_domain(
         if not raw:
             raise SchoolServiceError("domain is required when domain_type is default", status_code=422)
         prefix = _normalize_subdomain_prefix(raw)
-        base = get_settings().resolved_school_base_domain
-        if not base:
-            raise SchoolServiceError(
-                "School base domain is not configured (set SCHOOL_BASE_DOMAIN or APP_URL)",
-                status_code=500,
-            )
-        return f"{prefix}.{base}", DOMAIN_TYPE_DEFAULT, 1
+        return f"{prefix}.{school_base_domain()}", DOMAIN_TYPE_DEFAULT, 1
 
     if dtype == DOMAIN_TYPE_CUSTOM:
         if not raw:

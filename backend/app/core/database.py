@@ -38,6 +38,9 @@ def get_engine() -> Engine:
             pool_pre_ping=True,
             pool_size=settings.pool_size,
             max_overflow=settings.max_overflow,
+            # Recycle before Neon/pooler idle timeouts drop the socket under us.
+            pool_recycle=300,
+            connect_args={"connect_timeout": settings.db_connect_timeout_seconds},
         )
         _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
     return _engine

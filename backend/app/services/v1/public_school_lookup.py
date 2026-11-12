@@ -44,6 +44,8 @@ def _public_payload(school: School) -> dict:
         "school_id": school.id,
         "name": school.name,
         "slug": _slug_from_domain(domain, domain_type),
+        # Full stored hostname (e.g. "qa-sunrise-1105.schoolsarthi.com"); null when none.
+        "hostname": domain.lower() if domain else None,
         "tagline": school.tagline or None,
         "logo": school.logo or None,
         "address": school.address or None,

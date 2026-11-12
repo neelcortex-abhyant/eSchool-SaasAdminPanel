@@ -155,6 +155,31 @@ def ready():
     return {"status": "ready", "checks": checks}
 
 
+@app.get("/health/ready")
+def health_ready():
+    """Readiness with a real database round trip (SELECT 1).
+
+    Use as the Render health check and as an external keep-warm ping, so a
+    sleeping instance or a suspended Neon compute is woken before users sign in.
+    Returns 503 when the database cannot be reached. Never returns secrets.
+    """
+    from sqlalchemy import text
+
+    from app.core.database import get_engine
+
+    if not settings.neon_configured:
+        return JSONResponse({"status": "fail", "reason": "database not configured"}, status_code=503)
+    started = time.perf_counter()
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.warning("health_ready_db_failed error=%s", type(exc).__name__)
+        return JSONResponse({"status": "fail", "reason": "database unreachable"}, status_code=503)
+    db_ms = round((time.perf_counter() - started) * 1000, 1)
+    return {"status": "ready", "database": "ok", "db_ms": db_ms}
+
+
 app.include_router(mobile_router, prefix="/api")
 app.include_router(student_reads_router, prefix="/api")
 app.include_router(student_homework_router, prefix="/api")
