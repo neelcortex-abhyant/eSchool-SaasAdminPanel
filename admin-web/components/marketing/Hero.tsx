@@ -24,7 +24,7 @@ export default function Hero() {
           <Link href="/login" className="btn-pill btn-pill-green">
             Get started
           </Link>
-          <Link href="/login" className="btn-pill btn-pill-green-soft">
+          <Link href="/request-demo" className="btn-pill btn-pill-green-soft">
             Request demo
           </Link>
         </div>

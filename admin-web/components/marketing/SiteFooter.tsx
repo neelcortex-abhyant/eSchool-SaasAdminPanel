@@ -53,7 +53,7 @@ export default function SiteFooter() {
         <div className="footer-legal">
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms & Conditions</Link>
-          <a href="#contact">Refund Policy</a>
+          <Link href="/refund-policy">Refund Policy</Link>
         </div>
       </div>
     </footer>

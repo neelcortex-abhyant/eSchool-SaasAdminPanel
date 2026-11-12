@@ -1,0 +1,140 @@
+{
+  "results": [
+    {
+      "name": "[desktop] Request demo / Book a demo links go to /request-demo",
+      "ok": true,
+      "detail": "[\"/request-demo\",\"/request-demo\"]"
+    },
+    {
+      "name": "[desktop] signed out: Request demo opens the form",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] demo form shows validation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] without the server route, the form says it wasn't sent (no fake success)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] demo page: no horizontal scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] footer Refund Policy link",
+      "ok": true,
+      "detail": "/refund-policy"
+    },
+    {
+      "name": "[desktop] refund policy page opens publicly with no invented terms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] signed in: Request demo opens the form, not the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] signed in: refund policy opens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] fee assignments: one consistent explanation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] assign dialog title and description",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[desktop] ₹1,200 in 2 parts → Installment 1 & 2, ₹600 each",
+      "ok": true,
+      "detail": "[[\"Installment 1\",\"600.00\"],[\"Installment 2\",\"600.00\"]]"
+    },
+    {
+      "name": "[desktop] 3 parts and one payment labels",
+      "ok": true,
+      "detail": "[\"Installment 1\",\"Installment 2\",\"Installment 3\"] / [\"Full payment\"]"
+    },
+    {
+      "name": "[mobile] Request demo / Book a demo links go to /request-demo",
+      "ok": true,
+      "detail": "[\"/request-demo\",\"/request-demo\"]"
+    },
+    {
+      "name": "[mobile] signed out: Request demo opens the form",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] demo form shows validation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] without the server route, the form says it wasn't sent (no fake success)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] demo page: no horizontal scroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] footer Refund Policy link",
+      "ok": true,
+      "detail": "/refund-policy"
+    },
+    {
+      "name": "[mobile] refund policy page opens publicly with no invented terms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] signed in: Request demo opens the form, not the dashboard",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] signed in: refund policy opens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] fee assignments: one consistent explanation",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] assign dialog title and description",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[mobile] ₹1,200 in 2 parts → Installment 1 & 2, ₹600 each",
+      "ok": true,
+      "detail": "[[\"Installment 1\",\"600.00\"],[\"Installment 2\",\"600.00\"]]"
+    },
+    {
+      "name": "[mobile] 3 parts and one payment labels",
+      "ok": true,
+      "detail": "[\"Installment 1\",\"Installment 2\",\"Installment 3\"] / [\"Full payment\"]"
+    },
+    {
+      "name": "No console errors on the pages visited",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "consoleErrors": []
+}

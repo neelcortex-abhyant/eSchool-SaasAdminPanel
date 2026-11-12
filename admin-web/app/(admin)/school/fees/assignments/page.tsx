@@ -11,6 +11,7 @@ import { useFormErrors, useOptions } from "@/components/ui/hooks";
 import { useToast } from "@/components/ui/Toasts";
 import { ConcessionForm, FEE_TABS, StudentPicker, rupees } from "@/components/ops/fees";
 import { OPS_LIVE_NOTE } from "@/components/ops/notes";
+import { feeAssignmentCopy } from "@/lib/ops/feeCopy";
 import { isOpsLive } from "@/lib/ops/mode";
 import { TeachingPage } from "@/components/teaching/Frame";
 import { Chip } from "@/components/ui/Badge";
@@ -26,11 +27,7 @@ export default function FeeAssignmentsPage() {
     <TeachingPage
       module="fees"
       title="Assignments & concessions"
-      description={
-        isOpsLive("fees")
-          ? "A student owes a fee structure only once it's assigned to them here. Assign each class's structure to its students, add extra fees (like transport), and record discounts or exemptions."
-          : "Students pay their class's fee structures automatically. Add extra fees (like transport) for individual students, and record discounts or exemptions."
-      }
+      description={feeAssignmentCopy(isOpsLive("fees")).page}
       icon={<IconFees width={18} height={18} />}
       tabs={FEE_TABS}
       liveNote={OPS_LIVE_NOTE.fees}
@@ -54,6 +51,7 @@ function AssignmentsBody() {
   const [removing, setRemoving] = useState<{ kind: "assignment"; row: FeeAssignment } | { kind: "concession"; row: Concession } | null>(null);
   const [pending, setPending] = useState(false);
   const byId = useMemo(() => new Map(structures.options.map((row) => [row.id, row])), [structures.options]);
+  const copy = feeAssignmentCopy(isOpsLive("fees"));
 
   const assignmentColumns: Column<FeeAssignment>[] = [
     { key: "student", label: "Student", render: (row) => <strong>{row.student_name}</strong> },
@@ -89,16 +87,16 @@ function AssignmentsBody() {
       <ErrorAlert error={structures.error ?? assignments.error ?? concessions.error} onRetry={() => { void assignments.reload(); void concessions.reload(); }} />
       <section className="resource-card" aria-labelledby="extra-title">
         <div className="teach-detail-head">
-          <h2 id="extra-title" className="teach-section-title">Extra fees for individual students</h2>
+          <h2 id="extra-title" className="teach-section-title">{copy.section}</h2>
           <button className="btn-pill btn-pill-green" type="button" onClick={() => setAssigning(true)}>
-            Assign to a student
+            {copy.button}
           </button>
         </div>
         <DataTable
           columns={assignmentColumns}
           rows={assignments.options}
           loading={assignments.loading}
-          emptyText="No individual assignments. Class fee structures already apply to every student in the class."
+          emptyText={copy.empty}
           actions={(row) => (
             <button className="link-btn danger" type="button" onClick={() => setRemoving({ kind: "assignment", row })}>
               Remove
@@ -215,7 +213,7 @@ function AssignForm({ structures, initialStructure, onClose, onSaved }: { struct
   }
 
   return (
-    <FormModal title="Assign fees to a student" description="For fees outside the student's class structure, like transport." error={errors.formError} saving={saving} submitLabel="Assign" wide onSubmit={() => void submit()} onClose={onClose}>
+    <FormModal title={feeAssignmentCopy(isOpsLive("fees")).dialogTitle} description={feeAssignmentCopy(isOpsLive("fees")).dialogDescription} error={errors.formError} saving={saving} submitLabel="Assign" wide onSubmit={() => void submit()} onClose={onClose}>
       <StudentPicker id="as-student" value={student} onPick={setStudent} error={errors.fieldErrors.student_id} />
       <SelectField id="as-structure" label="Fee structure" required placeholder="Choose a structure" value={structureId} onChange={setStructureId} options={structures.map((row) => ({ value: String(row.id), label: `${row.name} (${rupees(row.total)})` }))} error={errors.fieldErrors.structure_id} />
     </FormModal>

@@ -49,6 +49,39 @@ export function splitEvenly(total: number, count: number): number[] {
   return amounts;
 }
 
+/** The name a split gives an installment: "Full payment" for one, "Installment 1…N" otherwise. */
+export function presetInstallmentName(count: number, index: number): string {
+  return count === 1 ? "Full payment" : `Installment ${index + 1}`;
+}
+
+/** A name a split made (or an empty one), as opposed to one the admin typed, like "Term 1". */
+export function isPresetInstallmentName(name: string): boolean {
+  const text = name.trim();
+  return !text || text === "Full payment" || /^Installment \d+$/.test(text);
+}
+
+/**
+ * Splits a total into `count` installments. Amounts come from splitEvenly, so they add up to the
+ * total. Preset names are renamed to match the new split; names the admin typed are kept.
+ */
+export function splitInstallmentPlan<T extends { id?: number; name: string; due_date: string }>(list: T[], total: number, count: number) {
+  return splitEvenly(total, count).map((amount, index) => {
+    const current = list[index];
+    return {
+      id: current?.id,
+      name: current && !isPresetInstallmentName(current.name) ? current.name : presetInstallmentName(count, index),
+      due_date: current?.due_date ?? "",
+      amount: amount.toFixed(2),
+    };
+  });
+}
+
+/** Adds an empty installment; a lone "Full payment" becomes "Installment 1" now that there are two. */
+export function addInstallment<T extends { name: string; due_date: string; amount: string }>(list: T[]): (T | { name: string; due_date: string; amount: string })[] {
+  const renamed = list.length === 1 && list[0].name.trim() === "Full payment" ? [{ ...list[0], name: presetInstallmentName(2, 0) }] : list;
+  return [...renamed, { name: presetInstallmentName(list.length + 1, list.length), due_date: "", amount: "" }];
+}
+
 /** The rupee value of a concession on a total. Percent concessions are capped at 100%; fixed ones at the total. */
 export function concessionValue(total: number, concession: Pick<Concession, "kind" | "value"> | null | undefined): number {
   if (!concession) return 0;

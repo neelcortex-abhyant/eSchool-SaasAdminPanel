@@ -9,7 +9,7 @@ import { Chip, type ChipTone, StatusChip } from "@/components/ui/Badge";
 import { useCurrentSessionId } from "@/components/teaching/Pickers";
 import { peopleService, type StudentRow } from "@/lib/people";
 import { feeService, structureFormProblems } from "@/lib/ops/fees";
-import { paise, splitEvenly } from "@/lib/ops/fees-math";
+import { addInstallment, paise, splitInstallmentPlan } from "@/lib/ops/fees-math";
 import { isOpsLive } from "@/lib/ops/mode";
 import { FEE_CATEGORIES, type ConcessionKind, type FeeStructure, type FeeType, type FeeTypeInput, type InstallmentInput, type PaymentStatus } from "@/lib/ops/types";
 
@@ -151,15 +151,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
   const planned = useMemo(() => paise(installments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)), [installments]);
 
   function splitInto(count: number) {
-    const amounts = splitEvenly(total, count);
-    setInstallments((list) =>
-      amounts.map((amount, index) => ({
-        id: list[index]?.id,
-        name: list[index]?.name || (count === 1 ? "Full payment" : `Installment ${index + 1}`),
-        due_date: list[index]?.due_date ?? "",
-        amount: amount.toFixed(2),
-      })),
-    );
+    setInstallments((list) => splitInstallmentPlan(list, total, count));
   }
 
   async function submit() {
@@ -260,7 +252,7 @@ export function StructureForm({ structure, onClose, onSaved }: { structure: FeeS
           </div>
         ))}
         <div className="ops-line-foot">
-          <button className="link-btn" type="button" disabled={installments.length >= 12} onClick={() => setInstallments((list) => [...list, { name: `Installment ${list.length + 1}`, due_date: "", amount: "" }])}>
+          <button className="link-btn" type="button" disabled={installments.length >= 12} onClick={() => setInstallments((list) => addInstallment(list))}>
             + Add installment
           </button>
           <span className={Math.abs(planned - total) > 0.001 ? "field-error" : "muted"}>

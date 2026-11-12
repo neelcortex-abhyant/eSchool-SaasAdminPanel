@@ -217,7 +217,7 @@ export function CTASection() {
           <Link href="/login" className="btn-pill btn-pill-green">
             Get started
           </Link>
-          <Link href="/login" className="btn-pill btn-pill-light">
+          <Link href="/request-demo" className="btn-pill btn-pill-light">
             Book a demo
           </Link>
         </div>
