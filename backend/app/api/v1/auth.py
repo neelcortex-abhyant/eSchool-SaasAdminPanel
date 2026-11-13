@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -56,19 +57,45 @@ def login_with_limits(request: Request, email: str, attempt) -> auth_service.Iss
     Shared by /auth/login and /super-admin/login. Only wrong-credential failures
     (401) count, so a user who signs in correctly is never locked out.
     """
+    started = time.perf_counter()
+    path = request.url.path
     email_key = auth_service.normalize_email(email)
     ip_key = rate_limit.client_ip(request)
-    rate_limit.LOGIN_PER_EMAIL.check(email_key)
-    rate_limit.LOGIN_PER_IP.check(ip_key)
+    try:
+        rate_limit.LOGIN_PER_EMAIL.check(email_key)
+        rate_limit.LOGIN_PER_IP.check(ip_key)
+    except HTTPException:
+        _log_login(path, "rate_limited", None, started)
+        raise
     try:
         issued = attempt()
     except auth_service.AuthError as exc:
         if exc.status_code == status.HTTP_401_UNAUTHORIZED:
             rate_limit.LOGIN_PER_EMAIL.record(email_key)
             rate_limit.LOGIN_PER_IP.record(ip_key)
+            _log_login(path, "invalid", None, started)
+        else:
+            _log_login(path, "forbidden", None, started, reason=exc.detail)
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except Exception:
+        _log_login(path, "error", None, started)
+        raise
     rate_limit.LOGIN_PER_EMAIL.clear(email_key)
+    _log_login(path, "ok", issued.user.role, started)
     return issued
+
+
+def _log_login(path: str, outcome: str, role: str | None, started: float, *, reason: str | None = None) -> None:
+    """One line per login attempt. Never logs the email or the password."""
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "auth.login path=%s outcome=%s role=%s reason=%s ms=%.1f",
+        path,
+        outcome,
+        role or "-",
+        reason or "-",
+        elapsed_ms,
+    )
 
 
 @router.post("/login", response_model=AuthTokenResponse)

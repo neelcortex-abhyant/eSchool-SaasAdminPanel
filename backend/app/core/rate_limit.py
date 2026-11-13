@@ -84,7 +84,31 @@ RESET_PER_IP = SlidingWindowLimiter("reset_ip", limit=10, window_seconds=15 * 60
 
 
 def client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    """The address to rate-limit by.
+
+    With TRUSTED_PROXY_HOPS=0 (default) this is the socket peer. Behind proxies
+    every user shares the proxy's address, so one person's failed logins would
+    lock out everyone. With TRUSTED_PROXY_HOPS=N the Nth address from the right
+    of X-Forwarded-For is used. Only the right-most N entries are written by
+    proxies we run behind, so a client cannot choose its own key by sending a
+    forged left-most value. When the header has fewer entries than N, the
+    left-most one is used.
+    """
+    from app.core.config import get_settings
+
+    peer = request.client.host if request.client else "unknown"
+    hops = max(0, int(get_settings().trusted_proxy_hops or 0))
+    if hops == 0:
+        return peer
+    forwarded = [
+        part.strip()
+        for header in request.headers.getlist("x-forwarded-for")
+        for part in header.split(",")
+        if part.strip()
+    ]
+    if not forwarded:
+        return peer
+    return forwarded[-hops] if len(forwarded) >= hops else forwarded[0]
 
 
 def reset_limits() -> None:

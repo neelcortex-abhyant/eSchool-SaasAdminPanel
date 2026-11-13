@@ -10,6 +10,12 @@
 | `ALLOW_DDL` | Yes | Must be `false` |
 | `FRONTEND_ORIGIN` | Recommended | Comma-separated browser origins (localhost). Netlify `*.netlify.app` is allowed via CORS regex in `main.py`. |
 | `V1_SESSION_TTL_MINUTES` | Optional | Default `10080` |
+| `SCHOOL_BASE_DOMAIN` | **Yes** | `schoolsarthi.com`. Default school hosts are `<slug>.schoolsarthi.com`. Unset falls back to `APP_URL`'s host (default is the vendor demo host), which production now refuses. |
+| `TRUSTED_PROXY_HOPS` | Recommended | `1` behind Render alone. `2` once the Netlify proxy forwards `x-forwarded-for`. Login rate limits then key on the real client instead of the shared proxy IP. |
+| `DB_CONNECT_TIMEOUT_SECONDS` | Optional | Default `10`. A new DB connection that takes longer fails fast instead of hanging the request. |
+| `APP_DEBUG` | Recommended | `false` in production (hides `/docs`). |
+
+**Region:** run the Render service in the **same region as Neon**. As of 2026-11-12 Render is in Oregon (`gcp-us-west1`) and Neon is in Singapore (`ap-southeast-1`). Every DB round trip crosses the Pacific, which makes a warm login take about 2.7 s and a one-query read about 1.1–1.5 s. Move Render to Singapore, or Neon to US West.
 
 ### Document storage (teacher/staff/student files, homework, study materials)
 
@@ -69,3 +75,4 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 - `GET /health` — liveness (no DB open)
 - `GET /ready` — requires `NEON_DATABASE_URL`
+- `GET /health/ready` — runs `SELECT 1` against the database. Returns `{"status":"ready","db_ms":…}`, or 503 when the DB is unreachable. **Set this as the Render health check path**, and ping it every 10 minutes from an uptime monitor (e.g. UptimeRobot). On the free instance type that keeps the service and Neon awake. A cold start measured **83 s** on 2026-11-12, longer than the Netlify proxy can wait, so the login form spins on "Signing in…".

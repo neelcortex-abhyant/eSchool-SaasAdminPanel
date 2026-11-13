@@ -72,4 +72,6 @@ def register_public_school(
         school_id=school.id,
         status="pending_approval",
         message="Your school registration has been submitted successfully.",
+        hostname=(school.domain or "").strip().lower() or None,
+        domain_type=school.domain_type,
     )

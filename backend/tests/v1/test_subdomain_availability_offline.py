@@ -12,7 +12,7 @@ from app.services.v1 import school_service as svc
 
 @pytest.fixture(autouse=True)
 def _base_domain(monkeypatch):
-    settings = SimpleNamespace(resolved_school_base_domain="eschool.example")
+    settings = SimpleNamespace(resolved_school_base_domain="eschool.example", school_base_domain_problem=None)
     monkeypatch.setattr(svc, "get_settings", lambda: settings)
 
 

@@ -13,6 +13,8 @@ class PublicSchoolLookupOut(_Out):
     school_id: int
     name: str
     slug: str | None = None
+    # Full stored hostname, e.g. "qa-sunrise-1105.schoolsarthi.com".
+    hostname: str | None = None
     tagline: str | None = None
     logo: str | None = None
     address: str | None = None

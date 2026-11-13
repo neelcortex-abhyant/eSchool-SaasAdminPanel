@@ -92,6 +92,9 @@ class SchoolRegistrationResponse(BaseModel):
     school_id: int
     status: str
     message: str
+    # Full provisioned hostname, e.g. "qa-sunrise-1105.schoolsarthi.com"; null when none was given.
+    hostname: str | None = None
+    domain_type: str | None = None
 
 
 class SubdomainAvailabilityResponse(BaseModel):
@@ -103,3 +106,8 @@ class SubdomainAvailabilityResponse(BaseModel):
     available: bool
     problem: str | None = None
     suggestions: list[str] = Field(default_factory=list)
+    # Full hostname this slug would be provisioned as, e.g. "qa-sunrise-1105.schoolsarthi.com".
+    # Null when the slug itself is invalid. Show this; never build slug + a guessed base.
+    hostname: str | None = None
+    # The configured base domain the hostname is built on, e.g. "schoolsarthi.com".
+    base_domain: str | None = None

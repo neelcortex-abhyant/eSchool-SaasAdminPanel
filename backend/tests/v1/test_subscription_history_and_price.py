@@ -317,7 +317,7 @@ def test_default_access_policy_does_not_block_expired_subscription(v1_client, v1
     assert own_school.status_code == 200, own_school.text
 
     monkeypatch.setattr(
-        "app.api.v1.deps.subscription_expiry_blocks_access",
+        "app.services.v1.subscription_access.subscription_expiry_blocks_access",
         lambda _school_id: True,
     )
     blocked = v1_client.get("/api/v1/school-admin/school", headers=school_headers)

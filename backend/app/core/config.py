@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     allow_ddl: bool = False
     pool_size: int = 5
     max_overflow: int = 10
+    # Seconds to wait for a new Postgres connection before failing (a suspended Neon
+    # compute or an unreachable host then fails fast instead of hanging the request).
+    db_connect_timeout_seconds: int = 10
+    # Proxies in front of the app that append to X-Forwarded-For (used by rate
+    # limits to find the real client). 0 = use the socket peer. Render alone = 1;
+    # Netlify proxy (forwarding x-forwarded-for) + Render = 2.
+    trusted_proxy_hops: int = 0
 
     # Single Neon PostgreSQL for /api/v1 + legacy /api/student|admin|...
     neon_database_url: str = ""
@@ -140,6 +147,38 @@ class Settings(BaseSettings):
 
         host = (urlparse(self.app_url).hostname or "").strip().lower().rstrip(".")
         return host
+
+    @property
+    def school_base_domain_problem(self) -> str | None:
+        """Why the resolved base domain must not be used for school hostnames, or None.
+
+        Production must never build ``<slug>.localhost``, ``<slug>.<vendor demo host>``
+        or ``<slug>.<hosting provider host>``. Outside production only an empty base
+        is refused, so local development can keep ``localhost``.
+        """
+        base = self.resolved_school_base_domain
+        if not base:
+            return "School base domain is not configured (set SCHOOL_BASE_DOMAIN)"
+        if (self.app_env or "").strip().lower() != "production":
+            return None
+        if "." not in base:
+            return f"School base domain {base!r} is not a public domain (set SCHOOL_BASE_DOMAIN)"
+        for blocked in _NON_PRODUCTION_BASE_SUFFIXES:
+            if base == blocked or base.endswith("." + blocked):
+                return f"School base domain {base!r} is not allowed in production (set SCHOOL_BASE_DOMAIN)"
+        return None
+
+
+# Hosts that must never be the base of a production school hostname.
+_NON_PRODUCTION_BASE_SUFFIXES = (
+    "localhost",
+    "local",
+    "test",
+    "example.com",
+    "wrteam.me",
+    "onrender.com",
+    "netlify.app",
+)
 
 
 @lru_cache

@@ -184,23 +184,50 @@ def login(db: Session, *, email: str, password: str) -> IssuedSession:
     return create_session(db, user)
 
 
-def assert_school_admin_login_allowed(db: Session, user: User) -> None:
-    """Block a school admin until their school is active. Pending registrations stay closed."""
-    if user.role != ROLE_SCHOOL_ADMIN:
-        return
+SCHOOL_PENDING_DETAIL = "This school is waiting for approval. You can sign in after it is activated."
+SCHOOL_SUSPENDED_DETAIL = "School access is suspended"
+SCHOOL_SETUP_INCOMPLETE_DETAIL = (
+    "This school has not finished setup. Ask the Super Admin to activate it, then sign in again."
+)
+SUBSCRIPTION_BLOCKED_DETAIL = "Subscription access is not available"
+
+
+def school_admin_access_error(db: Session, user: User) -> AuthError | None:
+    """The one rule for whether a school_admin may use the School Admin panel.
+
+    Login (``assert_school_admin_login_allowed``) and every ``/school-admin`` route
+    (``deps.require_school_admin``) both call this, so a login that succeeds is never
+    followed by 403s on the dashboard. Returns None when access is allowed.
+    """
+    from app.services.v1.subscription_access import subscription_expiry_blocks_access
+
+    if user.status != STATUS_ACTIVE:
+        return AuthError("Account inactive", status_code=403)
     if user.school_id is None:
-        raise AuthError("No school assigned", status_code=403)
+        return AuthError("No school assigned", status_code=403)
     school = db.get(School, user.school_id)
     if school is None or school.deleted_at is not None:
-        raise AuthError("This school is not available.", status_code=403)
-    if school.status == 1:
+        return AuthError(SCHOOL_SUSPENDED_DETAIL, status_code=403)
+    active = school.status == 1
+    installed = school.installed == 1
+    if not active and not installed:
+        return AuthError(SCHOOL_PENDING_DETAIL, status_code=403)
+    if not active:
+        return AuthError(SCHOOL_SUSPENDED_DETAIL, status_code=403)
+    if not installed:
+        return AuthError(SCHOOL_SETUP_INCOMPLETE_DETAIL, status_code=403)
+    if subscription_expiry_blocks_access(user.school_id):
+        return AuthError(SUBSCRIPTION_BLOCKED_DETAIL, status_code=403)
+    return None
+
+
+def assert_school_admin_login_allowed(db: Session, user: User) -> None:
+    """Block a school admin whose panel would refuse them (same rule as the routes)."""
+    if user.role != ROLE_SCHOOL_ADMIN:
         return
-    if school.installed == 0:
-        raise AuthError(
-            "Your school is awaiting approval from the Super Admin. You can sign in once your school has been approved and activated..",
-            status_code=403,
-        )
-    raise AuthError("This school is inactive.", status_code=403)
+    error = school_admin_access_error(db, user)
+    if error is not None:
+        raise error
 
 
 def login_super_admin(db: Session, *, email: str, password: str) -> IssuedSession:
@@ -239,9 +266,23 @@ def resolve_user_from_token(db: Session, plain_token: str) -> tuple[User, AuthSe
     if user.status != STATUS_ACTIVE:
         raise AuthError("Account inactive", status_code=403)
 
-    session.last_used_at = now
-    db.commit()
+    if _last_used_is_stale(session.last_used_at, now):
+        session.last_used_at = now
+        db.commit()
     return user, session
+
+
+# How often an active session's last_used_at is written. Writing it on every request
+# costs a DB commit per API call (one cross-region round trip each on Render + Neon).
+LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
+
+
+def _last_used_is_stale(last_used_at: datetime | None, now: datetime) -> bool:
+    if last_used_at is None:
+        return True
+    if last_used_at.tzinfo is None:
+        last_used_at = last_used_at.replace(tzinfo=timezone.utc)
+    return now - last_used_at >= LAST_USED_WRITE_INTERVAL
 
 
 def change_password(
