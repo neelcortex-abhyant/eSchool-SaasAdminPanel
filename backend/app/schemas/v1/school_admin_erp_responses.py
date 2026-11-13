@@ -157,6 +157,19 @@ class FeeStructureOut(_Out):
     amounts: list[FeeStructureAmountOut] = Field(default_factory=list)
     total: float = 0
     installments: list[FeeInstallmentOut] = Field(default_factory=list)
+    installments_total: float = 0
+    installments_match_total: bool = True
+    class_assignment: FeeClassAssignmentOut | None = Field(
+        default=None, description="Only on create, when the structure has a class_id"
+    )
+
+
+class FeeClassAssignmentOut(_Out):
+    eligible_students: int
+    created: int
+    already_assigned: int
+    structure_id: int | None = None
+    class_id: int | None = None
 
 
 class FeeStructureListOut(_Out):

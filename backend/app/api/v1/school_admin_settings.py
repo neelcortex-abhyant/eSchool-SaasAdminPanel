@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import central_db
@@ -185,13 +185,33 @@ class SupportTicketMessageBody(BaseModel):
 
 
 class PublicContactBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """Public (no-auth) website enquiry. Strict: unknown fields and oversized input -> 422."""
 
-    name: str = Field(..., min_length=1, max_length=255)
-    email: EmailStr
-    phone: str | None = Field(default=None, max_length=64)
-    subject: str = Field(..., min_length=1, max_length=255)
-    message: str = Field(..., min_length=1)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr = Field(..., max_length=254)
+    # Digits with optional leading +, spaces, hyphens, brackets; 7-15 digits in total.
+    phone: str | None = Field(default=None, max_length=20, pattern=r"^\+?[0-9 ()\-]{7,20}$")
+    subject: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=5000)
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_digits(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        digits = sum(ch.isdigit() for ch in value)
+        if not 7 <= digits <= 15:
+            raise ValueError("phone must have 7 to 15 digits")
+        return value
+
+    @field_validator("name", "subject", "message")
+    @classmethod
+    def _no_control_chars(cls, value: str) -> str:
+        if any((ord(ch) < 32 and ord(ch) not in (9, 10, 13)) or ord(ch) == 127 for ch in value):
+            raise ValueError("contains control characters")
+        return value
 
 
 # ---- Phase A: content + FAQ ----
@@ -705,7 +725,7 @@ def public_create_contact_inquiry(
     request: Request,
     db: Annotated[Session, Depends(central_db)],
 ):
-    rate_limit.FORGOT_PER_IP.hit(rate_limit.client_ip(request))
+    rate_limit.CONTACT_PER_IP.hit(rate_limit.client_ip(request))
     return _run(
         lambda: cms.create_public_contact_inquiry(
             db, code, body.model_dump(exclude_unset=True)
