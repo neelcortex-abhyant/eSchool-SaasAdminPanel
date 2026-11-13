@@ -7,6 +7,7 @@ from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import session_factory
+from app.core.v1_database import get_v1_db
 from sqlalchemy import select
 
 from app.core.responses import INACTIVATED_USER, VALIDATION_ERROR, fail
@@ -25,13 +26,16 @@ class ApiError(Exception):
         self.payload = payload
 
 
-def central_db() -> Generator[Session, None, None]:
-    """Shared Neon session (formerly the central MySQL database)."""
-    db = session_factory()()
-    try:
-        yield db
-    finally:
-        db.close()
+# The shared Neon session (formerly the central MySQL database).
+#
+# It is the SAME callable as the v1 auth dependency on purpose. FastAPI caches a dependency
+# once per request by its callable, so a route whose auth uses get_v1_db and whose handler
+# uses central_db gets ONE session and holds ONE pooled connection. With two separate
+# callables every request held two connections at once; 20 concurrent requests (e.g. the
+# Add syllabus form loading each subject's classes) exhausted the pool, each waited for its
+# second connection, and they failed with HTTP 500 after the 30 s pool timeout.
+# See tests_offline/test_db_one_session_per_request.py.
+central_db = get_v1_db
 
 
 def open_named_db(_database_name: str | None = None) -> Session:
