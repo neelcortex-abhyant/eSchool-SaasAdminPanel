@@ -79,6 +79,8 @@ LOGIN_PER_IP = SlidingWindowLimiter("login_ip", limit=50, window_seconds=15 * 60
 # Every forgot-password request, per email and per IP.
 FORGOT_PER_EMAIL = SlidingWindowLimiter("forgot_email", limit=5, window_seconds=60 * 60)
 FORGOT_PER_IP = SlidingWindowLimiter("forgot_ip", limit=20, window_seconds=60 * 60)
+# Public website enquiries, per IP. Separate from forgot-password so neither blocks the other.
+CONTACT_PER_IP = SlidingWindowLimiter("contact_ip", limit=10, window_seconds=60 * 60)
 # Every reset-password attempt, per IP (tokens are unguessable; this stops scanning).
 RESET_PER_IP = SlidingWindowLimiter("reset_ip", limit=10, window_seconds=15 * 60)
 

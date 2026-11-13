@@ -82,17 +82,39 @@ def _active_installments(db: Session, school_id: int, structure_id: int) -> list
     )
 
 
-def _installment_allocated(db: Session, school_id: int, installment_id: int) -> Decimal:
-    total = (
-        db.query(func.coalesce(func.sum(FeePaymentAllocation.amount), 0))
-        .filter(
-            FeePaymentAllocation.school_id == school_id,
-            FeePaymentAllocation.installment_id == installment_id,
-            FeePaymentAllocation.deleted_at.is_(None),
-        )
-        .scalar()
+def _installment_allocated(
+    db: Session, school_id: int, installment_id: int, *, assignment_id: int | None = None
+) -> Decimal:
+    """Money allocated to an installment.
+
+    Installments belong to a structure that many students share. With ``assignment_id`` only
+    that student's (assignment's) payments count; without it the total across all students
+    is returned (used only to guard replacing a schedule that has any payments).
+    """
+    q = db.query(func.coalesce(func.sum(FeePaymentAllocation.amount), 0)).filter(
+        FeePaymentAllocation.school_id == school_id,
+        FeePaymentAllocation.installment_id == installment_id,
+        FeePaymentAllocation.deleted_at.is_(None),
     )
-    return inr_quantize(total or 0)
+    if assignment_id is not None:
+        q = q.join(FeePayment, FeePayment.id == FeePaymentAllocation.payment_id).filter(
+            FeePayment.assignment_id == assignment_id,
+            FeePayment.deleted_at.is_(None),
+        )
+    return inr_quantize(q.scalar() or 0)
+
+
+FULL_PAYMENT_LABEL = "Full payment"
+
+
+def _schedule_label(name: str, index: int, count: int) -> str:
+    """A multi-row schedule never has a row called "Full payment"; it is "Installment N".
+
+    Other names ("Term 1", "April") are kept as entered.
+    """
+    if count > 1 and " ".join(name.split()).lower() == FULL_PAYMENT_LABEL.lower():
+        return f"Installment {index + 1}"
+    return name
 
 
 def _assert_row_branch(row: Any, branch_id: int | None) -> None:
@@ -157,6 +179,7 @@ def set_structure_installments(
         name = str(raw.get("name") or "").strip()
         if not name:
             raise AcademicError(422, "installment name is required")
+        name = _schedule_label(name, idx, len(items))
         due_raw = raw.get("due_date")
         if not due_raw:
             raise AcademicError(422, "installment due_date is required")
@@ -176,7 +199,7 @@ def set_structure_installments(
                 structure_id=structure.id,
                 name=name,
                 due_date=due,
-                amount=float(amount),
+                amount=amount,
                 sort_order=sort_order,
                 created_at=now,
                 updated_at=now,
@@ -199,7 +222,10 @@ def allocate_payment(db: Session, school_id: int, payment: FeePayment, structure
     for inst in installments:
         if remaining <= 0:
             break
-        already = _installment_allocated(db, school_id, inst.id)
+        # Only this student's earlier payments fill this installment (the structure is shared).
+        already = _installment_allocated(
+            db, school_id, inst.id, assignment_id=payment.assignment_id
+        )
         due = inr_quantize(inr_quantize(inst.amount) - already)
         if due <= 0:
             continue
@@ -208,7 +234,7 @@ def allocate_payment(db: Session, school_id: int, payment: FeePayment, structure
             school_id=school_id,
             payment_id=payment.id,
             installment_id=inst.id,
-            amount=float(take),
+            amount=take,
             created_at=now,
             updated_at=now,
         )
@@ -221,7 +247,7 @@ def allocate_payment(db: Session, school_id: int, payment: FeePayment, structure
             school_id=school_id,
             payment_id=payment.id,
             installment_id=None,
-            amount=float(remaining),
+            amount=remaining,
             created_at=now,
             updated_at=now,
         )
@@ -425,6 +451,22 @@ def fee_collection_report(
     }
 
 
+def concession_value(kind: str, value: Decimal | float | str, total: Decimal) -> Decimal:
+    """Rupee value of a concession on ``total``: percent of total, or a fixed amount.
+
+    Never more than the total, never negative (2 dp, ROUND_HALF_UP).
+    """
+    total = inr_quantize(total)
+    val = inr_quantize(value)
+    if val <= 0 or total <= 0:
+        return Decimal("0.00")
+    if kind == "percent":
+        amount = inr_quantize(total * min(val, Decimal("100")) / Decimal("100"))
+    else:
+        amount = val
+    return min(amount, total)
+
+
 def _concession_amount(db: Session, school_id: int, student_id: int, structure_id: int, total: Decimal) -> Decimal:
     conc = (
         db.query(FeeConcession)
@@ -438,9 +480,27 @@ def _concession_amount(db: Session, school_id: int, student_id: int, structure_i
     )
     if conc is None:
         return Decimal("0.00")
-    if conc.kind == "percent":
-        return inr_quantize(total * inr_quantize(conc.value) / Decimal("100"))
-    return min(inr_quantize(conc.value), total)
+    return concession_value(conc.kind, conc.value, total)
+
+
+def assignment_amounts(db: Session, school_id: int, assignment: FeeAssignment) -> dict[str, Decimal]:
+    """The one fee calculation for an assignment (Decimal, INR 2 dp).
+
+    payable = max(total - concession, 0); balance = payable - successful payments.
+    """
+    total = _structure_total_dec(db, school_id, assignment.structure_id)
+    concession = _concession_amount(
+        db, school_id, assignment.student_id, assignment.structure_id, total
+    )
+    payable = inr_quantize(max(total - concession, Decimal("0")))
+    paid = _paid_success(db, school_id, assignment.id)
+    return {
+        "total": total,
+        "concession": concession,
+        "payable": payable,
+        "paid": paid,
+        "balance": inr_quantize(payable - paid),
+    }
 
 
 def _paid_success(db: Session, school_id: int, assignment_id: int) -> Decimal:
@@ -471,16 +531,14 @@ def student_fee_balance(db: Session, school_id: int, student_id: int) -> dict:
     total_payable = Decimal("0.00")
     total_paid = Decimal("0.00")
     for a in assignments:
-        structure_total = _structure_total_dec(db, school_id, a.structure_id)
-        concession = _concession_amount(db, school_id, student_id, a.structure_id, structure_total)
-        payable = inr_quantize(max(structure_total - concession, Decimal("0")))
-        paid = _paid_success(db, school_id, a.id)
-        outstanding = inr_quantize(payable - paid)
+        amounts = assignment_amounts(db, school_id, a)
+        payable = amounts["payable"]
+        paid = amounts["paid"]
+        outstanding = amounts["balance"]
         installments = []
         for inst in _active_installments(db, school_id, a.structure_id):
-            allocated = _installment_allocated(db, school_id, inst.id)
-            # Per-assignment installment outstanding is approximate when shared;
-            # report installment face vs global allocations for transparency.
+            # This student's payments only: the structure's installments are shared.
+            allocated = _installment_allocated(db, school_id, inst.id, assignment_id=a.id)
             installments.append(
                 {
                     "id": inst.id,

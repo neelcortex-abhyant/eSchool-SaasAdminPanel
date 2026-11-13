@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -1086,19 +1087,43 @@ def _structure_amounts(db: Session, school_id: int, structure_id: int) -> list[F
 
 
 def _structure_item(db: Session, row: FeeStructure) -> dict:
-    amounts = _structure_amounts(db, row.school_id, row.id)
-    total = sum(float(a.amount) for a in amounts)
     from app.services.v1 import school_erp_fees as erp_fees
 
+    amounts = _structure_amounts(db, row.school_id, row.id)
+    total = erp_fees.inr_quantize(sum((erp_fees.inr_quantize(a.amount) for a in amounts), Decimal("0")))
     installment_payload = erp_fees.list_installments(db, row.school_id, row.id)
+    installment_items = installment_payload.get("items") or []
+    scheduled = erp_fees.inr_quantize(
+        sum((erp_fees.inr_quantize(i["amount"]) for i in installment_items), Decimal("0"))
+    )
     return _row_dict(
         row,
         {
             "amounts": [_row_dict(a) for a in amounts],
-            "total": total,
-            "installments": installment_payload.get("items") or [],
+            "total": float(total),
+            "installments": installment_items,
+            # Additive: the schedule must add up to the total. False after the amounts changed
+            # without a matching installment update (send both in the same PATCH).
+            "installments_total": float(scheduled),
+            "installments_match_total": (not installment_items) or scheduled == total,
         },
     )
+
+
+def _amount_rows(amounts: list) -> list[tuple[int, Decimal]]:
+    from app.services.v1 import school_erp_fees as erp_fees
+
+    rows: list[tuple[int, Decimal]] = []
+    for raw in amounts:
+        fee_type_id = int(raw.get("fee_type_id") or 0)
+        try:
+            amount = erp_fees.inr_quantize(raw.get("amount") or 0)
+        except (ArithmeticError, ValueError) as exc:
+            raise AcademicError(422, "each amount needs fee_type_id and amount > 0") from exc
+        if not fee_type_id or amount <= 0:
+            raise AcademicError(422, "each amount needs fee_type_id and amount > 0")
+        rows.append((fee_type_id, amount))
+    return rows
 
 
 def list_fee_structures(
@@ -1165,11 +1190,7 @@ def create_fee_structure(
     )
     db.add(row)
     db.flush()
-    for raw in amounts:
-        fee_type_id = int(raw.get("fee_type_id") or 0)
-        amount = float(raw.get("amount") or 0)
-        if not fee_type_id or amount <= 0:
-            raise AcademicError(422, "each amount needs fee_type_id and amount > 0")
+    for fee_type_id, amount in _amount_rows(amounts):
         _owned(db, FeeType, fee_type_id, school_id)
         db.add(
             FeeStructureAmount(
@@ -1182,6 +1203,12 @@ def create_fee_structure(
                 updated_at=_now(),
             )
         )
+    # Contract: a class structure applies to every enrolled student of that class in its
+    # session. Assignments are created in the same transaction as the structure.
+    assigned = None
+    if row.class_id is not None and row.status == 1:
+        db.flush()
+        assigned = _assign_structure_to_class(db, school_id, row, branch_id=branch_id)
     installments = body.get("installments")
     if installments is not None:
         from app.services.v1 import school_erp_fees as erp_fees
@@ -1192,10 +1219,13 @@ def create_fee_structure(
         db.flush()
         erp_fees.set_structure_installments(db, school_id, row.id, installments)
         db.refresh(row)
-        return _structure_item(db, row)
-    _commit(db)
-    db.refresh(row)
-    return _structure_item(db, row)
+    else:
+        _commit(db)
+        db.refresh(row)
+    item = _structure_item(db, row)
+    if assigned is not None:
+        item["class_assignment"] = assigned
+    return item
 
 
 def update_fee_structure(
@@ -1221,18 +1251,16 @@ def update_fee_structure(
         if not isinstance(amounts, list) or not amounts:
             raise AcademicError(422, "amounts must be a non-empty list")
         now = _now()
+        parsed = _amount_rows(amounts)
         for old in _structure_amounts(db, school_id, row.id):
             old.deleted_at = now
             old.updated_at = now
-        for raw in amounts:
-            fee_type_id = int(raw.get("fee_type_id") or 0)
-            amount = float(raw.get("amount") or 0)
-            if not fee_type_id or amount <= 0:
-                raise AcademicError(422, "each amount needs fee_type_id and amount > 0")
+        for fee_type_id, amount in parsed:
             _owned(db, FeeType, fee_type_id, school_id)
             db.add(
                 FeeStructureAmount(
                     school_id=school_id,
+                    branch_id=getattr(row, "branch_id", None),
                     structure_id=row.id,
                     fee_type_id=fee_type_id,
                     amount=amount,
@@ -1306,6 +1334,11 @@ def create_fee_assignment(
             raise AcademicError(422, "structure_id must belong to the active branch")
         if getattr(student, "branch_id", None) not in (None, branch_id):
             raise AcademicError(422, "student_id must belong to the active branch")
+    if student.enrollment_status not in FEE_ENROLLED_STATUSES:
+        raise AcademicError(422, "student is not currently enrolled")
+    if _active_assignment(db, school_id, structure_id, student_id) is not None:
+        # Includes a student who already pays this structure through their class.
+        raise AcademicError(409, ASSIGNMENT_EXISTS_DETAIL)
     resolved_branch = (
         branch_id
         if branch_id is not None
@@ -1320,9 +1353,123 @@ def create_fee_assignment(
         updated_at=_now(),
     )
     db.add(row)
-    _commit(db)
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request assigned it first (unique index uq_fee_assignments_active).
+        db.rollback()
+        raise AcademicError(409, ASSIGNMENT_EXISTS_DETAIL) from None
     db.refresh(row)
     return _row_dict(row)
+
+
+# Same enrolment rule as exams / homework / study materials.
+FEE_ENROLLED_STATUSES = frozenset({"admitted", "active"})
+ASSIGNMENT_EXISTS_DETAIL = "This student already has these fees"
+
+
+def _active_assignment(
+    db: Session, school_id: int, structure_id: int, student_id: int
+) -> FeeAssignment | None:
+    return (
+        db.query(FeeAssignment)
+        .filter(
+            FeeAssignment.school_id == school_id,
+            FeeAssignment.structure_id == structure_id,
+            FeeAssignment.student_id == student_id,
+            FeeAssignment.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+
+def _class_students(
+    db: Session, school_id: int, structure: FeeStructure, *, branch_id: int | None
+) -> list[Student]:
+    """Enrolled students of the structure's class in the structure's session."""
+    q = (
+        db.query(Student)
+        .join(ClassSection, ClassSection.id == Student.class_section_id)
+        .filter(
+            Student.school_id == school_id,
+            Student.session_year_id == structure.session_year_id,
+            Student.deleted_at.is_(None),
+            Student.enrollment_status.in_(tuple(FEE_ENROLLED_STATUSES)),
+            ClassSection.school_id == school_id,
+            ClassSection.class_id == structure.class_id,
+            ClassSection.deleted_at.is_(None),
+        )
+    )
+    scope = branch_id if branch_id is not None else getattr(structure, "branch_id", None)
+    if scope is not None:
+        q = q.filter((Student.branch_id == scope) | (Student.branch_id.is_(None)))
+    return q.order_by(Student.id.asc()).all()
+
+
+def _assign_structure_to_class(
+    db: Session, school_id: int, structure: FeeStructure, *, branch_id: int | None
+) -> dict:
+    """Add the missing assignments for the class (does not commit). Idempotent."""
+    students = _class_students(db, school_id, structure, branch_id=branch_id)
+    existing = {
+        sid
+        for (sid,) in db.query(FeeAssignment.student_id).filter(
+            FeeAssignment.school_id == school_id,
+            FeeAssignment.structure_id == structure.id,
+            FeeAssignment.deleted_at.is_(None),
+        )
+    }
+    now = _now()
+    created = 0
+    for student in students:
+        if student.id in existing:
+            continue
+        db.add(
+            FeeAssignment(
+                school_id=school_id,
+                branch_id=getattr(student, "branch_id", None) or getattr(structure, "branch_id", None),
+                structure_id=structure.id,
+                student_id=student.id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        created += 1
+    return {
+        "eligible_students": len(students),
+        "created": created,
+        "already_assigned": len(students) - created,
+    }
+
+
+def assign_structure_to_class(
+    db: Session, school_id: int, structure_id: int, *, branch_id: int | None = None
+) -> dict:
+    """POST /fee-structures/{id}/assign-class: assign a class structure to its enrolled students.
+
+    Safe to repeat (e.g. after new admissions): students who already have it are skipped.
+    Two runs at once cannot create duplicates: the unique index refuses the second insert,
+    and the run is retried once against the fresh state.
+    """
+    structure = _owned(db, FeeStructure, structure_id, school_id)
+    if branch_id is not None and getattr(structure, "branch_id", None) not in (None, branch_id):
+        raise AcademicError(404, "Record not found")
+    if structure.class_id is None:
+        raise AcademicError(422, "This fee structure is not linked to a class")
+    if structure.status != 1:
+        raise AcademicError(422, "This fee structure is inactive")
+    for attempt in range(2):
+        result = _assign_structure_to_class(db, school_id, structure, branch_id=branch_id)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            if attempt == 1:
+                raise AcademicError(409, "Fees are being assigned to this class; try again") from None
+            structure = _owned(db, FeeStructure, structure_id, school_id)
+            continue
+        return {"structure_id": structure.id, "class_id": structure.class_id, **result}
+    raise AcademicError(409, "Fees are being assigned to this class; try again")
 
 
 def soft_delete_fee_assignment(
@@ -1359,9 +1506,11 @@ def create_fee_concession(
     structure_id = int(body.get("structure_id") or 0)
     kind = str(body.get("kind") or "").strip()
     reason = str(body.get("reason") or "").strip()
+    from app.services.v1 import school_erp_fees as erp_fees
+
     try:
-        value = float(body.get("value"))
-    except (TypeError, ValueError) as exc:
+        value = erp_fees.inr_quantize(body.get("value"))
+    except (TypeError, ValueError, ArithmeticError) as exc:
         raise AcademicError(422, "value is required") from exc
     if not student_id or not structure_id or kind not in ("percent", "amount") or not reason or value <= 0:
         raise AcademicError(422, "student_id, structure_id, kind (percent|amount), value > 0, reason required")
@@ -1380,6 +1529,33 @@ def create_fee_concession(
             and student.branch_id != structure.branch_id
         ):
             raise AcademicError(404, "Record not found")
+    existing = (
+        db.query(FeeConcession.id)
+        .filter(
+            FeeConcession.school_id == school_id,
+            FeeConcession.student_id == student_id,
+            FeeConcession.structure_id == structure_id,
+            FeeConcession.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing is not None:
+        raise AcademicError(409, "This student already has a concession on these fees")
+    total = erp_fees._structure_total_dec(db, school_id, structure_id)
+    if kind == "amount" and value > total:
+        raise AcademicError(
+            422, f"concession amount cannot exceed the fee structure total ({total})"
+        )
+    assignment = _active_assignment(db, school_id, structure_id, student_id)
+    if assignment is not None:
+        paid = erp_fees._paid_success(db, school_id, assignment.id)
+        payable_after = total - erp_fees.concession_value(kind, value, total)
+        if payable_after < paid:
+            raise AcademicError(
+                422,
+                f"concession would make the payable amount ({payable_after}) less than "
+                f"what has already been paid ({paid})",
+            )
     resolved_branch = (
         branch_id
         if branch_id is not None
@@ -1430,40 +1606,11 @@ def list_fee_payments(
     return _list_active(db, FeePayment, school_id, page=page, page_size=page_size, filters=filt)
 
 
-def _structure_total(db: Session, school_id: int, structure_id: int) -> float:
-    return sum(float(a.amount) for a in _structure_amounts(db, school_id, structure_id))
+def _assignment_amounts(db: Session, school_id: int, assignment: FeeAssignment) -> dict:
+    """Decimal fee figures for one assignment (single implementation in school_erp_fees)."""
+    from app.services.v1 import school_erp_fees as erp_fees
 
-
-def _paid_for_assignment(db: Session, school_id: int, assignment_id: int) -> float:
-    total = (
-        db.query(func.coalesce(func.sum(FeePayment.amount), 0))
-        .filter(
-            FeePayment.school_id == school_id,
-            FeePayment.assignment_id == assignment_id,
-            FeePayment.deleted_at.is_(None),
-            FeePayment.status == "success",
-        )
-        .scalar()
-    )
-    return float(total or 0)
-
-
-def _concession_amount(db: Session, school_id: int, student_id: int, structure_id: int, total: float) -> float:
-    conc = (
-        db.query(FeeConcession)
-        .filter(
-            FeeConcession.school_id == school_id,
-            FeeConcession.student_id == student_id,
-            FeeConcession.structure_id == structure_id,
-            FeeConcession.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if conc is None:
-        return 0.0
-    if conc.kind == "percent":
-        return round(total * float(conc.value) / 100.0, 2)
-    return min(float(conc.value), total)
+    return erp_fees.assignment_amounts(db, school_id, assignment)
 
 
 def collect_fee(
@@ -1475,8 +1622,8 @@ def collect_fee(
     if not assignment_id:
         raise AcademicError(422, "assignment_id is required")
     try:
-        amount = erp_fees.inr_float(float(body.get("amount")))
-    except (TypeError, ValueError) as exc:
+        amount = erp_fees.inr_quantize(body.get("amount"))
+    except (TypeError, ValueError, ArithmeticError) as exc:
         raise AcademicError(422, "amount is required") from exc
     if amount <= 0:
         raise AcademicError(422, "amount must be > 0")
@@ -1497,14 +1644,17 @@ def collect_fee(
         )
         if existing:
             return _row_dict(existing)
-    total = _structure_total(db, school_id, assignment.structure_id)
-    concession = _concession_amount(db, school_id, assignment.student_id, assignment.structure_id, total)
-    payable = max(total - concession, 0)
-    already = _paid_for_assignment(db, school_id, assignment.id)
-    balance = erp_fees.inr_float(payable - already)
-    if amount > balance + 0.001:
+    # Lock the assignment so two collections at once cannot both pass the balance check
+    # (PostgreSQL row lock; released at commit/rollback).
+    db.query(FeeAssignment).filter(FeeAssignment.id == assignment.id).with_for_update().one()
+    balance = _assignment_amounts(db, school_id, assignment)["balance"]
+    if amount > balance:
         raise AcademicError(422, "amount exceeds outstanding balance")
-    receipt = body.get("receipt_no") or f"RCPT-{_now().strftime('%Y%m%d%H%M%S')}-{assignment.id}"
+    # The random suffix keeps two collections in the same second for one student from
+    # colliding on uq_fee_payments_assignment_receipt_active (that used to be a 409).
+    receipt = body.get("receipt_no") or (
+        f"RCPT-{_now().strftime('%Y%m%d%H%M%S')}-{assignment.id}-{secrets.token_hex(2).upper()}"
+    )
     row = FeePayment(
         school_id=school_id,
         branch_id=resolved_branch,
@@ -1545,13 +1695,10 @@ def fees_outstanding(
         aq = aq.filter(FeeAssignment.branch_id == branch_id)
     assignments = aq.order_by(FeeAssignment.id.desc()).all()
     items = []
-    summary = {"payable": 0.0, "collected": 0.0, "outstanding": 0.0}
+    payable_sum = collected_sum = outstanding_sum = Decimal("0.00")
     for a in assignments:
-        total = _structure_total(db, school_id, a.structure_id)
-        concession = _concession_amount(db, school_id, a.student_id, a.structure_id, total)
-        payable = max(total - concession, 0)
-        paid = _paid_for_assignment(db, school_id, a.id)
-        balance = round(payable - paid, 2)
+        figures = _assignment_amounts(db, school_id, a)
+        balance = figures["balance"]
         if balance <= 0:
             continue
         items.append(
@@ -1559,15 +1706,20 @@ def fees_outstanding(
                 "assignment_id": a.id,
                 "student_id": a.student_id,
                 "structure_id": a.structure_id,
-                "payable": payable,
-                "concession": concession,
-                "paid": paid,
-                "balance": balance,
+                "payable": float(figures["payable"]),
+                "concession": float(figures["concession"]),
+                "paid": float(figures["paid"]),
+                "balance": float(balance),
             }
         )
-        summary["payable"] += payable
-        summary["collected"] += paid
-        summary["outstanding"] += balance
+        payable_sum += figures["payable"]
+        collected_sum += figures["paid"]
+        outstanding_sum += balance
+    summary = {
+        "payable": float(payable_sum),
+        "collected": float(collected_sum),
+        "outstanding": float(outstanding_sum),
+    }
     total_n = len(items)
     slice_items = items[(page - 1) * page_size : page * page_size]
     return {**_envelope(slice_items, total_n, page, page_size), "summary": summary}

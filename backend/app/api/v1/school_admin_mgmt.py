@@ -18,6 +18,7 @@ from app.schemas.v1 import school_admin_erp as erp_schemas
 from app.schemas.v1 import school_admin_mgmt as mgmt_schemas
 from app.schemas.v1 import school_admin_mgmt_responses as mgmt_out
 from app.schemas.v1.school_admin_erp_responses import (
+    FeeClassAssignmentOut,
     DeletedOut,
     FeeAssignmentListOut,
     FeeAssignmentOut,
@@ -519,6 +520,24 @@ def delete_fee_structure(
 ):
     return _run(
         lambda: mgmt.soft_delete_fee_structure(
+            db, _school_id(auth), row_id, branch_id=branch.branch_id
+        )
+    )
+
+
+@router.post(
+    "/fee-structures/{row_id}/assign-class",
+    responses=json_response(FeeClassAssignmentOut),
+)
+def assign_fee_structure_to_class(
+    row_id: int,
+    auth: Annotated[AuthContext, Depends(require_fees)],
+    db: Annotated[Session, Depends(central_db)],
+    branch: Annotated[BranchContext, Depends(get_branch_context)],
+):
+    """Assign a class fee structure to every enrolled student of its class (idempotent)."""
+    return _run(
+        lambda: mgmt.assign_structure_to_class(
             db, _school_id(auth), row_id, branch_id=branch.branch_id
         )
     )

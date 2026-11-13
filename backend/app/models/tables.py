@@ -1823,6 +1823,7 @@ class FeeStructureAmount(Base, TimestampMixin):
             "fee_type_id",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),  # offline tests only
         ),
     )
 
@@ -1846,6 +1847,7 @@ class FeeAssignment(Base, TimestampMixin):
             "student_id",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),  # offline tests only
         ),
     )
 
@@ -1868,6 +1870,7 @@ class FeeConcession(Base, TimestampMixin):
             "structure_id",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),  # offline tests only
         ),
     )
 
